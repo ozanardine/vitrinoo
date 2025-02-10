@@ -57,7 +57,7 @@ export async function exchangeCodeForToken(
     if (keyError) throw new Error('Erro ao obter chave de função');
 
     // Construir a URL completa da função Edge
-    const functionUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/tiny-token-exchange`;
+    const functionUrl = new URL('/functions/v1/tiny-token-exchange', import.meta.env.VITE_SUPABASE_URL).toString();
 
     const response = await fetch(functionUrl, {
       method: 'POST',
@@ -114,53 +114,6 @@ export async function saveTinyCredentials(
   if (error) throw error;
 }
 
-async function refreshTinyToken(
-  refreshToken: string,
-  clientId: string,
-  clientSecret: string
-): Promise<TinyTokenResponse> {
-  return pRetry(
-    async () => {
-      const { data: keyData, error: keyError } = await supabase
-        .from('function_keys')
-        .select('key')
-        .eq('name', 'tiny-token-exchange')
-        .single();
-
-      if (keyError) throw new Error('Erro ao obter chave de função');
-
-      const functionUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/tiny-token-exchange`;
-
-      const response = await fetch(functionUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${keyData.key}`
-        },
-        body: JSON.stringify({
-          refreshToken,
-          clientId,
-          clientSecret,
-          grantType: 'refresh_token'
-        })
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || 'Erro ao renovar token');
-      }
-
-      return response.json();
-    },
-    {
-      retries: 3,
-      onFailedAttempt: error => {
-        console.error(`Attempt ${error.attemptNumber} failed. ${error.retriesLeft} retries left.`);
-      }
-    }
-  );
-}
-
 async function getTinyCredentials(storeId: string): Promise<TinyCredentials | null> {
   const { data, error } = await supabase
     .from('erp_integrations')
@@ -199,15 +152,36 @@ async function getValidTinyToken(storeId: string): Promise<string> {
   isRefreshing = true;
   refreshPromise = (async () => {
     try {
-      const { 
-        access_token, 
-        refresh_token, 
-        expires_in 
-      } = await refreshTinyToken(
-        credentials.refresh_token,
-        credentials.client_id,
-        credentials.client_secret
-      );
+      const { data: keyData, error: keyError } = await supabase
+        .from('function_keys')
+        .select('key')
+        .eq('name', 'tiny-token-exchange')
+        .single();
+
+      if (keyError) throw new Error('Erro ao obter chave de função');
+
+      const functionUrl = new URL('/functions/v1/tiny-token-exchange', import.meta.env.VITE_SUPABASE_URL).toString();
+
+      const response = await fetch(functionUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${keyData.key}`
+        },
+        body: JSON.stringify({
+          refreshToken: credentials.refresh_token,
+          clientId: credentials.client_id,
+          clientSecret: credentials.client_secret,
+          grantType: 'refresh_token'
+        })
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || 'Erro ao renovar token');
+      }
+
+      const { access_token, refresh_token, expires_in } = await response.json();
 
       // Salva novos tokens
       await saveTinyCredentials(

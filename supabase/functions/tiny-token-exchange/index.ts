@@ -2,7 +2,6 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { rateLimit } from './rateLimit.ts';
 
 const TINY_TOKEN_URL = 'https://accounts.tiny.com.br/realms/tiny/protocol/openid-connect/token';
-const FUNCTION_KEY = Deno.env.get('FUNCTION_KEY');
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -31,7 +30,7 @@ serve(async (req) => {
         headers: {
           ...corsHeaders,
           'Content-Type': 'application/json',
-          'Retry-After': '900' // 15 minutes in seconds
+          'Retry-After': '900'
         }
       }
     );
@@ -45,11 +44,11 @@ serve(async (req) => {
     });
   }
 
-  // Verify authorization
+  // Verify authorization header exists
   const authHeader = req.headers.get('Authorization');
-  if (!authHeader || !authHeader.startsWith('Bearer ') || authHeader.split(' ')[1] !== FUNCTION_KEY) {
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
     return new Response(
-      JSON.stringify({ error: 'Unauthorized' }),
+      JSON.stringify({ error: 'Unauthorized - Missing or invalid authorization header' }),
       { 
         status: 401,
         headers: {
@@ -131,7 +130,7 @@ serve(async (req) => {
         details: error.stack 
       }),
       { 
-        status: error.message === 'Unauthorized' ? 401 : 500,
+        status: error.message.includes('Unauthorized') ? 401 : 500,
         headers: {
           ...corsHeaders,
           'Content-Type': 'application/json'
