@@ -63,7 +63,6 @@ serve(async (req) => {
     try {
       const { code, clientId, clientSecret, redirectUri, grantType, refreshToken } = await req.json();
 
-      // Log request (sem dados sensíveis)
       console.log(`Processing ${grantType} request for client ${clientId}`);
 
       // Validação de parâmetros obrigatórios
