@@ -61,23 +61,12 @@ export async function getPlans(): Promise<Plan[]> {
 
 export async function createCheckoutSession(priceId: string, storeId: string) {
   try {
-    const { data: session, error } = await supabase.functions.invoke('create-checkout-session', {
-      body: { priceId, storeId },
-      headers: {
-        Authorization: `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
-      }
+    const { data, error } = await supabase.functions.invoke('create-checkout-session', {
+      body: { priceId, storeId }
     });
 
     if (error) throw error;
-
-    const stripe = await stripePromise;
-    if (!stripe) throw new Error('Stripe não inicializado');
-
-    const result = await stripe.redirectToCheckout({
-      sessionId: session.id
-    });
-
-    if (result.error) throw result.error;
+    return data;
   } catch (error: any) {
     console.error('Erro ao criar sessão:', error);
     throw new Error(error.message || 'Erro ao processar pagamento');
@@ -86,15 +75,10 @@ export async function createCheckoutSession(priceId: string, storeId: string) {
 
 export async function createPortalSession() {
   try {
-    const { data: session, error } = await supabase.functions.invoke('create-portal-session', {
-      headers: {
-        Authorization: `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
-      }
-    });
+    const { data, error } = await supabase.functions.invoke('create-portal-session');
 
     if (error) throw error;
-
-    window.location.href = session.url;
+    return data;
   } catch (error: any) {
     console.error('Erro ao criar sessão do portal:', error);
     throw new Error(error.message || 'Erro ao acessar portal de pagamento');

@@ -1,5 +1,5 @@
-import React from 'react';
-import { Check, X } from 'lucide-react';
+import React, { useState } from 'react';
+import { Check, X, Loader2 } from 'lucide-react';
 import { Store } from '../../lib/types';
 import { createCheckoutSession, createPortalSession, Plan } from '../../lib/stripe';
 
@@ -9,21 +9,41 @@ interface PlansTabProps {
 }
 
 export function PlansTab({ store, plans }: PlansTabProps) {
+  const [loading, setLoading] = useState(false);
+
   const handleUpgrade = async (priceId: string) => {
     try {
-      await createCheckoutSession(priceId, store.id);
+      setLoading(true);
+      const response = await createCheckoutSession(priceId, store.id);
+      
+      // Se retornou uma URL, é portal session para downgrade
+      if ('url' in response) {
+        window.location.href = response.url;
+        return;
+      }
+
+      // Se retornou um ID, é checkout session para upgrade
+      if ('id' in response) {
+        const stripe = (window as any).Stripe(import.meta.env.VITE_STRIPE_PUBLIC_KEY);
+        await stripe.redirectToCheckout({ sessionId: response.id });
+      }
     } catch (error: any) {
       console.error('Erro ao iniciar upgrade:', error);
       alert(error.message);
+    } finally {
+      setLoading(false);
     }
   };
 
   const handleManageSubscription = async () => {
     try {
+      setLoading(true);
       await createPortalSession();
     } catch (error: any) {
       console.error('Erro ao acessar portal:', error);
       alert(error.message);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -171,6 +191,15 @@ export function PlansTab({ store, plans }: PlansTabProps) {
           Cancele a qualquer momento sem taxas adicionais.
         </p>
       </div>
+
+      {loading && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-gray-800 p-4 rounded-lg flex items-center space-x-3">
+            <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
+            <span>Processando...</span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

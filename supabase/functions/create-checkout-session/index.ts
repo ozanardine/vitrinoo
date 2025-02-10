@@ -27,9 +27,6 @@ serve(async (req) => {
   }
 
   try {
-    // Log request headers
-    console.log('Request headers:', Object.fromEntries(req.headers.entries()));
-
     const { priceId, storeId } = await req.json();
     console.log('Request body:', { priceId, storeId });
 
@@ -51,12 +48,19 @@ serve(async (req) => {
       throw new Error('Usuário não autenticado');
     }
 
-    console.log('User authenticated:', user.id);
-
     // Verificar se a loja pertence ao usuário
     const { data: store, error: storeError } = await supabase
       .from('stores')
-      .select('id')
+      .select(`
+        id,
+        subscriptions (
+          id,
+          stripe_subscription_id,
+          stripe_subscriptions (
+            subscription_id
+          )
+        )
+      `)
       .eq('id', storeId)
       .eq('user_id', user.id)
       .single();
@@ -64,18 +68,6 @@ serve(async (req) => {
     if (storeError || !store) {
       console.error('Store error:', storeError);
       throw new Error('Loja não encontrada ou não pertence ao usuário');
-    }
-
-    // Verificar se o preço existe
-    const { data: price, error: priceError } = await supabase
-      .from('stripe_prices')
-      .select('price_id')
-      .eq('price_id', priceId)
-      .single();
-
-    if (priceError || !price) {
-      console.error('Price error:', priceError);
-      throw new Error('Preço não encontrado');
     }
 
     // Verificar se já existe um customer
@@ -115,9 +107,28 @@ serve(async (req) => {
       customer = newCustomer;
     }
 
+    // Se já existe uma subscription, criar portal session para fazer downgrade
+    const currentSubscription = store.subscriptions?.[0]?.stripe_subscriptions?.subscription_id;
+    if (currentSubscription) {
+      console.log('Creating portal session for existing subscription');
+      
+      const session = await stripe.billingPortal.sessions.create({
+        customer: customer.customer_id,
+        return_url: `${req.headers.get('origin')}/profile`,
+      });
+
+      return new Response(
+        JSON.stringify({ url: session.url }),
+        { 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 200
+        }
+      );
+    }
+
+    // Se não tem subscription, criar checkout session
     console.log('Creating checkout session for customer:', customer.customer_id);
 
-    // Criar checkout session
     const session = await stripe.checkout.sessions.create({
       customer: customer.customer_id,
       line_items: [{ price: priceId, quantity: 1 }],
