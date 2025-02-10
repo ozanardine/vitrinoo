@@ -19,14 +19,14 @@ export function TinyCallback() {
         }
 
         // Recuperar e validar state
-        const tempCredentials = sessionStorage.getItem('tiny_temp_credentials');
-        if (!tempCredentials) {
+        const tempCredentialsStr = sessionStorage.getItem('tiny_temp_credentials');
+        if (!tempCredentialsStr) {
           throw new Error('Credenciais temporárias não encontradas');
         }
 
-        const { clientId, clientSecret, storeId, savedState } = JSON.parse(tempCredentials);
+        const tempCredentials = JSON.parse(tempCredentialsStr);
         
-        if (state !== savedState) {
+        if (state !== tempCredentials.savedState) {
           throw new Error('Estado inválido - possível ataque CSRF');
         }
 
@@ -37,22 +37,25 @@ export function TinyCallback() {
         const redirectUri = `${window.location.origin}/tiny-callback`;
         
         try {
+          console.log('Trocando código por tokens...');
           const { 
             access_token, 
             refresh_token, 
             expires_in 
           } = await exchangeCodeForToken(
             code,
-            clientId,
-            clientSecret,
+            tempCredentials.clientId,
+            tempCredentials.clientSecret,
             redirectUri
           );
 
+          console.log('Tokens obtidos, salvando credenciais...');
+          
           // Salvar credenciais
           await saveTinyCredentials(
-            storeId,
-            clientId,
-            clientSecret,
+            tempCredentials.storeId,
+            tempCredentials.clientId,
+            tempCredentials.clientSecret,
             access_token,
             refresh_token,
             expires_in
@@ -61,6 +64,7 @@ export function TinyCallback() {
           // Redirecionar de volta para o perfil
           navigate('/profile?tab=integrations&success=true');
         } catch (tokenError: any) {
+          console.error('Erro na troca de tokens:', tokenError);
           throw new Error(`Erro na autenticação: ${tokenError.message}`);
         }
       } catch (err: any) {
