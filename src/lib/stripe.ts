@@ -32,7 +32,7 @@ export async function getPlans(): Promise<Plan[]> {
       name,
       description,
       features,
-      stripe_prices!inner (
+      stripe_prices (
         id,
         price_id,
         unit_amount,
@@ -62,7 +62,10 @@ export async function getPlans(): Promise<Plan[]> {
 export async function createCheckoutSession(priceId: string, storeId: string) {
   try {
     const { data: session, error } = await supabase.functions.invoke('create-checkout-session', {
-      body: { priceId, storeId }
+      body: { priceId, storeId },
+      headers: {
+        Authorization: `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
+      }
     });
 
     if (error) throw error;
@@ -83,7 +86,11 @@ export async function createCheckoutSession(priceId: string, storeId: string) {
 
 export async function createPortalSession() {
   try {
-    const { data: session, error } = await supabase.functions.invoke('create-portal-session');
+    const { data: session, error } = await supabase.functions.invoke('create-portal-session', {
+      headers: {
+        Authorization: `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
+      }
+    });
 
     if (error) throw error;
 
