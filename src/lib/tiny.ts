@@ -48,6 +48,22 @@ export async function exchangeCodeForToken(
   redirectUri: string
 ): Promise<TinyTokenResponse> {
   try {
+    // Log inicial dos parâmetros (sem expor dados sensíveis)
+    console.log('Iniciando troca de código por token:', {
+      hasCode: !!code,
+      hasClientId: !!clientId,
+      hasClientSecret: !!clientSecret,
+      redirectUri
+    });
+
+    // Verificar URL do Supabase
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+    console.log('Supabase URL:', supabaseUrl);
+    
+    if (!supabaseUrl) {
+      throw new Error('VITE_SUPABASE_URL não está configurada');
+    }
+
     // Obter chave da função
     const { data: keyData, error: keyError } = await supabase
       .from('function_keys')
@@ -55,36 +71,58 @@ export async function exchangeCodeForToken(
       .eq('name', 'tiny-token-exchange')
       .single();
 
-    if (keyError) throw new Error('Erro ao obter chave de função');
+    if (keyError) {
+      console.error('Erro ao obter chave da função:', keyError);
+      throw new Error('Erro ao obter chave de função');
+    }
 
-    // Construir a URL completa da função Edge
-    const functionUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/tiny-token-exchange`;
+    // Construir URL da função
+    const functionUrl = new URL('/functions/v1/tiny-token-exchange', supabaseUrl).toString();
+    console.log('Function URL:', functionUrl);
+
+    // Preparar payload
+    const payload = {
+      code,
+      clientId,
+      clientSecret,
+      redirectUri,
+      grantType: 'authorization_code'
+    };
 
     // Fazer requisição para a função Edge
+    console.log('Iniciando requisição para função Edge');
     const response = await fetch(functionUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${keyData.key}`
       },
-      body: JSON.stringify({
-        code,
-        clientId,
-        clientSecret,
-        redirectUri,
-        grantType: 'authorization_code'
-      })
+      body: JSON.stringify(payload)
     });
 
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.message || 'Erro na troca de token');
+      const errorData = await response.json().catch(() => null);
+      console.error('Resposta não-OK da função Edge:', {
+        status: response.status,
+        statusText: response.statusText,
+        errorData
+      });
+      throw new Error(
+        errorData?.message || 
+        `Erro na troca de token: ${response.status} ${response.statusText}`
+      );
     }
 
     const data = await response.json();
+    console.log('Token obtido com sucesso');
+    
     return data;
   } catch (error: any) {
-    console.error('Error exchanging code for token:', error);
+    console.error('Erro detalhado na troca de token:', {
+      name: error.name,
+      message: error.message,
+      stack: error.stack
+    });
     throw error;
   }
 }

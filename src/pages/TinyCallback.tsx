@@ -11,60 +11,64 @@ export function TinyCallback() {
   useEffect(() => {
     const handleCallback = async () => {
       try {
+        console.log('Iniciando callback do Tiny');
         const code = searchParams.get('code');
         const state = searchParams.get('state');
         
         if (!code) {
-          throw new Error('Código de autorização não encontrado');
+          throw new Error('Código de autorização não encontrado na URL');
         }
-
-        // Recuperar e validar state
+  
+        console.log('Código de autorização recebido');
+  
+        // Recuperar credenciais temporárias
         const tempCredentialsStr = sessionStorage.getItem('tiny_temp_credentials');
         if (!tempCredentialsStr) {
-          throw new Error('Credenciais temporárias não encontradas');
+          throw new Error('Credenciais temporárias não encontradas no sessionStorage');
         }
-
+  
+        console.log('Credenciais temporárias encontradas');
         const tempCredentials = JSON.parse(tempCredentialsStr);
         
         if (state !== tempCredentials.savedState) {
           throw new Error('Estado inválido - possível ataque CSRF');
         }
-
+  
         // Limpar credenciais temporárias
         sessionStorage.removeItem('tiny_temp_credentials');
-
+  
         // Trocar código por tokens
         const redirectUri = `${window.location.origin}/tiny-callback`;
+        console.log('Redirect URI:', redirectUri);
         
         try {
-          console.log('Trocando código por tokens...');
-          const { 
-            access_token, 
-            refresh_token, 
-            expires_in 
-          } = await exchangeCodeForToken(
+          console.log('Iniciando troca de código por tokens');
+          const tokens = await exchangeCodeForToken(
             code,
             tempCredentials.clientId,
             tempCredentials.clientSecret,
             redirectUri
           );
-
-          console.log('Tokens obtidos, salvando credenciais...');
+  
+          console.log('Tokens obtidos, salvando credenciais');
           
-          // Salvar credenciais
           await saveTinyCredentials(
             tempCredentials.storeId,
             tempCredentials.clientId,
             tempCredentials.clientSecret,
-            access_token,
-            refresh_token,
-            expires_in
+            tokens.access_token,
+            tokens.refresh_token,
+            tokens.expires_in
           );
-
-          // Redirecionar de volta para o perfil
+  
+          console.log('Credenciais salvas com sucesso');
           navigate('/profile?tab=integrations&success=true');
         } catch (tokenError: any) {
-          console.error('Erro na troca de tokens:', tokenError);
+          console.error('Erro detalhado na troca de tokens:', {
+            name: tokenError.name,
+            message: tokenError.message,
+            stack: tokenError.stack
+          });
           throw new Error(`Erro na autenticação: ${tokenError.message}`);
         }
       } catch (err: any) {
@@ -72,7 +76,7 @@ export function TinyCallback() {
         setError(err.message || 'Erro ao processar autenticação');
       }
     };
-
+  
     handleCallback();
   }, [navigate, searchParams]);
 
