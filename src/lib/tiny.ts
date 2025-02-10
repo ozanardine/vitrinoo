@@ -60,7 +60,7 @@ export async function exchangeCodeForToken(
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${keyData.key}` // Usar a chave obtida do banco
+        'Authorization': `Bearer ${keyData.key}`
       },
       body: JSON.stringify({
         code,
@@ -130,7 +130,7 @@ async function refreshTinyToken(
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${import.meta.env.VITE_FUNCTION_KEY}`
+          'Authorization': `Bearer ${keyData.key}`
         },
         body: JSON.stringify({
           refreshToken,
