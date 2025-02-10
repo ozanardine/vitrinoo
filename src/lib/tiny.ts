@@ -48,6 +48,7 @@ export async function exchangeCodeForToken(
   redirectUri: string
 ): Promise<TinyTokenResponse> {
   try {
+    // Obter chave da função
     const { data: keyData, error: keyError } = await supabase
       .from('function_keys')
       .select('key')
@@ -59,6 +60,7 @@ export async function exchangeCodeForToken(
     // Construir a URL completa da função Edge
     const functionUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/tiny-token-exchange`;
 
+    // Fazer requisição para a função Edge
     const response = await fetch(functionUrl, {
       method: 'POST',
       headers: {
@@ -79,8 +81,9 @@ export async function exchangeCodeForToken(
       throw new Error(error.message || 'Erro na troca de token');
     }
 
-    return response.json();
-  } catch (error) {
+    const data = await response.json();
+    return data;
+  } catch (error: any) {
     console.error('Error exchanging code for token:', error);
     throw error;
   }
