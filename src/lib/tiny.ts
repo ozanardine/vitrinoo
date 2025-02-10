@@ -48,7 +48,7 @@ export async function exchangeCodeForToken(
   redirectUri: string
 ): Promise<TinyTokenResponse> {
   try {
-    // Log inicial dos parâmetros (sem expor dados sensíveis)
+    // Log inicial dos parâmetros
     console.log('Iniciando troca de código por token:', {
       hasCode: !!code,
       hasClientId: !!clientId,
@@ -60,10 +60,6 @@ export async function exchangeCodeForToken(
     const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
     console.log('Supabase URL:', supabaseUrl);
     
-    if (!supabaseUrl) {
-      throw new Error('VITE_SUPABASE_URL não está configurada');
-    }
-
     // Obter chave da função
     const { data: keyData, error: keyError } = await supabase
       .from('function_keys')
@@ -77,46 +73,60 @@ export async function exchangeCodeForToken(
     }
 
     // Construir URL da função
-    const functionUrl = new URL('/functions/v1/tiny-token-exchange', supabaseUrl).toString();
+    const functionUrl = `${supabaseUrl}/functions/v1/tiny-token-exchange`;
     console.log('Function URL:', functionUrl);
 
-    // Preparar payload
+    // Preparar payload com validação de tipos
     const payload = {
-      code,
-      clientId,
-      clientSecret,
-      redirectUri,
+      code: String(code),
+      clientId: String(clientId),
+      clientSecret: String(clientSecret),
+      redirectUri: String(redirectUri),
       grantType: 'authorization_code'
     };
 
-    // Fazer requisição para a função Edge
-    console.log('Iniciando requisição para função Edge');
-    const response = await fetch(functionUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${keyData.key}`
-      },
-      body: JSON.stringify(payload)
+    // Log do payload (sem dados sensíveis)
+    console.log('Payload preparado:', {
+      ...payload,
+      clientSecret: '[REDACTED]'
     });
 
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => null);
-      console.error('Resposta não-OK da função Edge:', {
-        status: response.status,
-        statusText: response.statusText,
-        errorData
-      });
-      throw new Error(
-        errorData?.message || 
-        `Erro na troca de token: ${response.status} ${response.statusText}`
-      );
-    }
+    // Log da chave (sem expor o valor completo)
+    console.log('Auth header preparado:', `Bearer ${keyData.key.substring(0, 5)}...`);
 
-    const data = await response.json();
-    console.log('Token obtido com sucesso');
-    
-    return data;
+    try {
+      // Fazer requisição para a função Edge com validação explícita
+      const response = await fetch(functionUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${keyData.key}`,
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      });
+
+      const data = await response.json();
+      
+      if (!response.ok) {
+        console.error('Resposta não-OK da função Edge:', {
+          status: response.status,
+          statusText: response.statusText,
+          error: data
+        });
+        throw new Error(data.error || 'Erro na troca de token');
+      }
+
+      console.log('Token obtido com sucesso');
+      return data;
+    } catch (fetchError) {
+      console.error('Erro no fetch:', {
+        name: fetchError.name,
+        message: fetchError.message,
+        type: typeof fetchError
+      });
+      throw fetchError;
+    }
   } catch (error: any) {
     console.error('Erro detalhado na troca de token:', {
       name: error.name,

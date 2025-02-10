@@ -5,7 +5,7 @@ const TINY_TOKEN_URL = 'https://accounts.tiny.com.br/realms/tiny/protocol/openid
 const FUNCTION_KEY = Deno.env.get('FUNCTION_KEY');
 
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Origin': 'https://vitrinoo.netlify.app',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
   'Access-Control-Max-Age': '86400'
