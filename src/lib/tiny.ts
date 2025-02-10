@@ -60,7 +60,7 @@ export async function exchangeCodeForToken(
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${import.meta.env.VITE_FUNCTION_KEY}`
+        'Authorization': `Bearer ${keyData.key}` // Usar a chave obtida do banco
       },
       body: JSON.stringify({
         code,
