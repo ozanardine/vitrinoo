@@ -27,9 +27,18 @@ serve(async (req) => {
   }
 
   try {
+    // Log request headers
+    console.log('Request headers:', Object.fromEntries(req.headers.entries()));
+
     const { priceId, storeId } = await req.json();
+    console.log('Request body:', { priceId, storeId });
+
+    // Validar parâmetros
+    if (!priceId || !storeId) {
+      throw new Error('priceId e storeId são obrigatórios');
+    }
+
     const authHeader = req.headers.get('Authorization');
-    
     if (!authHeader) {
       throw new Error('Não autorizado');
     }
@@ -38,7 +47,35 @@ serve(async (req) => {
     const { data: { user }, error: userError } = await supabase.auth.getUser(token);
 
     if (userError || !user) {
+      console.error('User error:', userError);
       throw new Error('Usuário não autenticado');
+    }
+
+    console.log('User authenticated:', user.id);
+
+    // Verificar se a loja pertence ao usuário
+    const { data: store, error: storeError } = await supabase
+      .from('stores')
+      .select('id')
+      .eq('id', storeId)
+      .eq('user_id', user.id)
+      .single();
+
+    if (storeError || !store) {
+      console.error('Store error:', storeError);
+      throw new Error('Loja não encontrada ou não pertence ao usuário');
+    }
+
+    // Verificar se o preço existe
+    const { data: price, error: priceError } = await supabase
+      .from('stripe_prices')
+      .select('price_id')
+      .eq('price_id', priceId)
+      .single();
+
+    if (priceError || !price) {
+      console.error('Price error:', priceError);
+      throw new Error('Preço não encontrado');
     }
 
     // Verificar se já existe um customer
@@ -49,6 +86,8 @@ serve(async (req) => {
       .single();
 
     if (!customer) {
+      console.log('Creating new customer for user:', user.id);
+      
       // Criar customer no Stripe
       const stripeCustomer = await stripe.customers.create({
         email: user.email,
@@ -58,14 +97,25 @@ serve(async (req) => {
       });
 
       // Salvar customer no banco
-      await supabase.from('stripe_customers').insert({
-        user_id: user.id,
-        customer_id: stripeCustomer.id,
-        email: user.email
-      });
+      const { data: newCustomer, error: customerError } = await supabase
+        .from('stripe_customers')
+        .insert({
+          user_id: user.id,
+          customer_id: stripeCustomer.id,
+          email: user.email
+        })
+        .select()
+        .single();
 
-      customer = { customer_id: stripeCustomer.id };
+      if (customerError) {
+        console.error('Customer creation error:', customerError);
+        throw new Error('Erro ao criar cliente');
+      }
+
+      customer = newCustomer;
     }
+
+    console.log('Creating checkout session for customer:', customer.customer_id);
 
     // Criar checkout session
     const session = await stripe.checkout.sessions.create({
@@ -79,6 +129,8 @@ serve(async (req) => {
       }
     });
 
+    console.log('Checkout session created:', session.id);
+
     return new Response(
       JSON.stringify({ id: session.id }),
       { 
@@ -87,8 +139,13 @@ serve(async (req) => {
       }
     );
   } catch (error) {
+    console.error('Function error:', error);
+    
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ 
+        error: error.message || 'Internal server error',
+        details: error.stack
+      }),
       { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 400
