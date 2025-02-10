@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { User, Package, Grid, Link, Palette, Store, Tag } from 'lucide-react';
+import { User, Package, Grid, Link, Palette, Store, Tag, CreditCard } from 'lucide-react';
 import { useStore } from '../lib/store';
 import { supabase } from '../lib/supabase';
 import { Store as StoreType } from '../lib/types';
@@ -10,9 +10,11 @@ import { CategoriesTab } from '../components/profile/CategoriesTab';
 import { IntegrationsTab } from '../components/profile/IntegrationsTab';
 import { StoreCustomizationTab } from '../components/profile/StoreCustomizationTab';
 import { LabelsTab } from '../components/profile/LabelsTab';
+import { PlansTab } from '../components/profile/PlansTab';
 import { StoreModal } from '../components/StoreModal';
+import { getPlans } from '../lib/stripe';
 
-type TabType = 'profile' | 'catalog' | 'products' | 'categories' | 'labels' | 'integrations';
+type TabType = 'profile' | 'catalog' | 'products' | 'categories' | 'labels' | 'integrations' | 'plans';
 
 interface TabButtonProps {
   tab: TabType;
@@ -61,6 +63,7 @@ export function Profile() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<TabType>('profile');
   const [showStoreModal, setShowStoreModal] = useState(false);
+  const [plans, setPlans] = useState([]);
 
   useEffect(() => {
     if (!user) {
@@ -68,8 +71,18 @@ export function Profile() {
       return;
     }
 
-    loadStoreData();
+    loadData();
   }, [user, navigate]);
+
+  const loadData = async () => {
+    try {
+      await loadStoreData();
+      const plansData = await getPlans();
+      setPlans(plansData);
+    } catch (error) {
+      console.error('Erro ao carregar dados:', error);
+    }
+  };
 
   const loadStoreData = async () => {
     try {
@@ -213,7 +226,10 @@ export function Profile() {
               </div>
             </div>
             {store.subscription.plan_type !== 'plus' && (
-              <button className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium">
+              <button 
+                onClick={() => setActiveTab('plans')}
+                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium"
+              >
                 Fazer Upgrade
               </button>
             )}
@@ -266,6 +282,13 @@ export function Profile() {
               activeTab={activeTab}
               onClick={setActiveTab}
             />
+            <TabButton
+              tab="plans"
+              icon={CreditCard}
+              label="Planos"
+              activeTab={activeTab}
+              onClick={setActiveTab}
+            />
           </div>
         </div>
 
@@ -276,6 +299,7 @@ export function Profile() {
           {activeTab === 'categories' && <CategoriesTab store={store} onUpdate={loadStoreData} />}
           {activeTab === 'labels' && <LabelsTab store={store} />}
           {activeTab === 'integrations' && <IntegrationsTab store={store} />}
+          {activeTab === 'plans' && <PlansTab store={store} plans={plans} />}
         </div>
       </div>
     </div>
