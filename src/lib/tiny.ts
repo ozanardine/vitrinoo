@@ -57,7 +57,7 @@ export async function exchangeCodeForToken(
     if (keyError) throw new Error('Erro ao obter chave de função');
 
     // Construir a URL completa da função Edge
-    const functionUrl = new URL('/functions/v1/tiny-token-exchange', import.meta.env.VITE_SUPABASE_URL).toString();
+    const functionUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/tiny-token-exchange`;
 
     const response = await fetch(functionUrl, {
       method: 'POST',
@@ -160,7 +160,7 @@ async function getValidTinyToken(storeId: string): Promise<string> {
 
       if (keyError) throw new Error('Erro ao obter chave de função');
 
-      const functionUrl = new URL('/functions/v1/tiny-token-exchange', import.meta.env.VITE_SUPABASE_URL).toString();
+      const functionUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/tiny-token-exchange`;
 
       const response = await fetch(functionUrl, {
         method: 'POST',
