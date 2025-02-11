@@ -61,12 +61,18 @@ serve(async (req) => {
   try {
     // Verificar autorização
     const authHeader = req.headers.get('Authorization');
-    if (!authHeader || !authHeader.startsWith('Bearer ') || authHeader.split(' ')[1] !== FUNCTION_KEY) {
-      console.error('Authorization failed:', {
-        hasHeader: !!authHeader,
-        startsWithBearer: authHeader?.startsWith('Bearer '),
-        keyMatch: authHeader?.split(' ')[1] === FUNCTION_KEY
-      });
+    console.log('Auth header recebido:', authHeader?.substring(0, 20) + '...');
+
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      console.error('Header de autorização inválido');
+      throw new Error('Unauthorized');
+    }
+
+    const token = authHeader.split(' ')[1];
+    console.log('Token extraído:', token.substring(0, 20) + '...');
+
+    if (token !== FUNCTION_KEY) {
+      console.error('Token não corresponde à chave da função');
       throw new Error('Unauthorized');
     }
 

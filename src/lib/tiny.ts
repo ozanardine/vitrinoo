@@ -64,68 +64,30 @@ export async function exchangeCodeForToken(
       throw new Error('Chave de função não encontrada');
     }
 
-    // Limpar o token removendo quebras de linha e espaços extras
-    const cleanToken = keyData.key.replace(/[\n\r\s]+/g, '');
-    console.log('Token limpo e preparado para uso');
+    // Limpar e validar o token
+    let cleanToken = keyData.key;
+    
+    // Remover espaços em branco e quebras de linha
+    cleanToken = cleanToken.replace(/[\n\r\s]+/g, '');
+    
+    // Verificar se o token está em base64
+    if (cleanToken.includes('base64,')) {
+      cleanToken = cleanToken.split('base64,')[1];
+    }
 
-    return new Promise((resolve, reject) => {
-      const xhr = new XMLHttpRequest();
+    // Log do token (apenas primeiros e últimos caracteres para segurança)
+    console.log('Token debug:', {
+      length: cleanToken.length,
+      start: cleanToken.substring(0, 10) + '...',
+      end: '...' + cleanToken.substring(cleanToken.length - 10),
+      containsSpaces: cleanToken.includes(' '),
+      containsNewlines: cleanToken.includes('\n'),
+    });
+
+    // Tentar usando fetch primeiro
+    try {
       const functionUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/tiny-token-exchange`;
-
-      xhr.open('POST', functionUrl, true);
       
-      // Headers com token limpo
-      xhr.setRequestHeader('Content-Type', 'application/json');
-      xhr.setRequestHeader('Accept', 'application/json');
-      xhr.setRequestHeader('Authorization', `Bearer ${cleanToken}`);
-
-      // Logging do estado
-      xhr.onreadystatechange = function() {
-        console.log('XHR State:', {
-          readyState: xhr.readyState,
-          status: xhr.status,
-          statusText: xhr.statusText
-        });
-      };
-
-      // Handler de sucesso
-      xhr.onload = function() {
-        console.log('Response received:', {
-          status: xhr.status,
-          statusText: xhr.statusText
-        });
-
-        if (xhr.status >= 200 && xhr.status < 300) {
-          try {
-            const response = JSON.parse(xhr.responseText);
-            console.log('Token obtido com sucesso');
-            resolve(response);
-          } catch (e) {
-            console.error('Erro ao processar resposta:', e);
-            reject(new Error('Erro ao processar resposta'));
-          }
-        } else {
-          try {
-            const error = JSON.parse(xhr.responseText);
-            console.error('Erro na resposta:', error);
-            reject(new Error(error.message || 'Erro na requisição'));
-          } catch (e) {
-            reject(new Error(`Erro ${xhr.status}: ${xhr.statusText}`));
-          }
-        }
-      };
-
-      // Handler de erro
-      xhr.onerror = function() {
-        console.error('XHR Error:', {
-          status: xhr.status,
-          statusText: xhr.statusText,
-          response: xhr.responseText
-        });
-        reject(new Error('Erro na conexão'));
-      };
-
-      // Enviar requisição
       const payload = {
         code: String(code),
         clientId: String(clientId),
@@ -134,15 +96,41 @@ export async function exchangeCodeForToken(
         grantType: 'authorization_code'
       };
 
-      console.log('Enviando requisição para:', functionUrl);
+      console.log('Tentando fetch com URL:', functionUrl);
 
-      try {
-        xhr.send(JSON.stringify(payload));
-      } catch (e) {
-        console.error('Erro ao enviar requisição:', e);
-        reject(e);
+      const response = await fetch(functionUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Authorization': `Bearer ${cleanToken}`
+        },
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error('Erro na resposta:', {
+          status: response.status,
+          statusText: response.statusText,
+          error: errorData
+        });
+        throw new Error(errorData.message || 'Erro na requisição');
       }
-    });
+
+      const data = await response.json();
+      console.log('Resposta recebida com sucesso');
+      return data;
+
+    } catch (fetchError) {
+      console.error('Erro no fetch:', {
+        name: fetchError.name,
+        message: fetchError.message,
+        type: typeof fetchError
+      });
+      throw fetchError;
+    }
+
   } catch (error: any) {
     console.error('Erro detalhado na troca de token:', {
       name: error.name,
