@@ -20,10 +20,20 @@ export function ProductsTab({ store, onUpdate }: ProductsTabProps) {
   const [productToView, setProductToView] = useState<Product | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [showFilters, setShowFilters] = useState(false);
+  const [categories, setCategories] = useState([]);
+  const [hasErpIntegration, setHasErpIntegration] = useState(false);
 
   useEffect(() => {
-    loadProducts();
+    loadData();
   }, [store.id]);
+
+  const loadData = async () => {
+    await Promise.all([
+      loadProducts(),
+      loadCategories(),
+      checkErpIntegration()
+    ]);
+  };
 
   const loadProducts = async () => {
     try {
@@ -42,13 +52,54 @@ export function ProductsTab({ store, onUpdate }: ProductsTabProps) {
     }
   };
 
+  const loadCategories = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('categories')
+        .select('*')
+        .eq('store_id', store.id)
+        .order('name');
+
+      if (error) throw error;
+      setCategories(data || []);
+    } catch (err) {
+      console.error('Erro ao carregar categorias:', err);
+    }
+  };
+
+  const checkErpIntegration = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('erp_integrations')
+        .select('active')
+        .eq('store_id', store.id)
+        .eq('provider', 'tiny')
+        .eq('active', true)
+        .limit(1);
+
+      if (error) throw error;
+      setHasErpIntegration(data && data.length > 0);
+    } catch (err) {
+      console.error('Erro ao verificar integração ERP:', err);
+      setHasErpIntegration(false);
+    }
+  };
+
   const handleEdit = (product: Product) => {
+    if (hasErpIntegration) {
+      alert('Não é possível editar produtos manualmente quando há integração com ERP ativa');
+      return;
+    }
     setProductToEdit(product);
     setShowProductModal(true);
     setProductToView(null);
   };
 
   const handleDelete = async (product: Product) => {
+    if (hasErpIntegration) {
+      alert('Não é possível excluir produtos manualmente quando há integração com ERP ativa');
+      return;
+    }
     try {
       const { error } = await supabase
         .from('products')
@@ -85,10 +136,14 @@ export function ProductsTab({ store, onUpdate }: ProductsTabProps) {
         </div>
         <button
           onClick={() => {
+            if (hasErpIntegration) {
+              alert('Não é possível adicionar produtos manualmente quando há integração com ERP ativa');
+              return;
+            }
             setProductToEdit(undefined);
             setShowProductModal(true);
           }}
-          disabled={products.length >= store.product_limit}
+          disabled={products.length >= store.product_limit || hasErpIntegration}
           className="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white px-4 py-2 rounded-lg flex items-center space-x-2"
         >
           <Plus className="w-4 h-4" />
@@ -139,7 +194,7 @@ export function ProductsTab({ store, onUpdate }: ProductsTabProps) {
       {showProductModal && (
         <ProductModal
           storeId={store.id}
-          categories={[]}
+          categories={categories}
           onClose={() => {
             setShowProductModal(false);
             setProductToEdit(undefined);
@@ -152,6 +207,8 @@ export function ProductsTab({ store, onUpdate }: ProductsTabProps) {
           }}
           product={productToEdit}
           planType={store.subscription.plan_type}
+          categoryLimit={store.category_limit}
+          currentCategoryCount={store.categories_count}
         />
       )}
 

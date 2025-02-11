@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { User, Package, Grid, Link, Palette, Store, Tag, CreditCard } from 'lucide-react';
+import { User, Package, Grid, Link, Palette, Store, CreditCard } from 'lucide-react';
 import { useStore } from '../lib/store';
 import { supabase } from '../lib/supabase';
 import { Store as StoreType } from '../lib/types';
@@ -9,12 +9,11 @@ import { ProductsTab } from '../components/profile/ProductsTab';
 import { CategoriesTab } from '../components/profile/CategoriesTab';
 import { IntegrationsTab } from '../components/profile/IntegrationsTab';
 import { StoreCustomizationTab } from '../components/profile/StoreCustomizationTab';
-import { LabelsTab } from '../components/profile/LabelsTab';
 import { PlansTab } from '../components/profile/PlansTab';
 import { StoreModal } from '../components/StoreModal';
 import { getPlans } from '../lib/stripe';
 
-type TabType = 'profile' | 'catalog' | 'products' | 'categories' | 'labels' | 'integrations' | 'plans';
+type TabType = 'profile' | 'catalog' | 'products' | 'categories' | 'integrations' | 'plans';
 
 interface TabButtonProps {
   tab: TabType;
@@ -86,7 +85,6 @@ export function Profile() {
 
   const loadStoreData = async () => {
     try {
-      // Primeiro carregamos os dados da loja e assinatura
       const { data: storeData, error: storeError } = await supabase
         .from('stores')
         .select(`
@@ -110,7 +108,6 @@ export function Profile() {
         return;
       }
 
-      // Agora carregamos as contagens
       const [productsCount, categoriesCount] = await Promise.all([
         supabase
           .from('products')
@@ -120,7 +117,7 @@ export function Profile() {
           .from('categories')
           .select('id', { count: 'exact', head: true })
           .eq('store_id', storeData.id)
-          .is('parent_id', null) // Conta apenas categorias principais
+          .is('parent_id', null)
       ]);
 
       const subscription = storeData.subscriptions[0];
@@ -269,13 +266,6 @@ export function Profile() {
               onClick={setActiveTab}
             />
             <TabButton
-              tab="labels"
-              icon={Tag}
-              label="Etiquetas"
-              activeTab={activeTab}
-              onClick={setActiveTab}
-            />
-            <TabButton
               tab="integrations"
               icon={Link}
               label="Integrações"
@@ -297,7 +287,6 @@ export function Profile() {
           {activeTab === 'catalog' && <StoreCustomizationTab store={store} onUpdate={loadStoreData} />}
           {activeTab === 'products' && <ProductsTab store={store} onUpdate={loadStoreData} />}
           {activeTab === 'categories' && <CategoriesTab store={store} onUpdate={loadStoreData} />}
-          {activeTab === 'labels' && <LabelsTab store={store} />}
           {activeTab === 'integrations' && <IntegrationsTab store={store} />}
           {activeTab === 'plans' && <PlansTab store={store} plans={plans} />}
         </div>

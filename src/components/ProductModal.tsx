@@ -1,10 +1,14 @@
-import React, { useState } from 'react';
-import { X, FolderTree, Wand2 } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Modal } from './Modal';
 import { supabase } from '../lib/supabase';
-import { CategoryTreeModal } from './CategoryTreeModal';
-import { ImageGalleryUploader } from './ImageGalleryUploader';
-import { ProductDescriptionGenerator } from './ProductDescriptionGenerator';
 import { Product } from '../lib/types';
+import { CategoryTreeModal } from './CategoryTreeModal';
+import { BasicInfo } from './products/form/BasicInfo';
+import { Description } from './products/form/Description';
+import { Images } from './products/form/Images';
+import { ProductAttributes } from './products/ProductAttributes';
+import { ProductVariations } from './products/ProductVariations';
+import { ProductComponents } from './products/ProductComponents';
 
 interface ProductModalProps {
   storeId: string;
@@ -12,79 +16,126 @@ interface ProductModalProps {
   onClose: () => void;
   onSuccess: () => void;
   product?: Product;
-  planType?: 'free' | 'basic' | 'plus';
+  planType: 'free' | 'basic' | 'plus';
+  categoryLimit: number;
+  currentCategoryCount: number;
 }
 
 export function ProductModal({ 
   storeId, 
   categories, 
   onClose, 
-  onSuccess,
+  onSuccess, 
   product,
-  planType = 'free'
+  planType,
+  categoryLimit,
+  currentCategoryCount
 }: ProductModalProps) {
-  const [title, setTitle] = useState(product?.title || '');
-  const [description, setDescription] = useState(product?.description || '');
-  const [brand, setBrand] = useState(product?.brand || '');
-  const [sku, setSku] = useState(product?.sku || '');
-  const [categoryId, setCategoryId] = useState(product?.category_id || '');
-  const [selectedCategoryPath, setSelectedCategoryPath] = useState<string>('');
-  const [tags, setTags] = useState(product?.tags?.join(', ') || '');
-  const [images, setImages] = useState<string[]>(product?.images || []);
-  const [price, setPrice] = useState(product?.price?.toString() || '');
-  const [promotionalPrice, setPromotionalPrice] = useState(product?.promotional_price?.toString() || '');
+  const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [showCategoryModal, setShowCategoryModal] = useState(false);
+  const [productType, setProductType] = useState<'simple' | 'variable' | 'kit' | 'manufactured'>(product?.type || 'simple');
+  const [variationAttributes, setVariationAttributes] = useState<string[]>(product?.variation_attributes || []);
+  const [variations, setVariations] = useState<any[]>([]);
+  const [components, setComponents] = useState<any[]>([]);
+  const [form, setForm] = useState({
+    title: product?.title || '',
+    description: product?.description || '',
+    brand: product?.brand || '',
+    sku: product?.sku || '',
+    price: product?.price || 0,
+    promotional_price: product?.promotional_price || null,
+    category_id: product?.category_id || null,
+    images: product?.images || [],
+    tags: product?.tags || [],
+    status: product?.status ?? true,
+    weight: product?.weight || null,
+    weight_unit: product?.weight_unit || 'kg',
+    dimensions: product?.dimensions || {
+      length: 0,
+      width: 0,
+      height: 0,
+      unit: 'cm'
+    },
+    attributes: product?.attributes || {}
+  });
+
+  useEffect(() => {
+    if (product && (product.type === 'kit' || product.type === 'manufactured')) {
+      loadComponents();
+    }
+  }, [product]);
+
+  useEffect(() => {
+    if (product && product.type === 'variable') {
+      loadVariations();
+    }
+  }, [product]);
+
+  const loadComponents = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('product_components')
+        .select(`
+          id,
+          component_id,
+          component_type,
+          quantity,
+          unit,
+          notes
+        `)
+        .eq('product_id', product.id);
+
+      if (error) throw error;
+      setComponents(data || []);
+    } catch (err) {
+      console.error('Erro ao carregar componentes:', err);
+    }
+  };
+
+  const loadVariations = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('products')
+        .select('*')
+        .eq('parent_id', product.id);
+
+      if (error) throw error;
+      setVariations(data || []);
+    } catch (err) {
+      console.error('Erro ao carregar variações:', err);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError(null);
     setLoading(true);
+    setError(null);
 
     try {
-      if (!categoryId) {
-        throw new Error('Por favor, selecione uma categoria.');
+      const productData = {
+        ...form,
+        store_id: storeId,
+        type: productType,
+        variation_attributes: productType === 'variable' ? variationAttributes : [],
+        updated_at: new Date().toISOString()
+      };
+
+      if (productType === 'variable' && variationAttributes.length === 0) {
+        throw new Error('Selecione pelo menos um atributo de variação');
       }
 
-      const numericPrice = parseFloat(price);
-      const numericPromotionalPrice = promotionalPrice ? parseFloat(promotionalPrice) : null;
+      if ((productType === 'kit' || productType === 'manufactured') && components.length === 0) {
+        throw new Error(`Adicione pelo menos um ${productType === 'kit' ? 'produto' : 'componente'}`);
+      }
 
-      if (numericPromotionalPrice && numericPromotionalPrice >= numericPrice) {
+      if (form.promotional_price && form.promotional_price >= form.price) {
         throw new Error('O preço promocional deve ser menor que o preço normal');
       }
 
-      // Verificar se o SKU já existe (exceto para o produto atual em caso de edição)
-      if (sku) {
-        const { data: existingSku, error: skuError } = await supabase
-          .from('products')
-          .select('id')
-          .eq('store_id', storeId)
-          .eq('sku', sku)
-          .neq('id', product?.id || '')
-          .maybeSingle();
-
-        if (skuError) throw skuError;
-        if (existingSku) {
-          throw new Error('Este SKU já está em uso por outro produto.');
-        }
-      }
-
-      const productData = {
-        store_id: storeId,
-        title,
-        description,
-        brand,
-        sku: sku || null,
-        category_id: categoryId,
-        tags: tags.split(',').map(tag => tag.trim()).filter(tag => tag),
-        images,
-        price: numericPrice,
-        promotional_price: numericPromotionalPrice,
-      };
+      let productId = product?.id;
 
       if (product) {
-        // Update existing product
         const { error: updateError } = await supabase
           .from('products')
           .update(productData)
@@ -92,205 +143,243 @@ export function ProductModal({
 
         if (updateError) throw updateError;
       } else {
-        // Create new product
-        const { error: insertError } = await supabase
+        const { data: newProduct, error: insertError } = await supabase
           .from('products')
-          .insert([productData]);
+          .insert([productData])
+          .select()
+          .single();
 
         if (insertError) throw insertError;
+        productId = newProduct.id;
+      }
+
+      if (productId && (productType === 'kit' || productType === 'manufactured')) {
+        await supabase
+          .from('product_components')
+          .delete()
+          .eq('product_id', productId);
+
+        if (components.length > 0) {
+          const { error: componentsError } = await supabase
+            .from('product_components')
+            .insert(
+              components.map(comp => ({
+                ...comp,
+                product_id: productId
+              }))
+            );
+
+          if (componentsError) throw componentsError;
+        }
+      }
+
+      if (productId && productType === 'variable' && variations.length > 0) {
+        for (const variation of variations) {
+          if (variation.id) {
+            await supabase
+              .from('products')
+              .update({
+                ...variation,
+                parent_id: productId,
+                type: 'simple',
+                updated_at: new Date().toISOString()
+              })
+              .eq('id', variation.id);
+          } else {
+            await supabase
+              .from('products')
+              .insert([{
+                ...variation,
+                store_id: storeId,
+                parent_id: productId,
+                type: 'simple'
+              }]);
+          }
+        }
       }
 
       onSuccess();
     } catch (err: any) {
-      setError(err.message || 'Erro ao salvar produto. Por favor, tente novamente.');
-      console.error('Erro:', err);
+      setError(err.message);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleCategorySelect = async (selectedId: string) => {
-    setCategoryId(selectedId);
-    setShowCategoryModal(false);
-
-    // Buscar o caminho completo da categoria
-    try {
-      const { data, error } = await supabase.rpc('get_category_path', {
-        category_id: selectedId
+  const handleTagsChange = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' || e.key === ',') {
+      e.preventDefault();
+      const value = (e.target as HTMLInputElement).value.trim();
+      if (value) {
+        setForm({
+          ...form,
+          tags: [...new Set([...form.tags, value])]
+        });
+        (e.target as HTMLInputElement).value = '';
+      }
+    } else if (e.key === 'Backspace' && (e.target as HTMLInputElement).value === '') {
+      e.preventDefault();
+      setForm({
+        ...form,
+        tags: form.tags.slice(0, -1)
       });
-
-      if (error) throw error;
-      setSelectedCategoryPath(data.join(' > '));
-    } catch (err) {
-      console.error('Erro ao buscar caminho da categoria:', err);
     }
   };
 
-  const handleGeneratedDescription = (description: string) => {
-    setDescription(description);
+  const removeTag = (tagToRemove: string) => {
+    setForm({
+      ...form,
+      tags: form.tags.filter(tag => tag !== tagToRemove)
+    });
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white dark:bg-gray-800 rounded-lg p-8 max-w-md w-full relative max-h-[90vh] overflow-y-auto">
-        <button
-          onClick={onClose}
-          className="absolute top-4 right-4 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-        >
-          <X className="w-6 h-6" />
-        </button>
-
-        <h2 className="text-2xl font-bold mb-6">
-          {product ? 'Editar Produto' : 'Novo Produto'}
-        </h2>
-
-        {error && (
-          <div className="mb-4 p-3 bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-100 rounded">
-            {error}
-          </div>
-        )}
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium mb-1">Título</label>
-            <input
-              type="text"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              className="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600"
-              required
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium mb-1">SKU</label>
-            <input
-              type="text"
-              value={sku}
-              onChange={(e) => setSku(e.target.value)}
-              className="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600"
-              placeholder="Código único do produto (opcional)"
-            />
-            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-              Código único para identificação do produto
-            </p>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium mb-1">Marca</label>
-            <input
-              type="text"
-              value={brand}
-              onChange={(e) => setBrand(e.target.value)}
-              className="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600"
-              required
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium mb-1">Categoria</label>
-            <div className="flex items-center space-x-2">
-              <button
-                type="button"
-                onClick={() => setShowCategoryModal(true)}
-                className="flex-1 flex items-center justify-between p-2 border rounded dark:bg-gray-700 dark:border-gray-600 hover:border-blue-500"
-              >
-                <span className="truncate">
-                  {selectedCategoryPath || 'Selecionar categoria'}
-                </span>
-                <FolderTree className="w-5 h-5 text-gray-400" />
-              </button>
+    <Modal
+      isOpen={true}
+      onClose={onClose}
+      title={product ? 'Editar Produto' : 'Novo Produto'}
+      maxWidth="max-w-5xl"
+    >
+      <div className="px-6">
+        <form onSubmit={handleSubmit} className="space-y-8">
+          {error && (
+            <div className="p-3 bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-100 rounded">
+              {error}
             </div>
-          </div>
+          )}
 
-          <div>
-            <ProductDescriptionGenerator
-              title={title}
-              brand={brand}
-              category={selectedCategoryPath}
-              onGenerate={handleGeneratedDescription}
-              disabled={planType !== 'plus'}
-            />
-            <textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              className="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600"
-              rows={3}
-              required
-            />
-          </div>
+          <BasicInfo
+            form={form}
+            setForm={setForm}
+            productType={productType}
+            setProductType={setProductType}
+            categories={categories}
+            onOpenCategoryModal={() => setShowCategoryModal(true)}
+            disabled={!!product}
+          />
 
-          <ImageGalleryUploader
-            onImagesChange={setImages}
-            currentImages={images}
-            maxImages={planType === 'plus' ? 10 : planType === 'basic' ? 5 : 3}
+          <Description
+            form={form}
+            setForm={setForm}
+            title={form.title}
+            brand={form.brand}
+            category={categories.find(c => c.id === form.category_id)?.name || ''}
             planType={planType}
           />
 
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium mb-1">Preço</label>
-              <div className="relative">
-                <span className="absolute left-2 top-2 text-gray-500">R$</span>
-                <input
-                  type="number"
-                  value={price}
-                  onChange={(e) => setPrice(e.target.value)}
-                  className="w-full p-2 pl-8 border rounded dark:bg-gray-700 dark:border-gray-600"
-                  min="0"
-                  step="0.01"
-                  required
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium mb-1">Preço Promocional</label>
-              <div className="relative">
-                <span className="absolute left-2 top-2 text-gray-500">R$</span>
-                <input
-                  type="number"
-                  value={promotionalPrice}
-                  onChange={(e) => setPromotionalPrice(e.target.value)}
-                  className="w-full p-2 pl-8 border rounded dark:bg-gray-700 dark:border-gray-600"
-                  min="0"
-                  step="0.01"
-                />
-              </div>
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium mb-1">
-              Tags (separadas por vírgula)
-            </label>
-            <input
-              type="text"
-              value={tags}
-              onChange={(e) => setTags(e.target.value)}
-              className="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600"
-              placeholder="ex: novo, promoção, destaque"
-            />
-          </div>
-
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 rounded font-medium disabled:opacity-50"
-          >
-            {loading ? 'Salvando...' : 'Salvar Produto'}
-          </button>
-        </form>
-
-        {showCategoryModal && (
-          <CategoryTreeModal
-            storeId={storeId}
-            onSelect={handleCategorySelect}
-            onClose={() => setShowCategoryModal(false)}
-            initialSelectedId={categoryId}
+          <Images
+            form={form}
+            setForm={setForm}
+            planType={planType}
           />
-        )}
+
+          <div className="space-y-4">
+            <h3 className="text-lg font-medium">Tags</h3>
+            <div className="flex flex-wrap gap-2 p-2 border rounded dark:bg-gray-700 dark:border-gray-600">
+              {form.tags.map((tag: string) => (
+                <span
+                  key={tag}
+                  className="inline-flex items-center px-2 py-1 rounded-full text-sm bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300"
+                >
+                  {tag}
+                  <button
+                    type="button"
+                    onClick={() => removeTag(tag)}
+                    className="ml-1 hover:text-blue-800 dark:hover:text-blue-200"
+                  >
+                    ×
+                  </button>
+                </span>
+              ))}
+              <input
+                type="text"
+                className="flex-1 min-w-[120px] bg-transparent outline-none"
+                placeholder="Digite uma tag e pressione Enter ou vírgula"
+                onKeyDown={handleTagsChange}
+              />
+            </div>
+          </div>
+
+          {productType === 'variable' && (
+            <div className="space-y-4">
+              <h3 className="text-lg font-medium">Variações</h3>
+              <ProductAttributes
+                storeId={storeId}
+                selectedAttributes={variationAttributes}
+                onAttributesChange={setVariationAttributes}
+                disabled={loading}
+              />
+              {variationAttributes.length > 0 && (
+                <ProductVariations
+                  attributes={variationAttributes}
+                  variations={variations}
+                  onVariationsChange={setVariations}
+                  disabled={loading}
+                />
+              )}
+            </div>
+          )}
+
+          {(productType === 'kit' || productType === 'manufactured') && (
+            <div className="space-y-4">
+              <h3 className="text-lg font-medium">
+                {productType === 'kit' ? 'Produtos do Kit' : 'Componentes'}
+              </h3>
+              <ProductComponents
+                storeId={storeId}
+                components={components}
+                onChange={setComponents}
+                type={productType}
+                disabled={loading}
+              />
+            </div>
+          )}
+
+          <div className="flex items-center space-x-2">
+            <input
+              type="checkbox"
+              id="status"
+              checked={form.status}
+              onChange={(e) => setForm({ ...form, status: e.target.checked })}
+              className="rounded border-gray-300"
+            />
+            <label htmlFor="status" className="text-sm">
+              Produto ativo
+            </label>
+          </div>
+
+          <div className="flex justify-end space-x-4 pt-4">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 text-gray-600 hover:text-gray-800"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              disabled={loading}
+              className="px-6 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
+            >
+              {loading ? 'Salvando...' : 'Salvar'}
+            </button>
+          </div>
+        </form>
       </div>
-    </div>
+
+      {showCategoryModal && (
+        <CategoryTreeModal
+          storeId={storeId}
+          onSelect={(categoryId) => {
+            setForm({ ...form, category_id: categoryId });
+            setShowCategoryModal(false);
+          }}
+          onClose={() => setShowCategoryModal(false)}
+          initialSelectedId={form.category_id}
+          categoryLimit={categoryLimit}
+          currentCategoryCount={currentCategoryCount}
+        />
+      )}
+    </Modal>
   );
 }
