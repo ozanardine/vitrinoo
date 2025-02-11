@@ -25,13 +25,30 @@ async function handleAPIRequest(url: URL, method: string, token: string, reqBody
       throw new Error('Endpoint é obrigatório');
     }
 
-    console.log('Fazendo requisição para Tiny API:', {
-      url: `${TINY_API_URL}/${endpoint}`,
+    // Decodificar o endpoint para garantir que os parâmetros estejam corretos
+    const decodedEndpoint = decodeURIComponent(endpoint);
+    
+    console.log('Preparando requisição para Tiny API:', {
+      endpoint: decodedEndpoint,
       method,
       hasBody: !!reqBody
     });
 
-    const response = await fetch(`${TINY_API_URL}/${endpoint}`, {
+    // Separar base endpoint e query params se houver
+    let [baseEndpoint, queryString] = decodedEndpoint.split('?');
+    const apiUrl = new URL(`${TINY_API_URL}/${baseEndpoint}`);
+    
+    // Adicionar query params se existirem
+    if (queryString) {
+      queryString.split('&').forEach(param => {
+        const [key, value] = param.split('=');
+        apiUrl.searchParams.append(key, value);
+      });
+    }
+
+    console.log('URL Final:', apiUrl.toString());
+
+    const response = await fetch(apiUrl.toString(), {
       method,
       headers: {
         'Authorization': `Bearer ${token}`,
@@ -47,19 +64,21 @@ async function handleAPIRequest(url: URL, method: string, token: string, reqBody
       headers: Object.fromEntries(response.headers)
     });
 
+    // Ler a resposta como texto primeiro
     const responseText = await response.text();
     console.log('Corpo da resposta:', responseText);
 
+    // Tentar fazer o parse do JSON se houver conteúdo
     let data;
     try {
-      data = JSON.parse(responseText);
+      data = responseText ? JSON.parse(responseText) : null;
     } catch (e) {
       console.error('Erro ao fazer parse do JSON:', e);
       throw new Error(`Erro ao processar resposta da API: ${responseText}`);
     }
 
     if (!response.ok) {
-      throw new Error(data.message || 'Erro na API do Tiny');
+      throw new Error(data?.message || `Erro na API do Tiny: ${response.status} - ${response.statusText}`);
     }
 
     return new Response(JSON.stringify(data), {
