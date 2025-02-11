@@ -248,7 +248,7 @@ class TinyProductSync {
   private async callTinyApi<T>(endpoint: string, method: string = 'GET', body?: any): Promise<T> {
     return this.queue.add(async () => {
       try {
-        // Buscar a chave da função como fazemos no token exchange
+        // Buscar a chave da função
         const { data: keyData, error: keyError } = await this.supabaseClient
           .from('function_keys')
           .select('key')
@@ -258,21 +258,75 @@ class TinyProductSync {
         if (keyError) throw new Error('Erro ao obter chave de função');
         if (!keyData?.key) throw new Error('Chave de função não encontrada');
   
-        // Limpar e validar o token
-        let cleanToken = keyData.key.replace(/[\n\r\s]+/g, '');
-        if (cleanToken.includes('base64,')) {
-          cleanToken = cleanToken.split('base64,')[1];
+        // Buscar credenciais do Tiny
+        const { data: integration, error: integrationError } = await this.supabaseClient
+          .from('erp_integrations')
+          .select('*')
+          .eq('store_id', this.storeId)
+          .eq('provider', 'tiny')
+          .eq('active', true)
+          .single();
+  
+        if (integrationError || !integration) {
+          throw new Error('Integração não encontrada ou inativa');
         }
   
-        const functionUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/tiny-api`;
+        // Verificar se precisa renovar o token
+        const expiresAt = new Date(integration.expires_at);
+        const now = new Date();
+        now.setMinutes(now.getMinutes() + 5);
+  
+        if (expiresAt <= now) {
+          // Renovar token usando o tiny-token-exchange
+          const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/tiny-token-exchange`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${keyData.key}`
+            },
+            body: JSON.stringify({
+              grantType: 'refresh_token',
+              clientId: integration.client_id,
+              clientSecret: integration.client_secret,
+              refreshToken: integration.refresh_token
+            })
+          });
+  
+          if (!response.ok) {
+            throw new Error('Erro ao renovar token');
+          }
+  
+          const tokenData = await response.json();
+  
+          // Atualizar tokens no banco
+          const newExpiresAt = new Date();
+          newExpiresAt.setSeconds(newExpiresAt.getSeconds() + tokenData.expires_in);
+  
+          await this.supabaseClient
+            .from('erp_integrations')
+            .update({
+              access_token: tokenData.access_token,
+              refresh_token: tokenData.refresh_token,
+              expires_at: newExpiresAt.toISOString(),
+              updated_at: new Date().toISOString()
+            })
+            .eq('store_id', this.storeId)
+            .eq('provider', 'tiny');
+  
+          integration.access_token = tokenData.access_token;
+        }
+  
+        // Fazer a chamada da API usando o tiny-token-exchange
+        const functionUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/tiny-token-exchange`;
         const url = new URL(functionUrl);
-        url.searchParams.set('endpoint', endpoint);
         url.searchParams.set('storeId', this.storeId);
+        url.searchParams.set('endpoint', endpoint);
+        url.searchParams.set('token', integration.access_token);
   
         const response = await fetch(url.toString(), {
           method,
           headers: {
-            'Authorization': `Bearer ${cleanToken}`,
+            'Authorization': `Bearer ${keyData.key}`,
             'Content-Type': 'application/json',
             'Accept': 'application/json'
           },
