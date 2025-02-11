@@ -5,7 +5,6 @@ import pQueue from 'p-queue';
 // Constants
 const TINY_AUTH_URL = 'https://accounts.tiny.com.br/realms/tiny/protocol/openid-connect/auth';
 const TINY_TOKEN_URL = 'https://accounts.tiny.com.br/realms/tiny/protocol/openid-connect/token';
-const TINY_API_PROXY = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/tiny-api`;
 
 // Queue for API calls during token refresh
 const apiQueue = new pQueue({ concurrency: 1 });
@@ -255,35 +254,6 @@ async function getValidTinyToken(storeId: string): Promise<string> {
   return refreshPromise;
 }
 
-async function callTinyApi(
-  storeId: string,
-  endpoint: string,
-  method: string = 'GET',
-  body?: any
-) {
-  return apiQueue.add(async () => {
-    const url = new URL(TINY_API_PROXY);
-    url.searchParams.set('endpoint', endpoint);
-    url.searchParams.set('storeId', storeId);
-
-    const response = await fetch(url.toString(), {
-      method,
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json'
-      },
-      body: body ? JSON.stringify(body) : undefined
-    });
-
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.message || 'Erro na API do Tiny');
-    }
-
-    return response.json();
-  });
-}
-
 export async function checkTinyIntegrationStatus(storeId: string) {
   try {
     const credentials = await getTinyCredentials(storeId);
@@ -307,6 +277,21 @@ export async function syncTinyProducts(storeId: string) {
       throw new Error('Integração com Tiny ERP não está ativa');
     }
 
+    // Obter token válido
+    const token = await getValidTinyToken(storeId);
+
+    // Obter chave da função
+    const { data: keyData, error: keyError } = await supabase
+      .from('function_keys')
+      .select('key')
+      .eq('name', 'tiny-token-exchange')
+      .single();
+
+    if (keyError) throw new Error('Erro ao obter chave de função');
+    if (!keyData?.key) throw new Error('Chave de função não encontrada');
+
+    const functionUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/tiny-token-exchange`;
+
     // Buscar lista de produtos com paginação
     let offset = 0;
     const limit = 100;
@@ -314,10 +299,24 @@ export async function syncTinyProducts(storeId: string) {
     let hasMore = true;
 
     while (hasMore) {
-      const { itens, paginacao } = await callTinyApi(
-        storeId,
-        `produtos?situacao=A&limit=${limit}&offset=${offset}`
-      );
+      const response = await fetch(functionUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${keyData.key}`
+        },
+        body: JSON.stringify({
+          accessToken: token,
+          endpoint: `produtos?situacao=A&limit=${limit}&offset=${offset}`
+        })
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || 'Erro ao buscar produtos');
+      }
+
+      const { itens, paginacao } = await response.json();
 
       if (!itens?.length) break;
 
@@ -336,11 +335,23 @@ export async function syncTinyProducts(storeId: string) {
         return Promise.all(
           allProducts.map(async (produto) => {
             try {
-              const details = await callTinyApi(
-                storeId,
-                `produtos/${produto.id}`
-              );
-              return details as TinyProductDetail;
+              const response = await fetch(functionUrl, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${keyData.key}`
+                },
+                body: JSON.stringify({
+                  accessToken: token,
+                  endpoint: `produtos/${produto.id}`
+                })
+              });
+
+              if (!response.ok) {
+                throw new Error('Erro ao buscar detalhes do produto');
+              }
+
+              return await response.json() as TinyProductDetail;
             } catch (error) {
               console.warn(`Erro ao buscar detalhes do produto ${produto.id}:`, error);
               return null;
@@ -397,5 +408,38 @@ export async function syncTinyProducts(storeId: string) {
         ? 'A integração com o Tiny ERP não está ativa. Por favor, configure a integração primeiro.'
         : 'Erro ao sincronizar produtos. Por favor, tente novamente mais tarde.'
     );
+  }
+}
+
+export async function disconnectTinyIntegration(storeId: string) {
+  try {
+    // Primeiro desativa a integração
+    const { error: integrationError } = await supabase
+      .from('erp_integrations')
+      .update({
+        active: false,
+        access_token: null,
+        refresh_token: null,
+        expires_at: null,
+        updated_at: new Date().toISOString()
+      })
+      .eq('store_id', storeId)
+      .eq('provider', 'tiny');
+
+    if (integrationError) throw integrationError;
+
+    // Remove todos os produtos sincronizados
+    const { error: productsError } = await supabase
+      .from('products')
+      .delete()
+      .eq('store_id', storeId)
+      .not('sku', 'is', null); // Remove apenas produtos com SKU (que vieram do Tiny)
+
+    if (productsError) throw productsError;
+
+    return true;
+  } catch (error: any) {
+    console.error('Erro ao desconectar integração:', error);
+    throw new Error('Erro ao desconectar integração com Tiny ERP. Por favor, tente novamente.');
   }
 }

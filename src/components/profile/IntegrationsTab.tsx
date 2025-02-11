@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Link2, Check, AlertCircle, Loader2 } from 'lucide-react';
+import { Link2, Check, AlertCircle, Loader2, AlertTriangle } from 'lucide-react';
 import { Store } from '../../lib/types';
-import { checkTinyIntegrationStatus, syncTinyProducts } from '../../lib/tiny';
+import { checkTinyIntegrationStatus, syncTinyProducts, disconnectTinyIntegration } from '../../lib/tiny';
 import { TinyConfigForm } from './TinyConfigForm';
 
 interface IntegrationsTabProps {
@@ -18,6 +18,7 @@ export function IntegrationsTab({ store }: IntegrationsTabProps) {
   const [loading, setLoading] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [isIntegrated, setIsIntegrated] = useState(false);
+  const [showDisconnectConfirm, setShowDisconnectConfirm] = useState(false);
 
   useEffect(() => {
     checkIntegrationStatus();
@@ -52,6 +53,26 @@ export function IntegrationsTab({ store }: IntegrationsTabProps) {
       });
     } finally {
       setSyncing(false);
+    }
+  };
+
+  const handleDisconnect = async () => {
+    setLoading(true);
+    try {
+      await disconnectTinyIntegration(store.id);
+      showAlert({
+        type: 'success',
+        text: 'Integração desconectada com sucesso!'
+      });
+      setIsIntegrated(false);
+      setShowDisconnectConfirm(false);
+    } catch (error: any) {
+      showAlert({
+        type: 'error',
+        text: error.message || 'Erro ao desconectar integração'
+      });
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -108,23 +129,35 @@ export function IntegrationsTab({ store }: IntegrationsTabProps) {
               <Check className="w-5 h-5" />
               <span>Integração ativa</span>
             </div>
-            <button
-              onClick={handleSync}
-              disabled={syncing}
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium disabled:opacity-50 flex items-center justify-center space-x-2"
-            >
-              {syncing ? (
-                <>
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                  <span>Sincronizando produtos...</span>
-                </>
-              ) : (
-                <>
-                  <Link2 className="w-5 h-5" />
-                  <span>Sincronizar Produtos</span>
-                </>
-              )}
-            </button>
+            
+            <div className="flex flex-col sm:flex-row gap-4">
+              <button
+                onClick={handleSync}
+                disabled={syncing}
+                className="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium disabled:opacity-50 flex items-center justify-center space-x-2"
+              >
+                {syncing ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    <span>Sincronizando produtos...</span>
+                  </>
+                ) : (
+                  <>
+                    <Link2 className="w-5 h-5" />
+                    <span>Sincronizar Produtos</span>
+                  </>
+                )}
+              </button>
+
+              <button
+                onClick={() => setShowDisconnectConfirm(true)}
+                disabled={loading}
+                className="px-4 py-2 border border-red-500 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg font-medium disabled:opacity-50"
+              >
+                Desconectar
+              </button>
+            </div>
+
             <p className="text-sm text-gray-500 dark:text-gray-400">
               Os produtos serão atualizados automaticamente a cada hora
             </p>
@@ -137,6 +170,58 @@ export function IntegrationsTab({ store }: IntegrationsTabProps) {
           />
         )}
       </div>
+
+      {/* Modal de Confirmação para Desconectar */}
+      {showDisconnectConfirm && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full">
+            <div className="flex items-center space-x-2 text-red-600 mb-4">
+              <AlertTriangle className="w-6 h-6" />
+              <h3 className="text-lg font-semibold">Confirmar Desconexão</h3>
+            </div>
+            
+            <div className="space-y-4 mb-6">
+              <p className="text-gray-600 dark:text-gray-400">
+                Tem certeza que deseja desconectar a integração com o Tiny ERP?
+              </p>
+              
+              <div className="bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-200 dark:border-yellow-800 rounded p-4">
+                <h4 className="font-medium text-yellow-800 dark:text-yellow-200 mb-2">
+                  Atenção
+                </h4>
+                <ul className="list-disc list-inside text-sm text-yellow-700 dark:text-yellow-300 space-y-1">
+                  <li>Todos os produtos sincronizados serão removidos</li>
+                  <li>As credenciais de acesso serão apagadas</li>
+                  <li>A sincronização automática será interrompida</li>
+                </ul>
+              </div>
+            </div>
+
+            <div className="flex justify-end space-x-4">
+              <button
+                onClick={() => setShowDisconnectConfirm(false)}
+                className="px-4 py-2 text-gray-600 hover:text-gray-800"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleDisconnect}
+                disabled={loading}
+                className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50 flex items-center space-x-2"
+              >
+                {loading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Desconectando...</span>
+                  </>
+                ) : (
+                  <span>Desconectar</span>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
