@@ -269,6 +269,29 @@ export async function checkTinyIntegrationStatus(storeId: string) {
   }
 }
 
+async function callTinyApi(storeId: string, endpoint: string, method: string = 'GET', body?: any) {
+  const functionUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/tiny-api`;
+  const url = new URL(functionUrl);
+  url.searchParams.set('endpoint', endpoint);
+  url.searchParams.set('storeId', storeId);
+
+  const response = await fetch(url.toString(), {
+    method,
+    headers: {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json'
+    },
+    body: body ? JSON.stringify(body) : undefined
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || 'Erro na API do Tiny');
+  }
+
+  return response.json();
+}
+
 export async function syncTinyProducts(storeId: string) {
   try {
     // Verificar se a integração está ativa
@@ -277,21 +300,6 @@ export async function syncTinyProducts(storeId: string) {
       throw new Error('Integração com Tiny ERP não está ativa');
     }
 
-    // Obter token válido
-    const token = await getValidTinyToken(storeId);
-
-    // Obter chave da função
-    const { data: keyData, error: keyError } = await supabase
-      .from('function_keys')
-      .select('key')
-      .eq('name', 'tiny-token-exchange')
-      .single();
-
-    if (keyError) throw new Error('Erro ao obter chave de função');
-    if (!keyData?.key) throw new Error('Chave de função não encontrada');
-
-    const functionUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/tiny-token-exchange`;
-
     // Buscar lista de produtos com paginação
     let offset = 0;
     const limit = 100;
@@ -299,24 +307,10 @@ export async function syncTinyProducts(storeId: string) {
     let hasMore = true;
 
     while (hasMore) {
-      const response = await fetch(functionUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${keyData.key}`
-        },
-        body: JSON.stringify({
-          accessToken: token,
-          endpoint: `produtos?situacao=A&limit=${limit}&offset=${offset}`
-        })
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || 'Erro ao buscar produtos');
-      }
-
-      const { itens, paginacao } = await response.json();
+      const { itens, paginacao } = await callTinyApi(
+        storeId,
+        `produtos?situacao=A&limit=${limit}&offset=${offset}`
+      );
 
       if (!itens?.length) break;
 
@@ -335,23 +329,7 @@ export async function syncTinyProducts(storeId: string) {
         return Promise.all(
           allProducts.map(async (produto) => {
             try {
-              const response = await fetch(functionUrl, {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  'Authorization': `Bearer ${keyData.key}`
-                },
-                body: JSON.stringify({
-                  accessToken: token,
-                  endpoint: `produtos/${produto.id}`
-                })
-              });
-
-              if (!response.ok) {
-                throw new Error('Erro ao buscar detalhes do produto');
-              }
-
-              return await response.json() as TinyProductDetail;
+              return await callTinyApi(storeId, `produtos/${produto.id}`);
             } catch (error) {
               console.warn(`Erro ao buscar detalhes do produto ${produto.id}:`, error);
               return null;
