@@ -64,16 +64,20 @@ export async function exchangeCodeForToken(
       throw new Error('Chave de função não encontrada');
     }
 
+    // Limpar o token removendo quebras de linha e espaços extras
+    const cleanToken = keyData.key.replace(/[\n\r\s]+/g, '');
+    console.log('Token limpo e preparado para uso');
+
     return new Promise((resolve, reject) => {
       const xhr = new XMLHttpRequest();
       const functionUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/tiny-token-exchange`;
 
       xhr.open('POST', functionUrl, true);
       
-      // Headers
+      // Headers com token limpo
       xhr.setRequestHeader('Content-Type', 'application/json');
       xhr.setRequestHeader('Accept', 'application/json');
-      xhr.setRequestHeader('Authorization', `Bearer ${keyData.key}`);
+      xhr.setRequestHeader('Authorization', `Bearer ${cleanToken}`);
 
       // Logging do estado
       xhr.onreadystatechange = function() {
@@ -86,17 +90,24 @@ export async function exchangeCodeForToken(
 
       // Handler de sucesso
       xhr.onload = function() {
+        console.log('Response received:', {
+          status: xhr.status,
+          statusText: xhr.statusText
+        });
+
         if (xhr.status >= 200 && xhr.status < 300) {
           try {
             const response = JSON.parse(xhr.responseText);
             console.log('Token obtido com sucesso');
             resolve(response);
           } catch (e) {
+            console.error('Erro ao processar resposta:', e);
             reject(new Error('Erro ao processar resposta'));
           }
         } else {
           try {
             const error = JSON.parse(xhr.responseText);
+            console.error('Erro na resposta:', error);
             reject(new Error(error.message || 'Erro na requisição'));
           } catch (e) {
             reject(new Error(`Erro ${xhr.status}: ${xhr.statusText}`));
@@ -123,9 +134,12 @@ export async function exchangeCodeForToken(
         grantType: 'authorization_code'
       };
 
+      console.log('Enviando requisição para:', functionUrl);
+
       try {
         xhr.send(JSON.stringify(payload));
       } catch (e) {
+        console.error('Erro ao enviar requisição:', e);
         reject(e);
       }
     });
