@@ -230,41 +230,55 @@ class TinyProductSync {
   private storeId: string;
   private rateLimit: typeof RATE_LIMITS.basic;
   private queue: pQueue;
+  private supabaseClient: typeof supabase;
 
   constructor(storeId: string, plan: 'basic' | 'essential' | 'enterprise' = 'basic') {
     this.storeId = storeId;
     this.rateLimit = RATE_LIMITS[plan];
+    this.supabaseClient = supabase;
     
     // Initialize queue with rate limiting
     this.queue = new pQueue({
       concurrency: 1,
-      interval: 60000, // 1 minute
-      intervalCap: this.rateLimit.total // Max requests per minute
+      interval: 60000,
+      intervalCap: this.rateLimit.total
     });
   }
 
   private async callTinyApi<T>(endpoint: string, method: string = 'GET', body?: any): Promise<T> {
-    const functionUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/tiny-api`;
-    const url = new URL(functionUrl);
-    url.searchParams.set('endpoint', endpoint);
-    url.searchParams.set('storeId', this.storeId);
-
     return this.queue.add(async () => {
-      const response = await fetch(url.toString(), {
-        method,
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json'
-        },
-        body: body ? JSON.stringify(body) : undefined
-      });
+      try {
+        // Obter token de autenticação do usuário atual
+        const { data: { session }, error: authError } = await this.supabaseClient.auth.getSession();
+        if (authError || !session) {
+          throw new Error('Erro de autenticação');
+        }
 
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Erro na API do Tiny');
+        const functionUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/tiny-api`;
+        const url = new URL(functionUrl);
+        url.searchParams.set('endpoint', endpoint);
+        url.searchParams.set('storeId', this.storeId);
+
+        const response = await fetch(url.toString(), {
+          method,
+          headers: {
+            'Authorization': `Bearer ${session.access_token}`,
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+          },
+          body: body ? JSON.stringify(body) : undefined
+        });
+
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.error || 'Erro na API do Tiny');
+        }
+
+        return response.json();
+      } catch (error: any) {
+        console.error('Erro na chamada da API:', error);
+        throw new Error(`Erro na API do Tiny: ${error.message}`);
       }
-
-      return response.json();
     });
   }
 
@@ -435,13 +449,23 @@ export async function syncTinyProducts(storeId: string): Promise<{
       throw new Error('Integração com Tiny ERP não está ativa');
     }
 
-    // Buscar plano do Tiny
-    const { data: integration } = await supabase
+    // Buscar dados da integração com autenticação
+    const { data: { session }, error: authError } = await supabase.auth.getSession();
+    if (authError || !session) {
+      throw new Error('Erro de autenticação');
+    }
+
+    const { data: integration, error: integrationError } = await supabase
       .from('erp_integrations')
-      .select('tiny_plan')
+      .select('*')
       .eq('store_id', storeId)
       .eq('provider', 'tiny')
+      .eq('active', true)
       .single();
+
+    if (integrationError || !integration) {
+      throw new Error('Integração não encontrada ou inativa');
+    }
 
     const sync = new TinyProductSync(
       storeId,
@@ -456,7 +480,7 @@ export async function syncTinyProducts(storeId: string): Promise<{
     throw new Error(
       error.message === 'Integração com Tiny ERP não está ativa'
         ? 'A integração com o Tiny ERP não está ativa. Por favor, configure a integração primeiro.'
-        : 'Erro ao sincronizar produtos. Por favor, tente novamente mais tarde.'
+        : `Erro ao sincronizar produtos: ${error.message}`
     );
   }
 }
