@@ -20,16 +20,14 @@ const limiter = rateLimit({
 });
 
 serve(async (req) => {
-  // Log da requisição recebida
+  // Log inicial
   console.log('Request received:', {
     method: req.method,
     url: req.url,
     headers: Object.fromEntries(req.headers)
   });
 
-  const clientIp = req.headers.get('x-forwarded-for') || 'unknown';
-  
-  // Handle CORS preflight requests primeiro
+  // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response(null, { 
       status: 204,
@@ -41,42 +39,7 @@ serve(async (req) => {
     });
   }
 
-  // Apply rate limiting
   try {
-    await limiter.check(req, clientIp);
-  } catch (error) {
-    console.log('Rate limit exceeded for IP:', clientIp);
-    return new Response(
-      JSON.stringify({ error: 'Too many requests' }),
-      { 
-        status: 429,
-        headers: {
-          ...corsHeaders,
-          'Content-Type': 'application/json',
-          'Retry-After': '900'
-        }
-      }
-    );
-  }
-
-  try {
-    // Verificar autorização
-    const authHeader = req.headers.get('Authorization');
-    console.log('Auth header recebido:', authHeader?.substring(0, 20) + '...');
-
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      console.error('Header de autorização inválido');
-      throw new Error('Unauthorized');
-    }
-
-    const token = authHeader.split(' ')[1];
-    console.log('Token extraído:', token.substring(0, 20) + '...');
-
-    if (token !== FUNCTION_KEY) {
-      console.error('Token não corresponde à chave da função');
-      throw new Error('Unauthorized');
-    }
-
     const url = new URL(req.url);
     const endpoint = url.searchParams.get('endpoint');
     const storeId = url.searchParams.get('storeId');
@@ -84,6 +47,19 @@ serve(async (req) => {
 
     if (!endpoint || !storeId) {
       throw new Error('Endpoint e storeId são obrigatórios');
+    }
+
+    // Verificar autorização
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      console.error('Header de autorização inválido');
+      throw new Error('Não autorizado');
+    }
+
+    const token = authHeader.split(' ')[1];
+    if (token !== FUNCTION_KEY) {
+      console.error('Token não corresponde à chave da função');
+      throw new Error('Não autorizado');
     }
 
     // Criar cliente Supabase
@@ -101,6 +77,7 @@ serve(async (req) => {
       .single();
 
     if (integrationError || !integration) {
+      console.error('Erro ao buscar integração:', integrationError);
       throw new Error('Integração não encontrada ou inativa');
     }
 
@@ -110,7 +87,7 @@ serve(async (req) => {
     now.setMinutes(now.getMinutes() + 5); // 5 minutos de margem
 
     if (expiresAt <= now) {
-      // Renovar token usando a mesma lógica do tiny-token-exchange
+      console.log('Token expirado, renovando...');
       const params = new URLSearchParams();
       params.append('grant_type', 'refresh_token');
       params.append('client_id', integration.client_id);
@@ -127,21 +104,23 @@ serve(async (req) => {
       });
 
       if (!tokenResponse.ok) {
+        const errorData = await tokenResponse.json();
+        console.error('Erro ao renovar token:', errorData);
         throw new Error('Erro ao renovar token');
       }
 
       const tokenData = await tokenResponse.json();
-
+      
       // Atualizar tokens no banco
-      const expiresAt = new Date();
-      expiresAt.setSeconds(expiresAt.getSeconds() + tokenData.expires_in);
+      const newExpiresAt = new Date();
+      newExpiresAt.setSeconds(newExpiresAt.getSeconds() + tokenData.expires_in);
 
       await supabase
         .from('erp_integrations')
         .update({
           access_token: tokenData.access_token,
           refresh_token: tokenData.refresh_token,
-          expires_at: expiresAt.toISOString(),
+          expires_at: newExpiresAt.toISOString(),
           updated_at: new Date().toISOString()
         })
         .eq('store_id', storeId)
@@ -150,10 +129,8 @@ serve(async (req) => {
       integration.access_token = tokenData.access_token;
     }
 
-    // Fazer requisição para o Tiny
+    console.log('Fazendo requisição para o Tiny...');
     const tinyUrl = `${TINY_API_URL}/${endpoint}`;
-    console.log('Fazendo requisição para:', tinyUrl);
-
     const response = await fetch(tinyUrl, {
       method,
       headers: {
@@ -172,6 +149,7 @@ serve(async (req) => {
     }
 
     return new Response(JSON.stringify(data), {
+      status: 200,
       headers: {
         ...corsHeaders,
         'Content-Type': 'application/json'
@@ -186,7 +164,7 @@ serve(async (req) => {
         type: error.name
       }),
       {
-        status: error.message === 'Unauthorized' ? 401 : 400,
+        status: error.message.includes('autorizado') ? 401 : 400,
         headers: {
           ...corsHeaders,
           'Content-Type': 'application/json'

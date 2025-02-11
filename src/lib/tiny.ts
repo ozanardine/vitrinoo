@@ -248,32 +248,42 @@ class TinyProductSync {
   private async callTinyApi<T>(endpoint: string, method: string = 'GET', body?: any): Promise<T> {
     return this.queue.add(async () => {
       try {
-        // Obter token de autenticação do usuário atual
-        const { data: { session }, error: authError } = await this.supabaseClient.auth.getSession();
-        if (authError || !session) {
-          throw new Error('Erro de autenticação');
+        // Buscar a chave da função como fazemos no token exchange
+        const { data: keyData, error: keyError } = await this.supabaseClient
+          .from('function_keys')
+          .select('key')
+          .eq('name', 'tiny-token-exchange')
+          .single();
+  
+        if (keyError) throw new Error('Erro ao obter chave de função');
+        if (!keyData?.key) throw new Error('Chave de função não encontrada');
+  
+        // Limpar e validar o token
+        let cleanToken = keyData.key.replace(/[\n\r\s]+/g, '');
+        if (cleanToken.includes('base64,')) {
+          cleanToken = cleanToken.split('base64,')[1];
         }
-
+  
         const functionUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/tiny-api`;
         const url = new URL(functionUrl);
         url.searchParams.set('endpoint', endpoint);
         url.searchParams.set('storeId', this.storeId);
-
+  
         const response = await fetch(url.toString(), {
           method,
           headers: {
-            'Authorization': `Bearer ${session.access_token}`,
+            'Authorization': `Bearer ${cleanToken}`,
             'Content-Type': 'application/json',
             'Accept': 'application/json'
           },
           body: body ? JSON.stringify(body) : undefined
         });
-
+  
         if (!response.ok) {
           const error = await response.json();
           throw new Error(error.error || 'Erro na API do Tiny');
         }
-
+  
         return response.json();
       } catch (error: any) {
         console.error('Erro na chamada da API:', error);
