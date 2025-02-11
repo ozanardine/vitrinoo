@@ -3,6 +3,7 @@ import { Plus, FolderTree, ChevronRight, ChevronDown, Edit2, Trash2, AlertTriang
 import { Store } from '../../lib/types';
 import { supabase } from '../../lib/supabase';
 import { CategoryModal } from '../CategoryModal';
+import { PLAN_LIMITS } from '../../lib/store';
 
 interface Category {
   id: string;
@@ -98,6 +99,9 @@ export function CategoriesTab({ store, onUpdate }: CategoriesTabProps) {
     setExpandedCategories(newExpanded);
   };
 
+  const currentPlanType = store.subscription.plan_type as keyof typeof PLAN_LIMITS;
+  const currentPlanLimits = PLAN_LIMITS[currentPlanType];
+
   const renderCategory = (category: Category) => {
     const isExpanded = expandedCategories.has(category.id);
     const hasChildren = category.children && category.children.length > 0;
@@ -176,15 +180,25 @@ export function CategoriesTab({ store, onUpdate }: CategoriesTabProps) {
         <div>
           <h3 className="text-lg font-semibold">Categorias</h3>
           <p className="text-sm text-gray-600 dark:text-gray-400">
-            {parentCategoriesCount} de {store.category_limit === Infinity ? 'Ilimitado' : store.category_limit} categorias principais
+            {parentCategoriesCount} de {currentPlanLimits.categories.toLocaleString()} categorias principais
           </p>
+          <div className="mt-2">
+            <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+              <div
+                className="bg-green-600 h-2 rounded-full transition-all duration-300"
+                style={{ 
+                  width: `${Math.min((parentCategoriesCount / currentPlanLimits.categories) * 100, 100)}%` 
+                }}
+              />
+            </div>
+          </div>
         </div>
         <button
           onClick={() => {
             setCategoryToEdit(null);
             setShowCategoryModal(true);
           }}
-          disabled={parentCategoriesCount >= store.category_limit}
+          disabled={parentCategoriesCount >= currentPlanLimits.categories}
           className="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white px-4 py-2 rounded-lg flex items-center space-x-2"
         >
           <Plus className="w-4 h-4" />
@@ -220,7 +234,7 @@ export function CategoriesTab({ store, onUpdate }: CategoriesTabProps) {
             loadCategories();
             onUpdate();
           }}
-          categoryLimit={store.category_limit}
+          categoryLimit={currentPlanLimits.categories}
           currentCategoryCount={parentCategoriesCount}
           categoryToEdit={categoryToEdit}
         />

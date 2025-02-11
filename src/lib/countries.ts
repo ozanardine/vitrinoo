@@ -1,3 +1,5 @@
+import { Phone, Instagram, Facebook, Twitter, Youtube, Linkedin, MessageCircle, Mail, Globe, GitBranch as BrandTiktok } from 'lucide-react';
+
 // List of countries with calling codes
 export interface Country {
   name: string;
@@ -7,7 +9,8 @@ export interface Country {
   priority?: number;
 }
 
-export const countries: Country[] = [
+// Default countries list
+export const defaultCountries: Country[] = [
   {
     name: 'Brasil',
     code: 'BR',
@@ -16,16 +19,16 @@ export const countries: Country[] = [
     priority: 1
   },
   {
-    name: 'Estados Unidos',
-    code: 'US',
-    dialCode: '1',
-    format: '+# (###) ###-####'
-  },
-  {
     name: 'Portugal',
     code: 'PT',
     dialCode: '351',
     format: '+### ### ### ###'
+  },
+  {
+    name: 'Estados Unidos',
+    code: 'US',
+    dialCode: '1',
+    format: '+# (###) ###-####'
   },
   {
     name: 'Argentina',
@@ -68,78 +71,47 @@ export const countries: Country[] = [
     code: 'PY',
     dialCode: '595',
     format: '+### (###) ### ###'
-  },
-  {
-    name: 'Bolívia',
-    code: 'BO',
-    dialCode: '591',
-    format: '+### # ### ####'
-  },
-  {
-    name: 'Equador',
-    code: 'EC',
-    dialCode: '593',
-    format: '+### ## ### ####'
-  },
-  {
-    name: 'Venezuela',
-    code: 'VE',
-    dialCode: '58',
-    format: '+## (###) ### ####'
-  },
-  {
-    name: 'Espanha',
-    code: 'ES',
-    dialCode: '34',
-    format: '+## ### ### ###'
-  },
-  {
-    name: 'Reino Unido',
-    code: 'GB',
-    dialCode: '44',
-    format: '+## #### ######'
-  },
-  {
-    name: 'França',
-    code: 'FR',
-    dialCode: '33',
-    format: '+## # ## ## ## ##'
-  },
-  {
-    name: 'Alemanha',
-    code: 'DE',
-    dialCode: '49',
-    format: '+## ### #######'
-  },
-  {
-    name: 'Itália',
-    code: 'IT',
-    dialCode: '39',
-    format: '+## ### ### ####'
-  },
-  {
-    name: 'Canadá',
-    code: 'CA',
-    dialCode: '1',
-    format: '+# (###) ###-####'
-  },
-  {
-    name: 'Austrália',
-    code: 'AU',
-    dialCode: '61',
-    format: '+## ### ### ###'
   }
 ].sort((a, b) => {
-  // Prioridade primeiro
   if (a.priority && !b.priority) return -1;
   if (!a.priority && b.priority) return 1;
-  if (a.priority && b.priority) {
-    if (a.priority < b.priority) return -1;
-    if (a.priority > b.priority) return 1;
-  }
-  // Depois ordem alfabética
   return a.name.localeCompare(b.name);
 });
+
+// Export countries as the default list initially
+export const countries = [...defaultCountries];
+
+// Fetch countries from REST Countries API
+export async function fetchCountries(): Promise<Country[]> {
+  try {
+    const response = await fetch('https://restcountries.com/v3.1/all?fields=name,idd');
+    const data = await response.json();
+    
+    const fetchedCountries = data
+      .filter((country: any) => country.idd.root && country.idd.suffixes)
+      .map((country: any) => ({
+        name: country.name.common,
+        code: country.cca2,
+        dialCode: country.idd.root.replace('+', '') + country.idd.suffixes[0],
+        format: `+${country.idd.root.replace('+', '')}${country.idd.suffixes[0]} ### ### ###`,
+        priority: country.cca2 === 'BR' ? 1 : undefined
+      }))
+      .sort((a: Country, b: Country) => {
+        if (a.priority && !b.priority) return -1;
+        if (!a.priority && b.priority) return 1;
+        return a.name.localeCompare(b.name);
+      });
+
+    // Update the countries array with fetched data
+    countries.length = 0;
+    countries.push(...fetchedCountries);
+    
+    return countries;
+  } catch (error) {
+    console.error('Error fetching countries:', error);
+    return defaultCountries;
+  }
+}
 
 export function formatPhoneNumber(value: string, country: Country): string {
   // Remove tudo que não for número
@@ -177,7 +149,7 @@ export function parsePhoneNumber(formattedNumber: string): { countryCode: string
   if (!numbers) return null;
 
   // Procura o país pelo código de discagem
-  for (const country of countries) {
+  for (const country of defaultCountries) {
     if (numbers.startsWith(country.dialCode)) {
       return {
         countryCode: country.code,
@@ -187,4 +159,120 @@ export function parsePhoneNumber(formattedNumber: string): { countryCode: string
   }
 
   return null;
+}
+
+export const SOCIAL_NETWORKS = {
+  phone: {
+    label: 'Telefone',
+    icon: Phone,
+    placeholder: 'Número de telefone',
+    type: 'phone',
+    urlTemplate: 'tel:+'
+  },
+  whatsapp: {
+    label: 'WhatsApp',
+    icon: MessageCircle,
+    placeholder: 'Número do WhatsApp',
+    type: 'phone',
+    urlTemplate: 'https://wa.me/'
+  },
+  telegram: {
+    label: 'Telegram',
+    icon: MessageCircle,
+    placeholder: '@usuario ou número',
+    type: 'mixed',
+    urlTemplate: (value: string) => value.startsWith('@') ? 
+      `https://t.me/${value.substring(1)}` : 
+      `https://t.me/+${value.replace(/\D/g, '')}`
+  },
+  instagram: {
+    label: 'Instagram',
+    icon: Instagram,
+    placeholder: '@seuinstagram',
+    type: 'username',
+    urlTemplate: 'https://instagram.com/'
+  },
+  facebook: {
+    label: 'Facebook',
+    icon: Facebook,
+    placeholder: '@suapagina',
+    type: 'username',
+    urlTemplate: 'https://facebook.com/'
+  },
+  twitter: {
+    label: 'Twitter',
+    icon: Twitter,
+    placeholder: '@seutwitter',
+    type: 'username',
+    urlTemplate: 'https://twitter.com/'
+  },
+  youtube: {
+    label: 'YouTube',
+    icon: Youtube,
+    placeholder: '@seucanal',
+    type: 'username',
+    urlTemplate: 'https://youtube.com/@'
+  },
+  tiktok: {
+    label: 'TikTok',
+    icon: BrandTiktok,
+    placeholder: '@seutiktok',
+    type: 'username',
+    urlTemplate: 'https://tiktok.com/@'
+  },
+  linkedin: {
+    label: 'LinkedIn',
+    icon: Linkedin,
+    placeholder: '@seuperfil',
+    type: 'username',
+    urlTemplate: 'https://linkedin.com/in/'
+  },
+  email: {
+    label: 'Email',
+    icon: Mail,
+    placeholder: 'seuemail@exemplo.com',
+    type: 'email',
+    urlTemplate: 'mailto:'
+  },
+  website: {
+    label: 'Website',
+    icon: Globe,
+    placeholder: 'seusite.com',
+    type: 'url',
+    urlTemplate: (url: string) => url.startsWith('http') ? url : `https://${url}`
+  }
+} as const;
+
+export function generateSocialUrl(type: string, value: string, countryCode?: string): string {
+  const network = SOCIAL_NETWORKS[type as keyof typeof SOCIAL_NETWORKS];
+  
+  if (!network) return value;
+
+  // Handle phone numbers
+  if (network.type === 'phone') {
+    const cleanNumber = value.replace(/\D/g, '');
+    return typeof network.urlTemplate === 'string' ? 
+      network.urlTemplate + cleanNumber :
+      network.urlTemplate(cleanNumber);
+  }
+
+  // Handle usernames
+  if (network.type === 'username') {
+    const username = value.startsWith('@') ? value.substring(1) : value;
+    return typeof network.urlTemplate === 'string' ? 
+      network.urlTemplate + username :
+      network.urlTemplate(username);
+  }
+
+  // Handle mixed (Telegram)
+  if (network.type === 'mixed') {
+    return typeof network.urlTemplate === 'string' ? 
+      network.urlTemplate + value :
+      network.urlTemplate(value);
+  }
+
+  // Handle email and website
+  return typeof network.urlTemplate === 'string' ? 
+    network.urlTemplate + value :
+    network.urlTemplate(value);
 }

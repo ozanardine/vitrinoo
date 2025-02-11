@@ -1,21 +1,14 @@
 import React, { useState } from 'react';
-import { Store, Trash2 } from 'lucide-react';
+import { Store, AlertCircle, Upload, Palette, Layout } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { Store as StoreType } from '../../lib/types';
 import { ImageUploader } from '../ImageUploader';
-import { countries, formatPhoneNumber } from '../../lib/countries';
-import { SOCIAL_NETWORKS } from '../../lib/constants';
+import { SocialNetworksForm } from './SocialNetworksForm';
 import { StoreHeader } from '../store/StoreHeader';
 
 interface StoreCustomizationTabProps {
   store: StoreType;
   onUpdate: () => void;
-}
-
-interface SocialLink {
-  type: string;
-  url: string;
-  countryCode?: string;
 }
 
 export function StoreCustomizationTab({ store, onUpdate }: StoreCustomizationTabProps) {
@@ -28,11 +21,20 @@ export function StoreCustomizationTab({ store, onUpdate }: StoreCustomizationTab
     description: store.description || '',
     logoUrl: store.logo_url || '',
     primaryColor: store.primary_color || '#000000',
-    secondaryColor: store.secondary_color || '#ffffff'
+    secondaryColor: store.secondary_color || '#ffffff',
+    headerStyle: store.header_style || 'solid',
+    headerHeight: store.header_height || '400px',
+    headerImage: store.header_image || '',
+    headerGradient: store.header_gradient || 'to bottom',
+    logoSize: store.logo_size || '160px',
+    titleSize: store.title_size || '48px',
+    descriptionSize: store.description_size || '18px'
   });
-  const [socialLinks, setSocialLinks] = useState<SocialLink[]>(
-    store.social_links || []
-  );
+  const [socialLinks, setSocialLinks] = useState<Array<{
+    type: string;
+    url: string;
+    countryCode?: string;
+  }>>(store.social_links || []);
 
   const showAlert = (message: string, type: 'success' | 'error') => {
     if (type === 'success') setSuccess(message);
@@ -62,16 +64,6 @@ export function StoreCustomizationTab({ store, onUpdate }: StoreCustomizationTab
         throw new Error('Esta URL já está em uso. Por favor, escolha outra.');
       }
 
-      // Validar links sociais
-      for (const link of socialLinks) {
-        if (link.type === 'email' && !link.url.includes('@')) {
-          throw new Error('Email inválido');
-        }
-        if ((link.type === 'whatsapp' || link.type === 'telegram') && !link.url) {
-          throw new Error('Número de telefone inválido');
-        }
-      }
-
       const { error: updateError } = await supabase
         .from('stores')
         .update({
@@ -81,6 +73,13 @@ export function StoreCustomizationTab({ store, onUpdate }: StoreCustomizationTab
           logo_url: storeForm.logoUrl || null,
           primary_color: storeForm.primaryColor,
           secondary_color: storeForm.secondaryColor,
+          header_style: storeForm.headerStyle,
+          header_height: storeForm.headerHeight,
+          header_image: storeForm.headerImage || null,
+          header_gradient: storeForm.headerGradient,
+          logo_size: storeForm.logoSize,
+          title_size: storeForm.titleSize,
+          description_size: storeForm.descriptionSize,
           social_links: socialLinks,
           updated_at: new Date().toISOString()
         })
@@ -97,55 +96,19 @@ export function StoreCustomizationTab({ store, onUpdate }: StoreCustomizationTab
     }
   };
 
-  const addSocialNetwork = (type: string) => {
-    const defaultCountryCode = 'BR';
-    setSocialLinks([
-      ...socialLinks,
-      { 
-        type, 
-        url: '',
-        ...(type === 'whatsapp' || type === 'telegram' ? { countryCode: defaultCountryCode } : {})
-      }
-    ]);
-  };
-
-  const updateSocialNetwork = (index: number, value: string, countryCode?: string) => {
-    const newLinks = [...socialLinks];
-    if (countryCode) {
-      const country = countries.find(c => c.code === countryCode) || countries[0];
-      const numbers = value.replace(/\D/g, '');
-      const formatted = formatPhoneNumber(numbers, country);
-      newLinks[index] = { 
-        ...newLinks[index], 
-        url: formatted.substring(country.dialCode.length + 1), // Remove o código do país e o +
-        countryCode 
-      };
-    } else {
-      newLinks[index] = { ...newLinks[index], url: value };
-    }
-    setSocialLinks(newLinks);
-  };
-
-  const removeSocialNetwork = (index: number) => {
-    setSocialLinks(socialLinks.filter((_, i) => i !== index));
-  };
-
-  const getAvailableNetworks = () => {
-    const usedTypes = new Set(socialLinks.map(link => link.type));
-    return Object.entries(SOCIAL_NETWORKS).filter(([type]) => !usedTypes.has(type));
-  };
-
   return (
     <div className="space-y-8">
       {(error || success) && (
-        <div className={`p-4 rounded-lg ${
-          error ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'
+        <div className={`p-4 rounded-lg flex items-center space-x-2 ${
+          error ? 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-100' : 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-100'
         }`}>
-          {error || success}
+          <AlertCircle className="w-5 h-5 flex-shrink-0" />
+          <span>{error || success}</span>
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="space-y-6">
+      <form onSubmit={handleSubmit} className="space-y-8">
+        {/* Basic Info */}
         <div>
           <h3 className="text-lg font-semibold mb-4">Informações Básicas</h3>
           <div className="space-y-4">
@@ -199,148 +162,216 @@ export function StoreCustomizationTab({ store, onUpdate }: StoreCustomizationTab
           </div>
         </div>
 
+        {/* Header Customization */}
         <div>
-          <h3 className="text-lg font-semibold mb-4">Cores</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <h3 className="text-lg font-semibold mb-4">Personalização do Cabeçalho</h3>
+          
+          <div className="space-y-6">
+            {/* Header Style */}
             <div>
-              <label className="block text-sm font-medium mb-1">Cor Principal</label>
-              <div className="flex items-center space-x-2">
-                <input
-                  type="color"
-                  value={storeForm.primaryColor}
-                  onChange={(e) => setStoreForm({ ...storeForm, primaryColor: e.target.value })}
-                  className="w-8 h-8 rounded cursor-pointer"
-                />
-                <input
-                  type="text"
-                  value={storeForm.primaryColor}
-                  onChange={(e) => setStoreForm({ ...storeForm, primaryColor: e.target.value })}
-                  className="flex-1 p-2 border rounded dark:bg-gray-700 dark:border-gray-600"
-                  pattern="^#[0-9A-Fa-f]{6}$"
-                  title="Código de cor hexadecimal válido (ex: #000000)"
-                />
+              <label className="block text-sm font-medium mb-2">Estilo do Cabeçalho</label>
+              <div className="grid grid-cols-3 gap-4">
+                <button
+                  type="button"
+                  onClick={() => setStoreForm({ ...storeForm, headerStyle: 'solid' })}
+                  className={`p-4 border rounded-lg flex flex-col items-center gap-2 ${
+                    storeForm.headerStyle === 'solid' 
+                      ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' 
+                      : 'hover:bg-gray-50 dark:hover:bg-gray-800'
+                  }`}
+                >
+                  <div className="w-full h-16 bg-gray-200 dark:bg-gray-700 rounded" />
+                  <span>Sólido</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setStoreForm({ ...storeForm, headerStyle: 'gradient' })}
+                  className={`p-4 border rounded-lg flex flex-col items-center gap-2 ${
+                    storeForm.headerStyle === 'gradient'
+                      ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
+                      : 'hover:bg-gray-50 dark:hover:bg-gray-800'
+                  }`}
+                >
+                  <div className="w-full h-16 bg-gradient-to-b from-gray-200 to-white dark:from-gray-700 dark:to-gray-900 rounded" />
+                  <span>Gradiente</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setStoreForm({ ...storeForm, headerStyle: 'image' })}
+                  className={`p-4 border rounded-lg flex flex-col items-center gap-2 ${
+                    storeForm.headerStyle === 'image'
+                      ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
+                      : 'hover:bg-gray-50 dark:hover:bg-gray-800'
+                  }`}
+                >
+                  <div className="w-full h-16 bg-gray-200 dark:bg-gray-700 rounded flex items-center justify-center">
+                    <Upload className="w-6 h-6 text-gray-400" />
+                  </div>
+                  <span>Imagem</span>
+                </button>
               </div>
             </div>
 
-            <div>
-              <label className="block text-sm font-medium mb-1">Cor Secundária</label>
-              <div className="flex items-center space-x-2">
-                <input
-                  type="color"
-                  value={storeForm.secondaryColor}
-                  onChange={(e) => setStoreForm({ ...storeForm, secondaryColor: e.target.value })}
-                  className="w-8 h-8 rounded cursor-pointer"
-                />
-                <input
-                  type="text"
-                  value={storeForm.secondaryColor}
-                  onChange={(e) => setStoreForm({ ...storeForm, secondaryColor: e.target.value })}
-                  className="flex-1 p-2 border rounded dark:bg-gray-700 dark:border-gray-600"
-                  pattern="^#[0-9A-Fa-f]{6}$"
-                  title="Código de cor hexadecimal válido (ex: #000000)"
-                />
-              </div>
-            </div>
-          </div>
-
-          <div className="mt-4">
-            <h4 className="font-medium mb-2">Prévia</h4>
-            <div className="rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700">
-              <StoreHeader
-                name={storeForm.name}
-                description={storeForm.description}
-                logoUrl={storeForm.logoUrl}
-                primaryColor={storeForm.primaryColor}
-                secondaryColor={storeForm.secondaryColor}
-                socialLinks={socialLinks}
-              />
-            </div>
-          </div>
-        </div>
-
-        <div>
-          <h3 className="text-lg font-semibold mb-4">Redes Sociais</h3>
-          <div className="space-y-4">
-            {socialLinks.map((link, index) => {
-              const network = SOCIAL_NETWORKS[link.type];
-              const Icon = network.icon;
-              const isPhoneNumber = link.type === 'phone' || link.type === 'whatsapp' || (link.type === 'telegram' && !link.url.startsWith('@'));
-              
-              return (
-                <div key={index} className="flex items-center space-x-2">
-                  <Icon className="w-5 h-5 text-gray-500" />
-                  {isPhoneNumber ? (
-                    <div className="flex-1 flex space-x-2">
-                      <select
-                        value={link.countryCode || 'BR'}
-                        onChange={(e) => {
-                          const country = countries.find(c => c.code === e.target.value);
-                          if (country) {
-                            updateSocialNetwork(index, '', e.target.value);
-                          }
-                        }}
-                        className="w-40 p-2 border rounded dark:bg-gray-700 dark:border-gray-600"
-                      >
-                        {countries.map(country => (
-                          <option key={country.code} value={country.code}>
-                            {country.name} (+{country.dialCode})
-                          </option>
-                        ))}
-                      </select>
-                      <div className="flex-1 relative">
-                        <input
-                          type="tel"
-                          value={link.url}
-                          onChange={(e) => {
-                            const country = countries.find(c => c.code === link.countryCode) || countries[0];
-                            const numbers = e.target.value.replace(/\D/g, '');
-                            updateSocialNetwork(index, numbers, link.countryCode);
-                          }}
-                          className="w-full p-2 pl-12 border rounded dark:bg-gray-700 dark:border-gray-600"
-                          placeholder="00000-0000"
-                        />
-                        <span className="absolute left-2 top-2 text-gray-500 text-sm select-none">
-                          +{(countries.find(c => c.code === link.countryCode) || countries[0]).dialCode}
-                        </span>
-                      </div>
-                    </div>
-                  ) : (
-                    <input
-                      type={link.type === 'email' ? 'email' : 'text'}
-                      value={link.url}
-                      onChange={(e) => updateSocialNetwork(index, e.target.value)}
-                      className="flex-1 p-2 border rounded dark:bg-gray-700 dark:border-gray-600"
-                      placeholder={network.placeholder}
-                    />
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => removeSocialNetwork(index)}
-                    className="p-2 text-red-500 hover:text-red-700"
-                  >
-                    <Trash2 className="w-5 h-5" />
-                  </button>
-                </div>
-              );
-            })}
-
-            {getAvailableNetworks().length > 0 && (
-              <div className="flex flex-wrap gap-2">
-                {getAvailableNetworks().map(([type, network]) => (
-                  <button
-                    key={type}
-                    type="button"
-                    onClick={() => addSocialNetwork(type)}
-                    className="flex items-center space-x-2 px-4 py-2 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600"
-                  >
-                    <network.icon className="w-4 h-4" />
-                    <span>Adicionar {network.label}</span>
-                  </button>
-                ))}
+            {/* Header Style Specific Options */}
+            {storeForm.headerStyle === 'gradient' && (
+              <div>
+                <label className="block text-sm font-medium mb-2">Direção do Gradiente</label>
+                <select
+                  value={storeForm.headerGradient}
+                  onChange={(e) => setStoreForm({ ...storeForm, headerGradient: e.target.value })}
+                  className="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600"
+                >
+                  <option value="to bottom">De cima para baixo</option>
+                  <option value="to right">Da esquerda para direita</option>
+                  <option value="to bottom right">Diagonal</option>
+                  <option value="to top">De baixo para cima</option>
+                </select>
               </div>
             )}
+
+            {storeForm.headerStyle === 'image' && (
+              <div>
+                <label className="block text-sm font-medium mb-2">Imagem de Fundo</label>
+                <ImageUploader
+                  onImageUrl={(url) => setStoreForm({ ...storeForm, headerImage: url })}
+                  currentUrl={storeForm.headerImage}
+                />
+                <p className="text-sm text-gray-500 mt-1">
+                  Recomendado: 1920x400px ou maior, formato 16:9
+                </p>
+              </div>
+            )}
+
+            {/* Header Colors */}
+            <div className="space-y-4 mb-6">
+              <h4 className="text-md font-medium">Cores do Cabeçalho</h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium mb-1">Cor de Fundo</label>
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="color"
+                      value={storeForm.primaryColor}
+                      onChange={(e) => setStoreForm({ ...storeForm, primaryColor: e.target.value })}
+                      className="w-8 h-8 rounded cursor-pointer"
+                    />
+                    <input
+                      type="text"
+                      value={storeForm.primaryColor}
+                      onChange={(e) => setStoreForm({ ...storeForm, primaryColor: e.target.value })}
+                      className="flex-1 p-2 border rounded dark:bg-gray-700 dark:border-gray-600"
+                      pattern="^#[0-9A-Fa-f]{6}$"
+                      title="Código de cor hexadecimal válido (ex: #000000)"
+                    />
+                  </div>
+                  <p className="text-sm text-gray-500 mt-1">
+                    Cor principal do cabeçalho (fundo sólido ou base do gradiente)
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-1">Cor do Texto</label>
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="color"
+                      value={storeForm.secondaryColor}
+                      onChange={(e) => setStoreForm({ ...storeForm, secondaryColor: e.target.value })}
+                      className="w-8 h-8 rounded cursor-pointer"
+                    />
+                    <input
+                      type="text"
+                      value={storeForm.secondaryColor}
+                      onChange={(e) => setStoreForm({ ...storeForm, secondaryColor: e.target.value })}
+                      className="flex-1 p-2 border rounded dark:bg-gray-700 dark:border-gray-600"
+                      pattern="^#[0-9A-Fa-f]{6}$"
+                      title="Código de cor hexadecimal válido (ex: #000000)"
+                    />
+                  </div>
+                  <p className="text-sm text-gray-500 mt-1">
+                    Cor do texto e elementos no cabeçalho
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Header Dimensions */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <label className="block text-sm font-medium mb-1">Altura do Cabeçalho</label>
+                <input
+                  type="number"
+                  value={storeForm.headerHeight.replace('px', '')}
+                  onChange={(e) => setStoreForm({ ...storeForm, headerHeight: `${e.target.value}px` })}
+                  className="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600"
+                  placeholder="400"
+                  min="200"
+                  max="800"
+                />
+                <p className="text-sm text-gray-500 mt-1">Altura em pixels (200-800px)</p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1">Tamanho da Logo</label>
+                <input
+                  type="number"
+                  value={storeForm.logoSize.replace('px', '')}
+                  onChange={(e) => setStoreForm({ ...storeForm, logoSize: `${e.target.value}px` })}
+                  className="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600"
+                  placeholder="160"
+                  min="80"
+                  max="300"
+                />
+                <p className="text-sm text-gray-500 mt-1">Tamanho em pixels (80-300px)</p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1">Tamanho do Título</label>
+                <input
+                  type="number"
+                  value={storeForm.titleSize.replace('px', '')}
+                  onChange={(e) => setStoreForm({ ...storeForm, titleSize: `${e.target.value}px` })}
+                  className="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600"
+                  placeholder="48"
+                  min="24"
+                  max="72"
+                />
+                <p className="text-sm text-gray-500 mt-1">Tamanho em pixels (24-72px)</p>
+              </div>
+            </div>
           </div>
         </div>
+
+        {/* Preview */}
+        <div>
+          <h3 className="text-lg font-semibold mb-4">Prévia</h3>
+          <div className="rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700">
+            <StoreHeader
+              name={storeForm.name}
+              description={storeForm.description}
+              logoUrl={storeForm.logoUrl}
+              primaryColor={storeForm.primaryColor}
+              secondaryColor={storeForm.secondaryColor}
+              socialLinks={socialLinks}
+              customization={{
+                headerStyle: storeForm.headerStyle as 'solid' | 'gradient' | 'image',
+                headerHeight: storeForm.headerHeight,
+                headerImage: storeForm.headerImage,
+                headerGradient: storeForm.headerGradient,
+                logoSize: storeForm.logoSize,
+                titleSize: storeForm.titleSize,
+                descriptionSize: storeForm.descriptionSize
+              }}
+            />
+          </div>
+        </div>
+
+        {/* Social Networks */}
+        <SocialNetworksForm
+          links={socialLinks}
+          onChange={setSocialLinks}
+        />
 
         <button
           type="submit"

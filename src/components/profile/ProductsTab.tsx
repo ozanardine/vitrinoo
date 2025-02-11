@@ -5,6 +5,7 @@ import { supabase } from '../../lib/supabase';
 import { ProductModal } from '../ProductModal';
 import { ProductCard } from '../ProductCard';
 import { ProductDetailsModal } from '../ProductDetailsModal';
+import { PLAN_LIMITS } from '../../lib/store';
 
 interface ProductsTabProps {
   store: Store;
@@ -117,6 +118,9 @@ export function ProductsTab({ store, onUpdate }: ProductsTabProps) {
     }
   };
 
+  const currentPlanType = store.subscription.plan_type as keyof typeof PLAN_LIMITS;
+  const currentPlanLimits = PLAN_LIMITS[currentPlanType];
+
   if (loading) {
     return (
       <div className="flex justify-center py-8">
@@ -131,8 +135,18 @@ export function ProductsTab({ store, onUpdate }: ProductsTabProps) {
         <div>
           <h3 className="text-lg font-semibold">Produtos</h3>
           <p className="text-sm text-gray-600 dark:text-gray-400">
-            {products.length} de {store.product_limit === Infinity ? 'Ilimitado' : store.product_limit} produtos
+            {products.length} de {currentPlanLimits.products.toLocaleString()} produtos
           </p>
+          <div className="mt-2">
+            <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+              <div
+                className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                style={{ 
+                  width: `${Math.min((products.length / currentPlanLimits.products) * 100, 100)}%` 
+                }}
+              />
+            </div>
+          </div>
         </div>
         <button
           onClick={() => {
@@ -143,7 +157,7 @@ export function ProductsTab({ store, onUpdate }: ProductsTabProps) {
             setProductToEdit(undefined);
             setShowProductModal(true);
           }}
-          disabled={products.length >= store.product_limit || hasErpIntegration}
+          disabled={products.length >= currentPlanLimits.products || hasErpIntegration}
           className="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white px-4 py-2 rounded-lg flex items-center space-x-2"
         >
           <Plus className="w-4 h-4" />
@@ -206,8 +220,8 @@ export function ProductsTab({ store, onUpdate }: ProductsTabProps) {
             onUpdate();
           }}
           product={productToEdit}
-          planType={store.subscription.plan_type}
-          categoryLimit={store.category_limit}
+          planType={currentPlanType}
+          categoryLimit={currentPlanLimits.categories}
           currentCategoryCount={store.categories_count}
         />
       )}

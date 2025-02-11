@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Plus, X, Check } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Plus, X, Check, AlertCircle } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 
 interface Attribute {
@@ -14,13 +14,17 @@ interface ProductAttributesProps {
   selectedAttributes: string[];
   onAttributesChange: (attributes: string[]) => void;
   disabled?: boolean;
+  existingAttributes?: Record<string, string[]>;
+  onAttributeOptionsChange?: (name: string, options: string[]) => void;
 }
 
 export function ProductAttributes({
   storeId,
   selectedAttributes,
   onAttributesChange,
-  disabled
+  disabled,
+  existingAttributes = {},
+  onAttributeOptionsChange
 }: ProductAttributesProps) {
   const [attributes, setAttributes] = useState<Attribute[]>([]);
   const [showNewAttribute, setShowNewAttribute] = useState(false);
@@ -32,6 +36,10 @@ export function ProductAttributes({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  useEffect(() => {
+    loadAttributes();
+  }, [storeId]);
+
   const loadAttributes = async () => {
     try {
       const { data, error } = await supabase
@@ -41,9 +49,26 @@ export function ProductAttributes({
         .order('name');
 
       if (error) throw error;
+      
+      // Atualizar as opções dos atributos existentes
+      if (data) {
+        const newExistingAttributes: Record<string, string[]> = {};
+        data.forEach(attr => {
+          newExistingAttributes[attr.name] = attr.options || [];
+        });
+        if (onAttributeOptionsChange) {
+          selectedAttributes.forEach(attr => {
+            if (newExistingAttributes[attr]) {
+              onAttributeOptionsChange(attr, newExistingAttributes[attr]);
+            }
+          });
+        }
+      }
+
       setAttributes(data || []);
     } catch (err) {
       console.error('Erro ao carregar atributos:', err);
+      setError('Erro ao carregar atributos. Por favor, tente novamente.');
     }
   };
 
@@ -70,23 +95,32 @@ export function ProductAttributes({
     });
   };
 
-  const handleSaveAttribute = async () => {
+  const handleSaveAttribute = async (e: React.FormEvent) => {
+    e.preventDefault();
     try {
       setLoading(true);
       setError(null);
 
-      // Validar nome
       if (!newAttribute.name) {
         throw new Error('Nome do atributo é obrigatório');
       }
 
-      // Validar opções
       const validOptions = newAttribute.options.filter(opt => opt.trim());
       if (validOptions.length < 1) {
         throw new Error('Adicione pelo menos uma opção');
       }
 
-      // Salvar atributo
+      const { data: existingAttr } = await supabase
+        .from('product_attributes')
+        .select('id')
+        .eq('store_id', storeId)
+        .eq('name', newAttribute.name)
+        .maybeSingle();
+
+      if (existingAttr) {
+        throw new Error('Já existe um atributo com este nome');
+      }
+
       const { error: saveError } = await supabase
         .from('product_attributes')
         .insert({
@@ -98,10 +132,9 @@ export function ProductAttributes({
 
       if (saveError) throw saveError;
 
-      // Limpar form e recarregar atributos
       setNewAttribute({ name: '', description: '', options: [''] });
       setShowNewAttribute(false);
-      loadAttributes();
+      await loadAttributes();
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -109,12 +142,20 @@ export function ProductAttributes({
     }
   };
 
-  const toggleAttribute = (attributeName: string) => {
+  const toggleAttribute = async (attributeName: string) => {
+    const attribute = attributes.find(attr => attr.name === attributeName);
+    if (!attribute) return;
+
     const newAttributes = selectedAttributes.includes(attributeName)
       ? selectedAttributes.filter(attr => attr !== attributeName)
       : [...selectedAttributes, attributeName];
     
     onAttributesChange(newAttributes);
+
+    // Atualizar opções disponíveis
+    if (onAttributeOptionsChange) {
+      onAttributeOptionsChange(attributeName, attribute.options);
+    }
   };
 
   return (
@@ -187,8 +228,9 @@ export function ProductAttributes({
           </div>
 
           {error && (
-            <div className="text-sm text-red-600">
-              {error}
+            <div className="flex items-center space-x-2 text-red-600 text-sm">
+              <AlertCircle className="w-4 h-4" />
+              <span>{error}</span>
             </div>
           )}
 
@@ -217,42 +259,55 @@ export function ProductAttributes({
       )}
 
       <div className="space-y-2">
-        {attributes.map((attribute) => (
-          <button
-            key={attribute.id}
-            onClick={() => toggleAttribute(attribute.name)}
-            disabled={disabled}
-            className={`w-full text-left p-4 rounded-lg border-2 transition-colors ${
-              selectedAttributes.includes(attribute.name)
-                ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
-                : 'border-gray-200 dark:border-gray-700 hover:border-blue-200'
-            } ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
-          >
-            <div className="flex items-start justify-between">
-              <div>
-                <h4 className="font-medium">{attribute.name}</h4>
-                {attribute.description && (
-                  <p className="text-sm text-gray-600 dark:text-gray-400">
-                    {attribute.description}
-                  </p>
-                )}
-                <div className="flex flex-wrap gap-2 mt-2">
-                  {attribute.options.map((option, index) => (
-                    <span
-                      key={index}
-                      className="px-2 py-1 bg-gray-100 dark:bg-gray-800 rounded text-sm"
-                    >
-                      {option}
-                    </span>
-                  ))}
+        {attributes.map((attribute) => {
+          const isSelected = selectedAttributes.includes(attribute.name);
+          const existingOptions = existingAttributes[attribute.name] || [];
+
+          return (
+            <button
+              key={attribute.id}
+              type="button"
+              onClick={() => toggleAttribute(attribute.name)}
+              disabled={disabled}
+              className={`w-full text-left p-4 rounded-lg border-2 transition-colors ${
+                isSelected
+                  ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
+                  : 'border-gray-200 dark:border-gray-700 hover:border-blue-200'
+              } ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+            >
+              <div className="flex items-start justify-between">
+                <div>
+                  <h4 className="font-medium">{attribute.name}</h4>
+                  {attribute.description && (
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                      {attribute.description}
+                    </p>
+                  )}
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {attribute.options.map((option, index) => (
+                      <span
+                        key={index}
+                        className={`px-2 py-1 rounded text-sm ${
+                          existingOptions.includes(option)
+                            ? 'bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300'
+                            : 'bg-gray-100 dark:bg-gray-800'
+                        }`}
+                      >
+                        {option}
+                        {existingOptions.includes(option) && (
+                          <Check className="w-3 h-3 inline ml-1" />
+                        )}
+                      </span>
+                    ))}
+                  </div>
                 </div>
+                {isSelected && (
+                  <Check className="w-5 h-5 text-blue-600" />
+                )}
               </div>
-              {selectedAttributes.includes(attribute.name) && (
-                <Check className="w-5 h-5 text-blue-600" />
-              )}
-            </div>
-          </button>
-        ))}
+            </button>
+          );
+        })}
       </div>
     </div>
   );

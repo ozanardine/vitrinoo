@@ -1,13 +1,27 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { ShoppingBag, Palette, Zap, Share2, Database, Settings } from 'lucide-react';
 import { useStore } from './lib/store';
 
 function App() {
   const { theme } = useStore();
 
-  useEffect(() => {
+  React.useEffect(() => {
     document.documentElement.classList.toggle('dark', theme === 'dark');
   }, [theme]);
+
+  // Check for section parameter in URL and scroll if needed
+  React.useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const section = params.get('section');
+    if (section) {
+      const element = document.getElementById(section);
+      if (element) {
+        element.scrollIntoView({ behavior: 'smooth' });
+      }
+      // Clean up URL
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, []);
 
   return (
     <>
@@ -102,11 +116,15 @@ function App() {
               <ul className="space-y-3 mb-8">
                 <li className="flex items-center">
                   <span className="text-green-500 mr-2">✓</span>
-                  Até 50 produtos
+                  Até 100 produtos
                 </li>
                 <li className="flex items-center">
                   <span className="text-green-500 mr-2">✓</span>
-                  Personalização básica
+                  Até 10 categorias
+                </li>
+                <li className="flex items-center">
+                  <span className="text-green-500 mr-2">✓</span>
+                  3 imagens por produto
                 </li>
                 <li className="flex items-center">
                   <span className="text-green-500 mr-2">✓</span>
@@ -124,15 +142,19 @@ function App() {
                 Popular
               </div>
               <h3 className="text-2xl font-bold mb-4">Básico</h3>
-              <p className="text-4xl font-bold mb-6">R$ 147<span className="text-lg font-normal text-gray-600 dark:text-gray-400">/mês</span></p>
+              <p className="text-4xl font-bold mb-6">R$ 47<span className="text-lg font-normal text-gray-600 dark:text-gray-400">/mês</span></p>
               <ul className="space-y-3 mb-8">
                 <li className="flex items-center">
                   <span className="text-green-500 mr-2">✓</span>
-                  Até 500 produtos
+                  Até 1.000 produtos
                 </li>
                 <li className="flex items-center">
                   <span className="text-green-500 mr-2">✓</span>
-                  Personalização avançada
+                  Até 50 categorias
+                </li>
+                <li className="flex items-center">
+                  <span className="text-green-500 mr-2">✓</span>
+                  5 imagens por produto
                 </li>
                 <li className="flex items-center">
                   <span className="text-green-500 mr-2">✓</span>
@@ -151,11 +173,19 @@ function App() {
             {/* Plus Plan */}
             <div className="bg-white dark:bg-gray-900 rounded-lg shadow-lg p-8">
               <h3 className="text-2xl font-bold mb-4">Plus</h3>
-              <p className="text-4xl font-bold mb-6">R$ 497<span className="text-lg font-normal text-gray-600 dark:text-gray-400">/mês</span></p>
+              <p className="text-4xl font-bold mb-6">R$ 97<span className="text-lg font-normal text-gray-600 dark:text-gray-400">/mês</span></p>
               <ul className="space-y-3 mb-8">
                 <li className="flex items-center">
                   <span className="text-green-500 mr-2">✓</span>
-                  Produtos ilimitados
+                  Até 10.000 produtos
+                </li>
+                <li className="flex items-center">
+                  <span className="text-green-500 mr-2">✓</span>
+                  Até 200 categorias
+                </li>
+                <li className="flex items-center">
+                  <span className="text-green-500 mr-2">✓</span>
+                  10 imagens por produto
                 </li>
                 <li className="flex items-center">
                   <span className="text-green-500 mr-2">✓</span>

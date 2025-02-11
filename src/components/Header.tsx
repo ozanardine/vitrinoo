@@ -4,10 +4,11 @@ import { Store, LogOut, User } from 'lucide-react';
 import { AuthModal } from './AuthModal';
 import { useStore } from '../lib/store';
 import { signOut } from '../lib/auth';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useLocation } from 'react-router-dom';
 
 export const Header = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { user, setUser } = useStore();
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
@@ -22,6 +23,19 @@ export const Header = () => {
     }
   };
 
+  const scrollToSection = (sectionId: string) => {
+    // Se estiver na página inicial, rola para a seção
+    if (location.pathname === '/') {
+      const element = document.getElementById(sectionId);
+      if (element) {
+        element.scrollIntoView({ behavior: 'smooth' });
+      }
+    } else {
+      // Se estiver em outra página, navega para a home e depois rola para a seção
+      navigate('/?section=' + sectionId);
+    }
+  };
+
   return (
     <>
       <header className="border-b border-gray-200 dark:border-gray-700 sticky top-0 bg-white dark:bg-gray-900 z-50">
@@ -33,15 +47,24 @@ export const Header = () => {
             </Link>
             <div className="flex items-center space-x-6">
               <nav className="hidden md:flex space-x-6">
-                <a href="#features" className="text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400">
+                <button
+                  onClick={() => scrollToSection('features')}
+                  className="text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400"
+                >
                   Recursos
-                </a>
-                <a href="#pricing" className="text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400">
+                </button>
+                <button
+                  onClick={() => scrollToSection('pricing')}
+                  className="text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400"
+                >
                   Preços
-                </a>
-                <a href="#integrations" className="text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400">
+                </button>
+                <button
+                  onClick={() => scrollToSection('integrations')}
+                  className="text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400"
+                >
                   Integrações
-                </a>
+                </button>
               </nav>
               <div className="flex items-center space-x-4">
                 {user ? (

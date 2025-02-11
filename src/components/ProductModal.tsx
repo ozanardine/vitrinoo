@@ -9,6 +9,8 @@ import { Images } from './products/form/Images';
 import { ProductAttributes } from './products/ProductAttributes';
 import { ProductVariations } from './products/ProductVariations';
 import { ProductComponents } from './products/ProductComponents';
+import { ServiceInfo } from './products/form/ServiceInfo';
+import { PLAN_LIMITS } from '../lib/store';
 
 interface ProductModalProps {
   storeId: string;
@@ -34,10 +36,11 @@ export function ProductModal({
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [productType, setProductType] = useState<'simple' | 'variable' | 'kit' | 'manufactured'>(product?.type || 'simple');
+  const [productType, setProductType] = useState<'simple' | 'variable' | 'kit' | 'manufactured' | 'service'>(product?.type || 'simple');
   const [variationAttributes, setVariationAttributes] = useState<string[]>(product?.variation_attributes || []);
   const [variations, setVariations] = useState<any[]>([]);
   const [components, setComponents] = useState<any[]>([]);
+  const [existingAttributes, setExistingAttributes] = useState<Record<string, string[]>>({});
   const [form, setForm] = useState({
     title: product?.title || '',
     description: product?.description || '',
@@ -49,15 +52,12 @@ export function ProductModal({
     images: product?.images || [],
     tags: product?.tags || [],
     status: product?.status ?? true,
-    weight: product?.weight || null,
-    weight_unit: product?.weight_unit || 'kg',
-    dimensions: product?.dimensions || {
-      length: 0,
-      width: 0,
-      height: 0,
-      unit: 'cm'
-    },
-    attributes: product?.attributes || {}
+    attributes: product?.attributes || {},
+    // Service specific fields
+    duration: product?.duration || '',
+    availability: product?.availability || { weekdays: [], hours: [] },
+    service_location: product?.service_location || '',
+    service_modality: product?.service_modality || ''
   });
 
   useEffect(() => {
@@ -94,6 +94,8 @@ export function ProductModal({
   };
 
   const loadVariations = async () => {
+    if (!product?.id) return;
+
     try {
       const { data, error } = await supabase
         .from('products')
@@ -101,6 +103,23 @@ export function ProductModal({
         .eq('parent_id', product.id);
 
       if (error) throw error;
+
+      // Extract existing attribute values
+      const attrs: Record<string, Set<string>> = {};
+      data?.forEach(variation => {
+        Object.entries(variation.attributes || {}).forEach(([key, value]) => {
+          if (!attrs[key]) attrs[key] = new Set();
+          attrs[key].add(value as string);
+        });
+      });
+
+      // Convert Sets to arrays
+      const existingAttrs: Record<string, string[]> = {};
+      Object.entries(attrs).forEach(([key, values]) => {
+        existingAttrs[key] = Array.from(values);
+      });
+
+      setExistingAttributes(existingAttrs);
       setVariations(data || []);
     } catch (err) {
       console.error('Erro ao carregar variações:', err);
@@ -113,6 +132,12 @@ export function ProductModal({
     setError(null);
 
     try {
+      // Validate image limit
+      const planLimits = PLAN_LIMITS[planType];
+      if (form.images.length > planLimits.images_per_product) {
+        throw new Error(`O plano ${planLimits.name} permite apenas ${planLimits.images_per_product} imagens por produto`);
+      }
+
       const productData = {
         ...form,
         store_id: storeId,
@@ -121,6 +146,7 @@ export function ProductModal({
         updated_at: new Date().toISOString()
       };
 
+      // Validações específicas por tipo
       if (productType === 'variable' && variationAttributes.length === 0) {
         throw new Error('Selecione pelo menos um atributo de variação');
       }
@@ -131,6 +157,29 @@ export function ProductModal({
 
       if (form.promotional_price && form.promotional_price >= form.price) {
         throw new Error('O preço promocional deve ser menor que o preço normal');
+      }
+
+      // Validações específicas para serviço
+      if (productType === 'service') {
+        if (!form.duration) {
+          throw new Error('A duração do serviço é obrigatória');
+        }
+
+        if (!form.service_modality) {
+          throw new Error('A modalidade do serviço é obrigatória');
+        }
+
+        if ((form.service_modality === 'presential' || form.service_modality === 'hybrid') && !form.service_location) {
+          throw new Error('O local do serviço é obrigatório para serviços presenciais ou híbridos');
+        }
+
+        if (!form.availability?.weekdays?.length) {
+          throw new Error('Selecione pelo menos um dia de atendimento');
+        }
+
+        if (!form.availability?.hours?.length) {
+          throw new Error('Adicione pelo menos um horário de atendimento');
+        }
       }
 
       let productId = product?.id;
@@ -174,27 +223,24 @@ export function ProductModal({
       }
 
       if (productId && productType === 'variable' && variations.length > 0) {
+        // Primeiro remove todas as variações existentes
+        if (product) {
+          await supabase
+            .from('products')
+            .delete()
+            .eq('parent_id', productId);
+        }
+
+        // Depois insere as novas variações
         for (const variation of variations) {
-          if (variation.id) {
-            await supabase
-              .from('products')
-              .update({
-                ...variation,
-                parent_id: productId,
-                type: 'simple',
-                updated_at: new Date().toISOString()
-              })
-              .eq('id', variation.id);
-          } else {
-            await supabase
-              .from('products')
-              .insert([{
-                ...variation,
-                store_id: storeId,
-                parent_id: productId,
-                type: 'simple'
-              }]);
-          }
+          await supabase
+            .from('products')
+            .insert([{
+              ...variation,
+              store_id: storeId,
+              parent_id: productId,
+              type: 'simple'
+            }]);
         }
       }
 
@@ -204,33 +250,6 @@ export function ProductModal({
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleTagsChange = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter' || e.key === ',') {
-      e.preventDefault();
-      const value = (e.target as HTMLInputElement).value.trim();
-      if (value) {
-        setForm({
-          ...form,
-          tags: [...new Set([...form.tags, value])]
-        });
-        (e.target as HTMLInputElement).value = '';
-      }
-    } else if (e.key === 'Backspace' && (e.target as HTMLInputElement).value === '') {
-      e.preventDefault();
-      setForm({
-        ...form,
-        tags: form.tags.slice(0, -1)
-      });
-    }
-  };
-
-  const removeTag = (tagToRemove: string) => {
-    setForm({
-      ...form,
-      tags: form.tags.filter(tag => tag !== tagToRemove)
-    });
   };
 
   return (
@@ -284,7 +303,7 @@ export function ProductModal({
                   {tag}
                   <button
                     type="button"
-                    onClick={() => removeTag(tag)}
+                    onClick={() => setForm({ ...form, tags: form.tags.filter(t => t !== tag) })}
                     className="ml-1 hover:text-blue-800 dark:hover:text-blue-200"
                   >
                     ×
@@ -295,10 +314,35 @@ export function ProductModal({
                 type="text"
                 className="flex-1 min-w-[120px] bg-transparent outline-none"
                 placeholder="Digite uma tag e pressione Enter ou vírgula"
-                onKeyDown={handleTagsChange}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ',') {
+                    e.preventDefault();
+                    const value = (e.target as HTMLInputElement).value.trim();
+                    if (value) {
+                      setForm({
+                        ...form,
+                        tags: [...new Set([...form.tags, value])]
+                      });
+                      (e.target as HTMLInputElement).value = '';
+                    }
+                  } else if (e.key === 'Backspace' && (e.target as HTMLInputElement).value === '') {
+                    e.preventDefault();
+                    setForm({
+                      ...form,
+                      tags: form.tags.slice(0, -1)
+                    });
+                  }
+                }}
               />
             </div>
           </div>
+
+          {productType === 'service' && (
+            <ServiceInfo
+              form={form}
+              setForm={setForm}
+            />
+          )}
 
           {productType === 'variable' && (
             <div className="space-y-4">
@@ -308,6 +352,7 @@ export function ProductModal({
                 selectedAttributes={variationAttributes}
                 onAttributesChange={setVariationAttributes}
                 disabled={loading}
+                existingAttributes={existingAttributes}
               />
               {variationAttributes.length > 0 && (
                 <ProductVariations
@@ -315,6 +360,9 @@ export function ProductModal({
                   variations={variations}
                   onVariationsChange={setVariations}
                   disabled={loading}
+                  existingAttributes={existingAttributes}
+                  onExistingAttributesChange={setExistingAttributes}
+                  parentSku={form.sku}
                 />
               )}
             </div>

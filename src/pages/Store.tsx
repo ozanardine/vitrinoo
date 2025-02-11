@@ -1,12 +1,13 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
-import { Package } from 'lucide-react';
+import { Package, Store as StoreIcon, ThumbsUp } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { Product } from '../lib/types';
 import { StoreHeader } from '../components/store/StoreHeader';
 import { StoreSearch, SearchFilters } from '../components/store/StoreSearch';
 import { ProductCard } from '../components/store/ProductCard';
 import { ProductModal } from '../components/store/ProductModal';
+import { ThemeToggle } from '../components/ThemeToggle';
 
 interface Category {
   id: string;
@@ -39,6 +40,9 @@ export function Store() {
   const [brands, setBrands] = useState<string[]>([]);
   const [tags, setTags] = useState<string[]>([]);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const [currentView, setCurrentView] = useState<'grid' | 'list'>('grid');
+  const [currentSort, setCurrentSort] = useState<'recent' | 'price-asc' | 'price-desc'>('recent');
+  const [currentCategory, setCurrentCategory] = useState<string | null>(null);
 
   useEffect(() => {
     loadStoreData();
@@ -57,7 +61,7 @@ export function Store() {
 
       setStore(storeData);
 
-      // Carregar categorias
+      // Load categories
       const { data: categoriesData, error: categoriesError } = await supabase
         .from('categories')
         .select('*')
@@ -67,7 +71,7 @@ export function Store() {
       if (categoriesError) throw categoriesError;
       setCategories(categoriesData || []);
 
-      // Carregar produtos para extrair marcas e tags únicas
+      // Load products
       const { data: productsData, error: productsError } = await supabase
         .from('products')
         .select('*')
@@ -117,6 +121,17 @@ export function Store() {
     }
   };
 
+  const sortProducts = (products: Product[]) => {
+    switch (currentSort) {
+      case 'price-asc':
+        return [...products].sort((a, b) => (a.promotional_price || a.price) - (b.promotional_price || b.price));
+      case 'price-desc':
+        return [...products].sort((a, b) => (b.promotional_price || b.price) - (a.promotional_price || a.price));
+      default:
+        return [...products].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -140,6 +155,11 @@ export function Store() {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+      {/* Theme Toggle */}
+      <div className="fixed top-4 right-4 z-50">
+        <ThemeToggle />
+      </div>
+
       <StoreHeader
         name={store.name}
         description={store.description}
@@ -150,14 +170,52 @@ export function Store() {
       />
 
       <main className="container mx-auto px-4 py-8">
-        <StoreSearch
-          onSearch={handleSearch}
-          categories={categories}
-          brands={brands}
-          tags={tags}
-        />
+        <div className="mb-8">
+          <StoreSearch
+            onSearch={handleSearch}
+            categories={categories}
+            brands={brands}
+            tags={tags}
+          />
+        </div>
 
-        {/* Products */}
+        {/* View Controls */}
+        <div className="flex justify-between items-center mb-6">
+          <div className="flex items-center space-x-4">
+            <select
+              value={currentSort}
+              onChange={(e) => setCurrentSort(e.target.value as typeof currentSort)}
+              className="p-2 border rounded dark:bg-gray-800 dark:border-gray-700"
+            >
+              <option value="recent">Mais recentes</option>
+              <option value="price-asc">Menor preço</option>
+              <option value="price-desc">Maior preço</option>
+            </select>
+            <div className="flex items-center space-x-2">
+              <button
+                onClick={() => setCurrentView('grid')}
+                className={`p-2 rounded ${currentView === 'grid' ? 'bg-blue-100 dark:bg-blue-900' : ''}`}
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+                </svg>
+              </button>
+              <button
+                onClick={() => setCurrentView('list')}
+                className={`p-2 rounded ${currentView === 'list' ? 'bg-blue-100 dark:bg-blue-900' : ''}`}
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16m-7 6h7" />
+                </svg>
+              </button>
+            </div>
+          </div>
+          <div className="text-sm text-gray-600 dark:text-gray-400">
+            {products.length} {products.length === 1 ? 'produto' : 'produtos'}
+          </div>
+        </div>
+
+        {/* Products Grid/List */}
         {products.length === 0 ? (
           <div className="text-center py-12">
             <Package className="w-16 h-16 text-gray-400 mx-auto mb-4" />
@@ -166,17 +224,41 @@ export function Store() {
             </p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 mt-6">
-            {products.map((product) => (
+          <div className={`grid gap-6 ${
+            currentView === 'grid' 
+              ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4' 
+              : 'grid-cols-1'
+          }`}>
+            {sortProducts(products).map((product) => (
               <ProductCard
                 key={product.id}
                 product={product}
                 onClick={() => setSelectedProduct(product)}
+                view={currentView}
               />
             ))}
           </div>
         )}
       </main>
+
+      {/* Platform Footer */}
+      <footer className="bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 py-8 mt-12">
+        <div className="container mx-auto px-4">
+          <div className="flex flex-col items-center justify-center text-center">
+            <StoreIcon className="w-8 h-8 text-blue-600 mb-2" />
+            <p className="text-gray-600 dark:text-gray-400 mb-4">
+              Catálogo criado com Catálogo Digital
+            </p>
+            <a
+              href="/"
+              className="inline-flex items-center space-x-2 text-blue-600 hover:text-blue-700"
+            >
+              <ThumbsUp className="w-4 h-4" />
+              <span>Crie seu catálogo digital</span>
+            </a>
+          </div>
+        </div>
+      </footer>
 
       {selectedProduct && (
         <ProductModal

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, AlertCircle, AlertTriangle } from 'lucide-react';
+import { X, AlertCircle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
 interface Category {
@@ -112,7 +112,6 @@ export function CategoryModal({
       return;
     }
 
-    // Encontrar categorias similares no mesmo nível hierárquico
     const similar = categories.filter(cat => 
       cat.id !== categoryToEdit?.id &&
       cat.parent_id === parentId &&
@@ -135,7 +134,6 @@ export function CategoryModal({
     e.preventDefault();
     setError(null);
 
-    // Verificar se já existe uma categoria com o mesmo nome no mesmo nível
     const existingCategory = categories.find(
       cat => 
         cat.parent_id === parentId && 
@@ -148,7 +146,6 @@ export function CategoryModal({
       return;
     }
 
-    // Se encontrou categorias similares, mostra confirmação
     if (similarCategories.length > 0 && !pendingSave) {
       setShowConfirmation(true);
       return;
@@ -157,7 +154,6 @@ export function CategoryModal({
     setLoading(true);
 
     try {
-      // Só valida o limite se for uma categoria principal e não for edição
       if (!parentId && !categoryToEdit && currentCategoryCount >= categoryLimit) {
         throw new Error(`Você atingiu o limite de ${categoryLimit} categorias principais do seu plano.`);
       }
@@ -218,121 +214,75 @@ export function CategoryModal({
   };
 
   return (
-    <>
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-        <div className="bg-white dark:bg-gray-800 rounded-lg p-8 max-w-md w-full relative max-h-[90vh] overflow-y-auto">
-          <button
-            onClick={onClose}
-            className="absolute top-4 right-4 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-          >
-            <X className="w-6 h-6" />
-          </button>
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white dark:bg-gray-800 rounded-lg p-8 max-w-md w-full relative max-h-[90vh] overflow-y-auto">
+        <button
+          onClick={onClose}
+          className="absolute top-4 right-4 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+        >
+          <X className="w-6 h-6" />
+        </button>
 
-          <h2 className="text-2xl font-bold mb-6">
-            {categoryToEdit ? 'Editar Categoria' : 'Nova Categoria'}
-          </h2>
+        <h2 className="text-2xl font-bold mb-6">
+          {categoryToEdit ? 'Editar Categoria' : 'Nova Categoria'}
+        </h2>
 
-          {error && (
-            <div className="mb-4 p-3 bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-100 rounded flex items-center space-x-2">
-              <AlertCircle className="w-5 h-5 flex-shrink-0" />
-              <span>{error}</span>
-            </div>
-          )}
+        {error && (
+          <div className="mb-4 p-3 bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-100 rounded flex items-center space-x-2">
+            <AlertCircle className="w-5 h-5 flex-shrink-0" />
+            <span>{error}</span>
+          </div>
+        )}
 
-          <div className="mb-4">
-            <div className="flex justify-between text-sm text-gray-600 dark:text-gray-400">
-              <span>Categorias principais utilizadas:</span>
-              <span>{currentCategoryCount} de {categoryLimit === Infinity ? 'Ilimitado' : categoryLimit}</span>
-            </div>
-            <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 mt-1">
-              <div
-                className="bg-green-600 rounded-full h-2 transition-all"
-                style={{ width: `${Math.min((currentCategoryCount / categoryLimit) * 100, 100)}%` }}
-              ></div>
-            </div>
+        <div className="mb-4">
+          <div className="flex justify-between text-sm text-gray-600 dark:text-gray-400">
+            <span>Categorias principais utilizadas:</span>
+            <span>{currentCategoryCount} de {categoryLimit === Infinity ? 'Ilimitado' : categoryLimit}</span>
+          </div>
+          <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 mt-1">
+            <div
+              className="bg-green-600 rounded-full h-2 transition-all"
+              style={{ width: `${Math.min((currentCategoryCount / categoryLimit) * 100, 100)}%` }}
+            ></div>
+          </div>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium mb-1">Nome da Categoria</label>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => handleNameChange(e.target.value)}
+              className="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600"
+              required
+            />
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium mb-1">Nome da Categoria</label>
-              <input
-                type="text"
-                value={name}
-                onChange={(e) => handleNameChange(e.target.value)}
-                className="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600"
-                required
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium mb-1">Categoria Pai (opcional)</label>
-              <select
-                value={parentId || ''}
-                onChange={(e) => setParentId(e.target.value || null)}
-                className="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600"
-              >
-                <option value="">Nenhuma (categoria principal)</option>
-                {buildCategoryOptions(categories)}
-              </select>
-              <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                Apenas categorias principais contam no limite do plano
-              </p>
-            </div>
-
-            <button
-              type="submit"
-              disabled={loading || (!categoryToEdit && !parentId && currentCategoryCount >= categoryLimit)}
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 rounded font-medium disabled:opacity-50"
+          <div>
+            <label className="block text-sm font-medium mb-1">Categoria Pai (opcional)</label>
+            <select
+              value={parentId || ''}
+              onChange={(e) => setParentId(e.target.value || null)}
+              className="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600"
             >
-              {loading ? 'Salvando...' : categoryToEdit ? 'Salvar Alterações' : 'Salvar Categoria'}
-            </button>
-          </form>
-        </div>
-      </div>
-
-      {/* Modal de Confirmação para Categorias Similares */}
-      {showConfirmation && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60]">
-          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full">
-            <div className="flex items-center space-x-2 text-yellow-600 mb-4">
-              <AlertTriangle className="w-6 h-6" />
-              <h3 className="text-lg font-semibold">Categorias Similares Encontradas</h3>
-            </div>
-
-            <div className="mb-6">
-              <p className="text-gray-600 dark:text-gray-400 mb-4">
-                Existem categorias com nomes similares no mesmo nível:
-              </p>
-              <ul className="space-y-2 mb-4">
-                {similarCategories.map(cat => (
-                  <li key={cat.id} className="flex items-center space-x-2 text-gray-700 dark:text-gray-300">
-                    <span className="w-2 h-2 bg-yellow-500 rounded-full"></span>
-                    <span>{cat.name}</span>
-                  </li>
-                ))}
-              </ul>
-              <p className="text-gray-600 dark:text-gray-400">
-                Deseja continuar mesmo assim? Isso pode dificultar a organização do seu catálogo.
-              </p>
-            </div>
-
-            <div className="flex justify-end space-x-4">
-              <button
-                onClick={() => setShowConfirmation(false)}
-                className="px-4 py-2 text-gray-600 hover:text-gray-800"
-              >
-                Voltar e Revisar
-              </button>
-              <button
-                onClick={handleConfirmSave}
-                className="px-4 py-2 bg-yellow-500 hover:bg-yellow-600 text-white rounded"
-              >
-                Continuar Mesmo Assim
-              </button>
-            </div>
+              <option value="">Nenhuma (categoria principal)</option>
+              {buildCategoryOptions(categories)}
+            </select>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+              Apenas categorias principais contam no limite do plano
+            </p>
           </div>
-        </div>
-      )}
-    </>
+
+          <button
+            type="submit"
+            disabled={loading || (!categoryToEdit && !parentId && currentCategoryCount >= categoryLimit)}
+            className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 rounded font-medium disabled:opacity-50"
+          >
+            {loading ? 'Salvando...' : categoryToEdit ? 'Salvar Alterações' : 'Salvar Categoria'}
+          </button>
+        </form>
+      </div>
+    </div>
   );
 }

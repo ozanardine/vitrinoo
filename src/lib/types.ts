@@ -11,6 +11,21 @@ export interface Product {
   promotional_price: number | null;
   store_id: string;
   created_at: string;
+  type: 'simple' | 'variable' | 'kit' | 'manufactured' | 'service';
+  parent_id?: string;
+  attributes?: Record<string, any>;
+  variation_attributes?: string[];
+  // Campos específicos para serviços
+  duration?: string;
+  availability?: {
+    weekdays: string[];
+    hours: {
+      start: string;
+      end: string;
+    }[];
+  };
+  service_location?: string;
+  service_modality?: 'presential' | 'online' | 'hybrid';
 }
 
 export interface Store {

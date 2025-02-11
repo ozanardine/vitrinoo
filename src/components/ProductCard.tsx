@@ -1,6 +1,7 @@
 import React from 'react';
 import { Package, Edit2, Trash2 } from 'lucide-react';
 import { Product } from '../lib/types';
+import ReactMarkdown from 'react-markdown';
 
 interface ProductCardProps {
   product: Product;
@@ -10,6 +11,15 @@ interface ProductCardProps {
 }
 
 export function ProductCard({ product, onEdit, onDelete, onClick }: ProductCardProps) {
+  const getTypeLabel = (type: string) => {
+    switch (type) {
+      case 'variable': return 'Produto com Variações';
+      case 'kit': return 'Kit/Combo';
+      case 'manufactured': return 'Produto Fabricado';
+      default: return 'Produto Simples';
+    }
+  };
+
   return (
     <div 
       className="bg-white dark:bg-gray-800 rounded-lg shadow-sm overflow-hidden hover:shadow-md transition-all cursor-pointer group"
@@ -52,6 +62,16 @@ export function ProductCard({ product, onEdit, onDelete, onClick }: ProductCardP
             <Trash2 className="w-4 h-4" />
           </button>
         </div>
+        {product.promotional_price && (
+          <div className="absolute top-2 left-2 bg-red-500 text-white px-2 py-1 rounded-full text-sm font-medium">
+            {Math.round(((product.price - product.promotional_price) / product.price) * 100)}% OFF
+          </div>
+        )}
+        <div className="absolute bottom-2 left-2">
+          <span className="px-2 py-1 bg-blue-500 text-white text-xs rounded-full">
+            {getTypeLabel(product.type)}
+          </span>
+        </div>
       </div>
       <div className="p-4">
         <div className="mb-2">
@@ -65,9 +85,9 @@ export function ProductCard({ product, onEdit, onDelete, onClick }: ProductCardP
             )}
           </div>
         </div>
-        <p className="text-sm text-gray-600 dark:text-gray-400 line-clamp-2 mb-3 h-10">
-          {product.description}
-        </p>
+        <div className="prose prose-sm dark:prose-invert line-clamp-2 mb-3 h-10">
+          <ReactMarkdown>{product.description}</ReactMarkdown>
+        </div>
         <div className="flex flex-wrap gap-1 mb-3">
           {product.tags.slice(0, 3).map((tag) => (
             <span

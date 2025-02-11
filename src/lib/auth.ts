@@ -39,16 +39,23 @@ export async function signUp({ email, password, fullName, phone }: SignUpData) {
 }
 
 export async function signIn(email: string, password: string) {
-  const { data, error } = await supabase.auth.signInWithPassword({
-    email,
-    password,
-  });
+  try {
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
 
-  if (error) {
-    throw { message: 'Email ou senha incorretos.' };
+    if (error) {
+      if (error.message.includes('Invalid login credentials')) {
+        throw { message: 'Email ou senha incorretos.' };
+      }
+      throw { message: error.message };
+    }
+
+    return data;
+  } catch (err: any) {
+    throw { message: err.message || 'Erro ao fazer login. Por favor, tente novamente.' };
   }
-
-  return data;
 }
 
 export async function signOut() {

@@ -11,6 +11,31 @@ interface StoreState {
   setUser: (user: User | null) => void;
 }
 
+// Plan limits configuration
+export const PLAN_LIMITS = {
+  free: {
+    products: 100,
+    categories: 10,
+    images_per_product: 3,
+    name: 'Gratuito',
+    price: 0
+  },
+  basic: {
+    products: 1000,
+    categories: 50,
+    images_per_product: 5,
+    name: 'Básico',
+    price: 47
+  },
+  plus: {
+    products: 10000,
+    categories: 200,
+    images_per_product: 10,
+    name: 'Plus',
+    price: 97
+  }
+};
+
 export const useStore = create<StoreState>()(
   persist(
     (set) => ({
@@ -28,7 +53,7 @@ export const useStore = create<StoreState>()(
     }),
     {
       name: 'app-storage',
-      // Persistir tanto o tema quanto o usuário
+      // Persist both theme and user
       partialize: (state) => ({
         theme: state.theme,
         user: state.user

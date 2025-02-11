@@ -12,6 +12,7 @@ import { StoreCustomizationTab } from '../components/profile/StoreCustomizationT
 import { PlansTab } from '../components/profile/PlansTab';
 import { StoreModal } from '../components/StoreModal';
 import { getPlans } from '../lib/stripe';
+import { PLAN_LIMITS } from '../lib/store';
 
 type TabType = 'profile' | 'catalog' | 'products' | 'categories' | 'integrations' | 'plans';
 
@@ -36,24 +37,6 @@ const TabButton = ({ tab, icon: Icon, label, activeTab, onClick }: TabButtonProp
     <span>{label}</span>
   </button>
 );
-
-export const PLAN_LIMITS = {
-  free: {
-    products: 50,
-    categories: 5,
-    name: 'Gratuito'
-  },
-  basic: {
-    products: 500,
-    categories: 20,
-    name: 'Básico'
-  },
-  plus: {
-    products: Infinity,
-    categories: Infinity,
-    name: 'Plus'
-  }
-};
 
 export function Profile() {
   const navigate = useNavigate();
@@ -122,14 +105,15 @@ export function Profile() {
 
       const subscription = storeData.subscriptions[0];
       const planType = subscription.plan_type as keyof typeof PLAN_LIMITS;
+      const planLimits = PLAN_LIMITS[planType];
 
       setStore({
         ...storeData,
         subscription,
         products_count: productsCount.count || 0,
-        product_limit: PLAN_LIMITS[planType].products,
+        product_limit: planLimits.products,
         categories_count: categoriesCount.count || 0,
-        category_limit: PLAN_LIMITS[planType].categories
+        category_limit: planLimits.categories
       });
     } catch (error) {
       console.error('Erro ao carregar dados:', error);
@@ -176,6 +160,7 @@ export function Profile() {
   }
 
   const planType = store.subscription.plan_type as keyof typeof PLAN_LIMITS;
+  const planLimits = PLAN_LIMITS[planType];
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -193,31 +178,37 @@ export function Profile() {
           <div className="flex items-start justify-between">
             <div className="flex-1 pr-8">
               <h2 className="text-xl font-semibold mb-4">
-                Plano {PLAN_LIMITS[planType].name}
+                Plano {planLimits.name}
               </h2>
               <div className="space-y-4">
                 <div>
                   <div className="flex items-center justify-between text-sm mb-2">
                     <span className="text-gray-600 dark:text-gray-400">Produtos:</span>
-                    <span>{store.products_count} de {store.product_limit === Infinity ? 'Ilimitado' : store.product_limit}</span>
+                    <span>{store.products_count} de {planLimits.products.toLocaleString()}</span>
                   </div>
                   <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
                     <div
                       className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                      style={{ width: `${Math.min((store.products_count / (store.product_limit === Infinity ? store.products_count || 1 : store.product_limit)) * 100, 100)}%` }}
+                      style={{ width: `${Math.min((store.products_count / planLimits.products) * 100, 100)}%` }}
                     />
                   </div>
                 </div>
                 <div>
                   <div className="flex items-center justify-between text-sm mb-2">
                     <span className="text-gray-600 dark:text-gray-400">Categorias Principais:</span>
-                    <span>{store.categories_count} de {store.category_limit === Infinity ? 'Ilimitado' : store.category_limit}</span>
+                    <span>{store.categories_count} de {planLimits.categories.toLocaleString()}</span>
                   </div>
                   <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
                     <div
                       className="bg-green-600 h-2 rounded-full transition-all duration-300"
-                      style={{ width: `${Math.min((store.categories_count / (store.category_limit === Infinity ? store.categories_count || 1 : store.category_limit)) * 100, 100)}%` }}
+                      style={{ width: `${Math.min((store.categories_count / planLimits.categories) * 100, 100)}%` }}
                     />
+                  </div>
+                </div>
+                <div>
+                  <div className="flex items-center justify-between text-sm mb-2">
+                    <span className="text-gray-600 dark:text-gray-400">Imagens por Produto:</span>
+                    <span>Até {planLimits.images_per_product}</span>
                   </div>
                 </div>
               </div>

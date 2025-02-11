@@ -1,10 +1,11 @@
 import { supabase } from './supabase';
+import _ from 'lodash';
 import pRetry from 'p-retry';
 import pQueue from 'p-queue';
 
 // Constants
 const TINY_AUTH_URL = 'https://accounts.tiny.com.br/realms/tiny/protocol/openid-connect/auth';
-const TINY_TOKEN_URL = 'https://accounts.tiny.com.br/realms/tiny/protocol/openid-connect/token';
+const TINY_API_URL = 'https://api.tiny.com.br/public-api/v3';
 
 // Queue for API calls during token refresh
 const apiQueue = new pQueue({ concurrency: 1 });
@@ -26,14 +27,15 @@ interface TinyCredentials {
   access_token: string;
   refresh_token: string;
   expires_at: string;
+  tiny_plan?: 'basic' | 'essential' | 'enterprise';
 }
 
-interface TinyProduct {
+interface TinyProductBase {
   id: number;
   sku: string;
   descricao: string;
-  tipo: string;
-  situacao: string;
+  tipo: 'S' | 'P' | 'K' | 'V'; // Serviço, Produto, Kit, Variação
+  situacao: 'A' | 'I'; // Ativo, Inativo
   dataCriacao: string;
   dataAlteracao: string;
   unidade: string;
@@ -46,29 +48,67 @@ interface TinyProduct {
   };
 }
 
-interface TinyProductDetail extends TinyProduct {
+interface TinyProductDetail extends TinyProductBase {
   descricaoComplementar: string;
-  marca: {
-    id: number;
-    nome: string;
-  };
   categoria: {
     id: number;
     nome: string;
     caminhoCompleto: string;
   };
-  anexos: Array<{
-    url: string;
-    externo: boolean;
-  }>;
+  marca: {
+    id: number;
+    nome: string;
+  };
   seo: {
     titulo: string;
     descricao: string;
     keywords: string[];
     slug: string;
   };
+  anexos: Array<{
+    url: string;
+    externo: boolean;
+  }>;
+  variacoes?: Array<{
+    id: number;
+    sku: string;
+    descricao: string;
+    precos: {
+      preco: number;
+      precoPromocional: number;
+    };
+    grade: Array<{
+      chave: string;
+      valor: string;
+    }>;
+  }>;
+  kit?: Array<{
+    produto: {
+      id: number;
+      sku: string;
+      descricao: string;
+    };
+    quantidade: number;
+  }>;
 }
 
+interface TinyProductListResponse {
+  itens: TinyProductBase[];
+  paginacao: {
+    limit: number;
+    offset: number;
+    total: number;
+  };
+}
+
+// Rate limiting configuration
+const RATE_LIMITS = {
+  basic: { total: 60, write: 30 },
+  essential: { total: 120, write: 60 },
+  enterprise: { total: 240, write: 100 }
+};
+
+// Authentication functions
 export function getTinyAuthUrl(clientId: string, redirectUri: string, state: string) {
   const params = new URLSearchParams({
     client_id: clientId,
@@ -88,7 +128,6 @@ export async function exchangeCodeForToken(
   redirectUri: string
 ): Promise<TinyTokenResponse> {
   try {
-    // Primeiro obter a chave da função
     const { data: keyData, error: keyError } = await supabase
       .from('function_keys')
       .select('key')
@@ -98,24 +137,13 @@ export async function exchangeCodeForToken(
     if (keyError) throw new Error('Erro ao obter chave de função');
     if (!keyData?.key) throw new Error('Chave de função não encontrada');
 
-    // Limpar e validar o token
-    let cleanToken = keyData.key;
-    cleanToken = cleanToken.replace(/[\n\r\s]+/g, '');
-    
+    let cleanToken = keyData.key.replace(/[\n\r\s]+/g, '');
     if (cleanToken.includes('base64,')) {
       cleanToken = cleanToken.split('base64,')[1];
     }
 
     const functionUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/tiny-token-exchange`;
     
-    const payload = {
-      code: String(code),
-      clientId: String(clientId),
-      clientSecret: String(clientSecret),
-      redirectUri: String(redirectUri),
-      grantType: 'authorization_code'
-    };
-
     const response = await fetch(functionUrl, {
       method: 'POST',
       headers: {
@@ -123,7 +151,13 @@ export async function exchangeCodeForToken(
         'Accept': 'application/json',
         'Authorization': `Bearer ${cleanToken}`
       },
-      body: JSON.stringify(payload)
+      body: JSON.stringify({
+        code: String(code),
+        clientId: String(clientId),
+        clientSecret: String(clientSecret),
+        redirectUri: String(redirectUri),
+        grantType: 'authorization_code'
+      })
     });
 
     if (!response.ok) {
@@ -178,121 +212,222 @@ async function getTinyCredentials(storeId: string): Promise<TinyCredentials | nu
   return data;
 }
 
-async function getValidTinyToken(storeId: string): Promise<string> {
-  const credentials = await getTinyCredentials(storeId);
-  
-  if (!credentials) {
-    throw new Error('Integração com Tiny ERP não encontrada');
-  }
-
-  // Se o token atual ainda é válido (com margem de 5 minutos)
-  const expiresAt = new Date(credentials.expires_at);
-  const now = new Date();
-  now.setMinutes(now.getMinutes() + 5);
-
-  if (expiresAt > now) {
-    return credentials.access_token;
-  }
-
-  // Se já está renovando, aguarda a renovação atual
-  if (isRefreshing) {
-    return refreshPromise!;
-  }
-
-  // Inicia processo de renovação
-  isRefreshing = true;
-  refreshPromise = (async () => {
-    try {
-      const { data: keyData, error: keyError } = await supabase
-        .from('function_keys')
-        .select('key')
-        .eq('name', 'tiny-token-exchange')
-        .single();
-
-      if (keyError) throw new Error('Erro ao obter chave de função');
-
-      const functionUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/tiny-token-exchange`;
-
-      const response = await fetch(functionUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${keyData.key}`
-        },
-        body: JSON.stringify({
-          refreshToken: credentials.refresh_token,
-          clientId: credentials.client_id,
-          clientSecret: credentials.client_secret,
-          grantType: 'refresh_token'
-        })
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || 'Erro ao renovar token');
-      }
-
-      const { access_token, refresh_token, expires_in } = await response.json();
-
-      // Salva novos tokens
-      await saveTinyCredentials(
-        storeId,
-        credentials.client_id,
-        credentials.client_secret,
-        access_token,
-        refresh_token,
-        expires_in
-      );
-
-      return access_token;
-    } finally {
-      isRefreshing = false;
-      refreshPromise = null;
-    }
-  })();
-
-  return refreshPromise;
-}
-
 export async function checkTinyIntegrationStatus(storeId: string) {
   try {
     const credentials = await getTinyCredentials(storeId);
     if (!credentials) return false;
 
-    // Apenas verifica se há credenciais válidas, sem fazer chamada à API
     const expiresAt = new Date(credentials.expires_at);
     const now = new Date();
     return expiresAt > now && credentials.active;
   } catch (error) {
-    // Retorna false silenciosamente em caso de erro
     return false;
   }
 }
 
-async function callTinyApi(storeId: string, endpoint: string, method: string = 'GET', body?: any) {
-  const functionUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/tiny-api`;
-  const url = new URL(functionUrl);
-  url.searchParams.set('endpoint', endpoint);
-  url.searchParams.set('storeId', storeId);
+// Product Synchronization Class
+class TinyProductSync {
+  private storeId: string;
+  private rateLimit: typeof RATE_LIMITS.basic;
+  private queue: pQueue;
 
-  const response = await fetch(url.toString(), {
-    method,
-    headers: {
-      'Content-Type': 'application/json',
-      'Accept': 'application/json'
-    },
-    body: body ? JSON.stringify(body) : undefined
-  });
-
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error || 'Erro na API do Tiny');
+  constructor(storeId: string, plan: 'basic' | 'essential' | 'enterprise' = 'basic') {
+    this.storeId = storeId;
+    this.rateLimit = RATE_LIMITS[plan];
+    
+    // Initialize queue with rate limiting
+    this.queue = new pQueue({
+      concurrency: 1,
+      interval: 60000, // 1 minute
+      intervalCap: this.rateLimit.total // Max requests per minute
+    });
   }
 
-  return response.json();
+  private async callTinyApi<T>(endpoint: string, method: string = 'GET', body?: any): Promise<T> {
+    const functionUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/tiny-api`;
+    const url = new URL(functionUrl);
+    url.searchParams.set('endpoint', endpoint);
+    url.searchParams.set('storeId', this.storeId);
+
+    return this.queue.add(async () => {
+      const response = await fetch(url.toString(), {
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: body ? JSON.stringify(body) : undefined
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Erro na API do Tiny');
+      }
+
+      return response.json();
+    });
+  }
+
+  private async listProducts(offset: number, limit: number): Promise<TinyProductListResponse> {
+    return this.callTinyApi<TinyProductListResponse>(
+      `produtos?situacao=A&limit=${limit}&offset=${offset}`
+    );
+  }
+
+  private async getProductDetails(productId: number): Promise<TinyProductDetail> {
+    return this.callTinyApi<TinyProductDetail>(`produtos/${productId}`);
+  }
+
+  private mapProductToCatalog(product: TinyProductDetail) {
+    const baseProduct = {
+      store_id: this.storeId,
+      title: product.descricao,
+      description: product.descricaoComplementar || product.descricao,
+      sku: product.sku,
+      price: product.precos.preco || 0,
+      promotional_price: product.precos.precoPromocional || null,
+      brand: product.marca?.nome || '',
+      category: product.categoria?.caminhoCompleto || '',
+      meta_title: product.seo?.titulo || product.descricao,
+      meta_description: product.seo?.descricao || '',
+      meta_keywords: product.seo?.keywords?.join(',') || '',
+      status: product.situacao === 'A',
+      images: product.anexos
+        ?.filter(anexo => anexo.externo)
+        .map(anexo => anexo.url) || [],
+      updated_at: new Date().toISOString()
+    };
+
+    // Se for produto com variações
+    if (product.variacoes?.length) {
+      return {
+        ...baseProduct,
+        type: 'variable',
+        variations: product.variacoes.map(v => ({
+          sku: v.sku,
+          title: v.descricao,
+          price: v.precos.preco || 0,
+          promotional_price: v.precos.precoPromocional || null,
+          attributes: v.grade.map(g => ({
+            name: g.chave,
+            value: g.valor
+          }))
+        }))
+      };
+    }
+
+    // Se for kit/combo
+    if (product.kit?.length) {
+      return {
+        ...baseProduct,
+        type: 'kit',
+        kit_items: product.kit.map(k => ({
+          product_id: k.produto.id,
+          sku: k.produto.sku,
+          quantity: k.quantidade
+        }))
+      };
+    }
+
+    // Produto simples
+    return {
+      ...baseProduct,
+      type: 'simple'
+    };
+  }
+
+  public async syncProducts(): Promise<{
+    total: number;
+    success: number;
+    errors: number;
+  }> {
+    try {
+      let offset = 0;
+      const limit = 50;
+      let allProducts: TinyProductDetail[] = [];
+      let hasMore = true;
+      let stats = { total: 0, success: 0, errors: 0 };
+
+      // Buscar lista inicial de produtos
+      while (hasMore) {
+        const { itens, paginacao } = await this.listProducts(offset, limit);
+        
+        if (!itens?.length) break;
+
+        // Buscar detalhes dos produtos
+        const detailedProducts = await Promise.all(
+          itens.map(produto =>
+            pRetry(
+              () => this.getProductDetails(produto.id),
+              {
+                retries: 3,
+                onFailedAttempt: error => {
+                  console.warn(`Erro ao buscar produto ${produto.id}: ${error.message}. Tentando novamente...`);
+                }
+              }
+            ).catch(error => {
+              console.error(`Falha ao buscar produto ${produto.id}:`, error);
+              stats.errors++;
+              return null;
+            })
+          )
+        );
+
+        allProducts = [...allProducts, ...detailedProducts.filter((p): p is TinyProductDetail => !!p)];
+        stats.success += detailedProducts.filter(p => p !== null).length;
+        
+        offset += limit;
+        hasMore = offset < paginacao.total;
+        stats.total = paginacao.total;
+
+        // Log de progresso
+        console.log(`Progresso: ${offset}/${paginacao.total} produtos processados`);
+      }
+
+      // Mapear e salvar produtos em lotes
+      const mappedProducts = allProducts.map(p => this.mapProductToCatalog(p));
+      const batchSize = 50;
+
+      for (let i = 0; i < mappedProducts.length; i += batchSize) {
+        const batch = mappedProducts.slice(i, i + batchSize);
+        
+        try {
+          const { error } = await supabase
+            .from('products')
+            .upsert(batch, {
+              onConflict: 'store_id,sku',
+              ignoreDuplicates: false
+            });
+
+          if (error) {
+            console.error('Erro ao salvar lote de produtos:', error);
+            stats.errors += batch.length;
+            stats.success -= batch.length;
+          }
+        } catch (error) {
+          console.error('Erro ao processar lote:', error);
+          stats.errors += batch.length;
+          stats.success -= batch.length;
+        }
+
+        // Log de progresso do salvamento
+        console.log(`Salvos ${i + batch.length}/${mappedProducts.length} produtos`);
+      }
+
+      return stats;
+    } catch (error) {
+      console.error('Erro na sincronização:', error);
+      throw error;
+    }
+  }
 }
 
-export async function syncTinyProducts(storeId: string) {
+// Main synchronization function
+export async function syncTinyProducts(storeId: string): Promise<{
+  total: number;
+  success: number;
+  errors: number;
+}> {
   try {
     // Verificar se a integração está ativa
     const isActive = await checkTinyIntegrationStatus(storeId);
@@ -300,87 +435,24 @@ export async function syncTinyProducts(storeId: string) {
       throw new Error('Integração com Tiny ERP não está ativa');
     }
 
-    // Buscar lista de produtos com paginação
-    let offset = 0;
-    const limit = 100;
-    let allProducts: TinyProduct[] = [];
-    let hasMore = true;
+    // Buscar plano do Tiny
+    const { data: integration } = await supabase
+      .from('erp_integrations')
+      .select('tiny_plan')
+      .eq('store_id', storeId)
+      .eq('provider', 'tiny')
+      .single();
 
-    while (hasMore) {
-      const { itens, paginacao } = await callTinyApi(
-        storeId,
-        `produtos?situacao=A&limit=${limit}&offset=${offset}`
-      );
-
-      if (!itens?.length) break;
-
-      allProducts = [...allProducts, ...itens];
-      offset += limit;
-      hasMore = offset < paginacao.total;
-    }
-
-    if (!allProducts.length) {
-      return 0;
-    }
-
-    // Buscar detalhes dos produtos com retry
-    const detailedProducts = await pRetry(
-      async () => {
-        return Promise.all(
-          allProducts.map(async (produto) => {
-            try {
-              return await callTinyApi(storeId, `produtos/${produto.id}`);
-            } catch (error) {
-              console.warn(`Erro ao buscar detalhes do produto ${produto.id}:`, error);
-              return null;
-            }
-          })
-        );
-      },
-      {
-        retries: 3,
-        onFailedAttempt: error => {
-          console.warn(`Tentativa ${error.attemptNumber} falhou:`, error);
-        }
-      }
+    const sync = new TinyProductSync(
+      storeId,
+      (integration?.tiny_plan as 'basic' | 'essential' | 'enterprise') || 'basic'
     );
 
-    // Mapear produtos para o formato do banco
-    const mappedProducts = detailedProducts
-      .filter((produto): produto is TinyProductDetail => !!produto)
-      .map(produto => ({
-        title: produto.descricao,
-        description: produto.descricaoComplementar || produto.descricao,
-        brand: produto.marca?.nome || '',
-        sku: produto.sku,
-        price: produto.precos.preco || 0,
-        promotional_price: produto.precos.precoPromocional || null,
-        images: produto.anexos
-          ?.filter(anexo => anexo.externo)
-          .map(anexo => anexo.url) || [],
-        tags: produto.seo?.keywords || [],
-        status: produto.situacao === 'A',
-        store_id: storeId,
-        meta_title: produto.seo?.titulo || produto.descricao,
-        meta_description: produto.seo?.descricao || ''
-      }));
-
-    // Salvar produtos em lotes
-    const batchSize = 100;
-    for (let i = 0; i < mappedProducts.length; i += batchSize) {
-      const batch = mappedProducts.slice(i, i + batchSize);
-      const { error } = await supabase
-        .from('products')
-        .upsert(batch, {
-          onConflict: 'store_id,sku',
-          ignoreDuplicates: false
-        });
-
-      if (error) throw error;
-    }
-
-    return mappedProducts.length;
+    const result = await sync.syncProducts();
+    console.log('Sincronização concluída:', result);
+    return result;
   } catch (error: any) {
+    console.error('Erro na sincronização:', error);
     throw new Error(
       error.message === 'Integração com Tiny ERP não está ativa'
         ? 'A integração com o Tiny ERP não está ativa. Por favor, configure a integração primeiro.'

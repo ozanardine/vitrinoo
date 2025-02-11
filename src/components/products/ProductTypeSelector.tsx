@@ -1,9 +1,9 @@
 import React from 'react';
-import { Package, Layers, Box, Cog } from 'lucide-react';
+import { Package, Layers, Box, Cog, Briefcase } from 'lucide-react';
 
 interface ProductTypeSelectorProps {
-  value: 'simple' | 'variable' | 'kit' | 'manufactured';
-  onChange: (type: 'simple' | 'variable' | 'kit' | 'manufactured') => void;
+  value: 'simple' | 'variable' | 'kit' | 'manufactured' | 'service';
+  onChange: (type: 'simple' | 'variable' | 'kit' | 'manufactured' | 'service') => void;
   disabled?: boolean;
 }
 
@@ -32,11 +32,17 @@ export function ProductTypeSelector({ value, onChange, disabled }: ProductTypeSe
       name: 'Produto Fabricado',
       description: 'Produto montado a partir de componentes',
       icon: Cog
+    },
+    {
+      id: 'service',
+      name: 'Serviço',
+      description: 'Serviço prestado com duração e disponibilidade',
+      icon: Briefcase
     }
   ] as const;
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
       {types.map((type) => {
         const Icon = type.icon;
         const isSelected = value === type.id;

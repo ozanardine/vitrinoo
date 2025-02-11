@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Upload, X, Loader2, Plus, Trash2 } from 'lucide-react';
+import { Upload, X, Loader2, Plus, Trash2, Info } from 'lucide-react';
 import { uploadImage } from '../lib/imgur';
 
 interface ImageGalleryUploaderProps {
@@ -19,6 +19,7 @@ export function ImageGalleryUploader({
   const [error, setError] = useState<string | null>(null);
   const [images, setImages] = useState<string[]>(currentImages);
   const [manualUrl, setManualUrl] = useState('');
+  const [showGuidelines, setShowGuidelines] = useState(false);
 
   // Verificar se o plano permite upload
   const canUseImgur = planType === 'basic' || planType === 'plus';
@@ -88,7 +89,37 @@ export function ImageGalleryUploader({
   return (
     <div className="space-y-4">
       <div>
-        <label className="block text-sm font-medium mb-1">Imagens do Produto</label>
+        <div className="flex items-center justify-between mb-1">
+          <label className="block text-sm font-medium">Imagens do Produto</label>
+          <button
+            type="button"
+            onClick={() => setShowGuidelines(!showGuidelines)}
+            className="text-blue-600 hover:text-blue-700 flex items-center gap-1 text-sm"
+          >
+            <Info className="w-4 h-4" />
+            <span>Diretrizes de imagem</span>
+          </button>
+        </div>
+
+        {showGuidelines && (
+          <div className="mb-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg text-sm space-y-2">
+            <h4 className="font-medium text-blue-800 dark:text-blue-200">Diretrizes para imagens:</h4>
+            <ul className="list-disc list-inside space-y-1 text-blue-700 dark:text-blue-300">
+              <li>Dimensões recomendadas: 1000x1000 pixels (quadrada)</li>
+              <li>Dimensões mínimas: 500x500 pixels</li>
+              <li>Proporção: 1:1 (quadrada) para melhor visualização</li>
+              <li>Formato: JPG ou PNG</li>
+              <li>Tamanho máximo: 10MB</li>
+              <li>Fundo branco ou neutro para melhor apresentação</li>
+              <li>Boa iluminação e foco nítido</li>
+              <li>Produto deve ocupar 80-90% do quadro</li>
+            </ul>
+            <p className="text-blue-600 dark:text-blue-400 mt-2">
+              Dica: Use a primeira imagem como a principal do produto, ela será exibida na listagem.
+            </p>
+          </div>
+        )}
+
         <div className="flex space-x-2">
           <div className="relative flex-1">
             <input

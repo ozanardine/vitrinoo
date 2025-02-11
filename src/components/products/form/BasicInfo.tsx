@@ -96,8 +96,8 @@ export function BasicInfo({
             <span className="absolute left-3 top-2 text-gray-500">R$</span>
             <input
               type="number"
-              value={form.price}
-              onChange={(e) => setForm({ ...form, price: parseFloat(e.target.value) })}
+              value={form.price || ''}
+              onChange={(e) => setForm({ ...form, price: e.target.value ? parseFloat(e.target.value) : 0 })}
               className="w-full p-2 pl-10 border rounded dark:bg-gray-700 dark:border-gray-600"
               min="0"
               step="0.01"
