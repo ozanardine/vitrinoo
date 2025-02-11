@@ -55,88 +55,45 @@ export async function exchangeCodeForToken(
       .eq('name', 'tiny-token-exchange')
       .single();
 
-    if (keyError) {
-      console.error('Erro ao obter chave da função:', keyError);
-      throw new Error('Erro ao obter chave de função');
-    }
-
-    if (!keyData?.key) {
-      throw new Error('Chave de função não encontrada');
-    }
+    if (keyError) throw new Error('Erro ao obter chave de função');
+    if (!keyData?.key) throw new Error('Chave de função não encontrada');
 
     // Limpar e validar o token
     let cleanToken = keyData.key;
-    
-    // Remover espaços em branco e quebras de linha
     cleanToken = cleanToken.replace(/[\n\r\s]+/g, '');
     
-    // Verificar se o token está em base64
     if (cleanToken.includes('base64,')) {
       cleanToken = cleanToken.split('base64,')[1];
     }
 
-    // Log do token (apenas primeiros e últimos caracteres para segurança)
-    console.log('Token debug:', {
-      length: cleanToken.length,
-      start: cleanToken.substring(0, 10) + '...',
-      end: '...' + cleanToken.substring(cleanToken.length - 10),
-      containsSpaces: cleanToken.includes(' '),
-      containsNewlines: cleanToken.includes('\n'),
+    const functionUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/tiny-token-exchange`;
+    
+    const payload = {
+      code: String(code),
+      clientId: String(clientId),
+      clientSecret: String(clientSecret),
+      redirectUri: String(redirectUri),
+      grantType: 'authorization_code'
+    };
+
+    const response = await fetch(functionUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'Authorization': `Bearer ${cleanToken}`
+      },
+      body: JSON.stringify(payload)
     });
 
-    try {
-      const functionUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/tiny-token-exchange`;
-      
-      const payload = {
-        code: String(code),
-        clientId: String(clientId),
-        clientSecret: String(clientSecret),
-        redirectUri: String(redirectUri),
-        grantType: 'authorization_code'
-      };
-
-      console.log('Tentando fetch com URL:', functionUrl);
-
-      const response = await fetch(functionUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-          'Authorization': `Bearer ${cleanToken}`
-        },
-        body: JSON.stringify(payload)
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        console.error('Erro na resposta:', {
-          status: response.status,
-          statusText: response.statusText,
-          error: errorData
-        });
-        throw new Error(errorData.message || 'Erro na requisição');
-      }
-
-      const data = await response.json();
-      console.log('Resposta recebida com sucesso');
-      return data;
-
-    } catch (fetchError) {
-      console.error('Erro no fetch:', {
-        name: fetchError.name,
-        message: fetchError.message,
-        type: typeof fetchError
-      });
-      throw fetchError;
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || 'Erro na requisição');
     }
 
+    return response.json();
   } catch (error: any) {
-    console.error('Erro detalhado na troca de token:', {
-      name: error.name,
-      message: error.message,
-      stack: error.stack
-    });
-    throw error;
+    throw new Error(`Erro na troca de token: ${error.message}`);
   }
 }
 
@@ -290,56 +247,92 @@ export async function checkTinyIntegrationStatus(storeId: string) {
     const credentials = await getTinyCredentials(storeId);
     if (!credentials) return false;
 
-    await callTinyApi(storeId, 'info');
-    return true;
+    // Apenas verifica se há credenciais válidas, sem fazer chamada à API
+    const expiresAt = new Date(credentials.expires_at);
+    const now = new Date();
+    return expiresAt > now && credentials.active;
   } catch (error) {
-    console.error('Error checking Tiny integration status:', error);
+    // Retorna false silenciosamente em caso de erro
     return false;
   }
 }
 
 export async function syncTinyProducts(storeId: string) {
   try {
-    const { data } = await callTinyApi(storeId, 'produtos');
+    // Verificar se a integração está ativa
+    const isActive = await checkTinyIntegrationStatus(storeId);
+    if (!isActive) {
+      throw new Error('Integração com Tiny ERP não está ativa');
+    }
 
-    const detailedProducts = await Promise.all(
-      data.map(async (produto: any) => {
-        const { data: details } = await callTinyApi(
-          storeId,
-          `produtos/${produto.id}`
+    // Buscar lista de produtos
+    const { data: productsList } = await callTinyApi(storeId, 'produtos');
+    if (!productsList?.length) {
+      return 0; // Retorna 0 se não houver produtos
+    }
+
+    // Buscar detalhes dos produtos com retry
+    const detailedProducts = await pRetry(
+      async () => {
+        return Promise.all(
+          productsList.map(async (produto: any) => {
+            try {
+              const { data: details } = await callTinyApi(
+                storeId,
+                `produtos/${produto.id}`
+              );
+              return details;
+            } catch (error) {
+              throw new Error(`Erro ao buscar detalhes do produto ${produto.id}`);
+            }
+          })
         );
-        return details;
-      })
+      },
+      {
+        retries: 3,
+        onFailedAttempt: error => {
+          throw new Error(`Falha ao sincronizar produtos após ${error.attemptNumber} tentativas`);
+        }
+      }
     );
 
-    const mappedProducts = detailedProducts.map((produto: any) => ({
-      title: produto.nome,
-      description: produto.descricao || '',
-      brand: produto.marca || '',
-      sku: produto.codigo || produto.sku,
-      price: parseFloat(produto.preco),
-      promotional_price: produto.preco_promocional ? parseFloat(produto.preco_promocional) : null,
-      images: produto.imagens?.map((img: any) => img.url) || [],
-      tags: produto.tags?.split(',').map((tag: string) => tag.trim()) || [],
-      status: produto.situacao === 'A',
-      store_id: storeId
-    }));
+    // Mapear produtos para o formato do banco
+    const mappedProducts = detailedProducts
+      .filter(produto => produto) // Remove produtos sem detalhes
+      .map(produto => ({
+        title: produto.nome,
+        description: produto.descricao || '',
+        brand: produto.marca || '',
+        sku: produto.codigo || produto.sku,
+        price: parseFloat(produto.preco) || 0,
+        promotional_price: produto.preco_promocional ? parseFloat(produto.preco_promocional) : null,
+        images: produto.imagens?.map((img: any) => img.url).filter(Boolean) || [],
+        tags: produto.tags?.split(',').map((tag: string) => tag.trim()).filter(Boolean) || [],
+        status: produto.situacao === 'A',
+        store_id: storeId
+      }));
 
-    const { error } = await supabase
-      .from('products')
-      .upsert(
-        mappedProducts,
-        {
+    // Salvar produtos em lotes
+    const batchSize = 100;
+    for (let i = 0; i < mappedProducts.length; i += batchSize) {
+      const batch = mappedProducts.slice(i, i + batchSize);
+      const { error } = await supabase
+        .from('products')
+        .upsert(batch, {
           onConflict: 'store_id,sku',
           ignoreDuplicates: false
-        }
-      );
+        });
 
-    if (error) throw error;
+      if (error) throw error;
+    }
 
     return mappedProducts.length;
-  } catch (error) {
-    console.error('Error syncing Tiny products:', error);
-    throw error;
+  } catch (error: any) {
+    // Lança o erro com uma mensagem mais amigável
+    throw new Error(
+      error.message === 'Integração com Tiny ERP não está ativa'
+        ? 'A integração com o Tiny ERP não está ativa. Por favor, configure a integração primeiro.'
+        : 'Erro ao sincronizar produtos. Por favor, tente novamente mais tarde.'
+    );
   }
 }

@@ -28,13 +28,18 @@ export const useStore = create<StoreState>()(
     }),
     {
       name: 'app-storage',
-      partialize: (state) => ({ theme: state.theme }), // Only persist theme
+      // Persistir tanto o tema quanto o usuário
+      partialize: (state) => ({
+        theme: state.theme,
+        user: state.user
+      }),
     }
   )
 );
 
 // Initialize theme on app load
 if (typeof document !== 'undefined') {
-  const theme = JSON.parse(localStorage.getItem('app-storage') || '{}')?.state?.theme || 'light';
+  const stored = localStorage.getItem('app-storage');
+  const theme = stored ? JSON.parse(stored).state?.theme || 'light' : 'light';
   document.documentElement.classList.add(theme);
 }
