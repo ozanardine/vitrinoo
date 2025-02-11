@@ -47,36 +47,56 @@ export async function exchangeCodeForToken(
   clientSecret: string,
   redirectUri: string
 ): Promise<TinyTokenResponse> {
-  try {
-    // Log inicial dos parâmetros
-    console.log('Iniciando troca de código por token:', {
-      hasCode: !!code,
-      hasClientId: !!clientId,
-      hasClientSecret: !!clientSecret,
-      redirectUri
-    });
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    const functionUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/tiny-token-exchange`;
 
-    // Verificar URL do Supabase
-    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-    console.log('Supabase URL:', supabaseUrl);
+    xhr.open('POST', functionUrl, true);
     
-    // Obter chave da função
-    const { data: keyData, error: keyError } = await supabase
-      .from('function_keys')
-      .select('key')
-      .eq('name', 'tiny-token-exchange')
-      .single();
+    // Headers
+    xhr.setRequestHeader('Content-Type', 'application/json');
+    xhr.setRequestHeader('Accept', 'application/json');
+    xhr.setRequestHeader('Authorization', `Bearer ${keyData.key}`);
 
-    if (keyError) {
-      console.error('Erro ao obter chave da função:', keyError);
-      throw new Error('Erro ao obter chave de função');
-    }
+    // Logging do estado
+    xhr.onreadystatechange = function() {
+      console.log('XHR State:', {
+        readyState: xhr.readyState,
+        status: xhr.status,
+        statusText: xhr.statusText
+      });
+    };
 
-    // Construir URL da função
-    const functionUrl = `${supabaseUrl}/functions/v1/tiny-token-exchange`;
-    console.log('Function URL:', functionUrl);
+    // Handler de sucesso
+    xhr.onload = function() {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        try {
+          const response = JSON.parse(xhr.responseText);
+          resolve(response);
+        } catch (e) {
+          reject(new Error('Erro ao processar resposta'));
+        }
+      } else {
+        try {
+          const error = JSON.parse(xhr.responseText);
+          reject(new Error(error.message || 'Erro na requisição'));
+        } catch (e) {
+          reject(new Error(`Erro ${xhr.status}: ${xhr.statusText}`));
+        }
+      }
+    };
 
-    // Preparar payload com validação de tipos
+    // Handler de erro
+    xhr.onerror = function() {
+      console.error('XHR Error:', {
+        status: xhr.status,
+        statusText: xhr.statusText,
+        response: xhr.responseText
+      });
+      reject(new Error('Erro na conexão'));
+    };
+
+    // Enviar requisição
     const payload = {
       code: String(code),
       clientId: String(clientId),
@@ -85,56 +105,12 @@ export async function exchangeCodeForToken(
       grantType: 'authorization_code'
     };
 
-    // Log do payload (sem dados sensíveis)
-    console.log('Payload preparado:', {
-      ...payload,
-      clientSecret: '[REDACTED]'
-    });
-
-    // Log da chave (sem expor o valor completo)
-    console.log('Auth header preparado:', `Bearer ${keyData.key.substring(0, 5)}...`);
-
     try {
-      // Fazer requisição para a função Edge com validação explícita
-      const response = await fetch(functionUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${keyData.key}`,
-          'Accept': 'application/json'
-        },
-        body: JSON.stringify(payload)
-      });
-
-      const data = await response.json();
-      
-      if (!response.ok) {
-        console.error('Resposta não-OK da função Edge:', {
-          status: response.status,
-          statusText: response.statusText,
-          error: data
-        });
-        throw new Error(data.error || 'Erro na troca de token');
-      }
-
-      console.log('Token obtido com sucesso');
-      return data;
-    } catch (fetchError) {
-      console.error('Erro no fetch:', {
-        name: fetchError.name,
-        message: fetchError.message,
-        type: typeof fetchError
-      });
-      throw fetchError;
+      xhr.send(JSON.stringify(payload));
+    } catch (e) {
+      reject(e);
     }
-  } catch (error: any) {
-    console.error('Erro detalhado na troca de token:', {
-      name: error.name,
-      message: error.message,
-      stack: error.stack
-    });
-    throw error;
-  }
+  });
 }
 
 export async function saveTinyCredentials(

@@ -7,8 +7,9 @@ const FUNCTION_KEY = Deno.env.get('FUNCTION_KEY');
 const corsHeaders = {
   'Access-Control-Allow-Origin': 'https://vitrinoo.netlify.app',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Max-Age': '86400'
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, accept',
+  'Access-Control-Max-Age': '86400',
+  'Access-Control-Allow-Credentials': 'true'
 };
 
 // Rate limiting configuration
@@ -18,12 +19,32 @@ const limiter = rateLimit({
 });
 
 serve(async (req) => {
+  // Log da requisição recebida
+  console.log('Request received:', {
+    method: req.method,
+    url: req.url,
+    headers: Object.fromEntries(req.headers)
+  });
+
   const clientIp = req.headers.get('x-forwarded-for') || 'unknown';
   
+  // Handle CORS preflight requests primeiro
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { 
+      status: 204,
+      headers: {
+        ...corsHeaders,
+        'Content-Length': '0',
+        'Content-Type': 'text/plain'
+      }
+    });
+  }
+
   // Apply rate limiting
   try {
     await limiter.check(req, clientIp);
   } catch (error) {
+    console.log('Rate limit exceeded for IP:', clientIp);
     return new Response(
       JSON.stringify({ error: 'Too many requests' }),
       { 
@@ -37,22 +58,29 @@ serve(async (req) => {
     );
   }
 
-  // Handle CORS preflight requests
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { 
-      status: 204,
-      headers: corsHeaders
-    });
-  }
-
   try {
     // Verificar autorização
     const authHeader = req.headers.get('Authorization');
     if (!authHeader || !authHeader.startsWith('Bearer ') || authHeader.split(' ')[1] !== FUNCTION_KEY) {
+      console.error('Authorization failed:', {
+        hasHeader: !!authHeader,
+        startsWithBearer: authHeader?.startsWith('Bearer '),
+        keyMatch: authHeader?.split(' ')[1] === FUNCTION_KEY
+      });
       throw new Error('Unauthorized');
     }
 
-    const { code, clientId, clientSecret, redirectUri, grantType, refreshToken } = await req.json();
+    // Parse request body
+    let requestBody;
+    try {
+      requestBody = await req.json();
+      console.log('Request body parsed successfully');
+    } catch (e) {
+      console.error('Error parsing request body:', e);
+      throw new Error('Invalid request body');
+    }
+
+    const { code, clientId, clientSecret, redirectUri, grantType, refreshToken } = requestBody;
 
     console.log(`Processing ${grantType} request for client ${clientId}`);
 
@@ -82,6 +110,8 @@ serve(async (req) => {
       params.append('refresh_token', refreshToken);
     }
 
+    console.log('Making request to Tiny API');
+
     // Make request to Tiny
     const response = await fetch(TINY_TOKEN_URL, {
       method: 'POST',
@@ -91,6 +121,8 @@ serve(async (req) => {
       },
       body: params.toString()
     });
+
+    console.log('Tiny API response status:', response.status);
 
     const data = await response.json();
 
@@ -108,17 +140,23 @@ serve(async (req) => {
 
     // Return response with appropriate CORS headers
     return new Response(JSON.stringify(data), {
+      status: 200,
       headers: {
         ...corsHeaders,
         'Content-Type': 'application/json'
       }
     });
   } catch (error) {
-    console.error('Function error:', error);
+    console.error('Function error:', {
+      name: error.name,
+      message: error.message,
+      stack: error.stack
+    });
     
     return new Response(
       JSON.stringify({ 
-        error: error.message || 'Internal server error'
+        error: error.message || 'Internal server error',
+        type: error.name
       }),
       { 
         status: error.message === 'Unauthorized' ? 401 : 500,
