@@ -84,7 +84,6 @@ export async function exchangeCodeForToken(
       containsNewlines: cleanToken.includes('\n'),
     });
 
-    // Tentar usando fetch primeiro
     try {
       const functionUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/tiny-token-exchange`;
       
