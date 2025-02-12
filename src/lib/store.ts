@@ -18,21 +18,30 @@ export const PLAN_LIMITS = {
     categories: 10,
     images_per_product: 3,
     name: 'Gratuito',
-    price: 0
+    price: 0,
+    metadata: {
+      plan_type: 'free'
+    }
   },
   basic: {
     products: 1000,
     categories: 50,
     images_per_product: 5,
     name: 'Básico',
-    price: 47
+    price: 47,
+    metadata: {
+      plan_type: 'basic'
+    }
   },
   plus: {
     products: 10000,
     categories: 200,
     images_per_product: 10,
     name: 'Plus',
-    price: 97
+    price: 97,
+    metadata: {
+      plan_type: 'plus'
+    }
   }
 };
 

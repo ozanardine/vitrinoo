@@ -188,8 +188,8 @@ async function handleSubscriptionUpdated(event: Stripe.Event) {
     throw new Error('Product information not found');
   }
 
-  // Determinar o tipo do plano
-  const planType = planInfo.metadata?.plan_type || 'basic';
+  // Determinar o tipo do plano baseado no metadata do produto
+  const planType = planInfo.metadata?.plan_type || 'free';
 
   // Atualizar stripe_subscription
   const { error: updateError } = await supabase
@@ -216,9 +216,9 @@ async function handleSubscriptionUpdated(event: Stripe.Event) {
   const { error: storeSubError } = await supabase
     .from('subscriptions')
     .update({
-      status: subscription.status,
       plan_type: planType,
       active: subscription.status === 'active',
+      status: subscription.status,
       next_payment_at: new Date(subscription.current_period_end * 1000),
       plan_id: planInfo.id,
       plan_name: planInfo.name,
@@ -281,6 +281,8 @@ async function handleSubscriptionDeleted(event: Stripe.Event) {
   const { error: storeSubError } = await supabase
     .from('subscriptions')
     .update({
+      plan_type: 'free',
+      active: false,
       status: 'canceled',
       updated_at: new Date()
     })
