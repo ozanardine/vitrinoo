@@ -101,6 +101,20 @@ interface TinyProductListResponse {
   };
 }
 
+interface TinyApiResponse<T> {
+  status: 'OK' | 'Erro';
+  status_processamento: '1' | '2' | '3' | '4';
+  codigo_erro: number | null;
+  retorno: T;
+}
+
+interface TinyProductListRetorno {
+  produtos: TinyProductBase[];
+  pagina: number;
+  numero_registros: number;
+  total: number;
+}
+
 // Rate limiting configuration
 const RATE_LIMITS = {
   basic: { total: 60, write: 30 },
@@ -311,36 +325,35 @@ class TinyProductSync {
         randomize: true,
         onRetry: (error: any, attempt: number) => {
           console.warn(`Tentativa ${attempt} falhou:`, error.message);
+          
+          // Se for erro de rate limit, aguardar mais tempo
           if (error.message.includes('429') || error.message.includes('rate limit')) {
             return new Promise(resolve => setTimeout(resolve, 10000));
           }
         }
       };
-  
-      try {
-        return await pRetry(async () => {
-          console.log('Iniciando chamada API para endpoint:', endpoint);
-  
+
+      return pRetry(async () => {
+        try {
           const { data: keyData, error: keyError } = await this.supabaseClient
             .from('function_keys')
             .select('key')
             .eq('name', 'tiny-token-exchange')
             .single();
-  
-          if (keyError) throw new Error(`Erro ao obter chave de função: ${keyError.message}`);
+    
+          if (keyError) throw new Error('Erro ao obter chave de função');
           if (!keyData?.key) throw new Error('Chave de função não encontrada');
-  
+    
           let cleanToken = keyData.key.replace(/[\n\r\s]+/g, '');
           if (cleanToken.includes('base64,')) {
             cleanToken = cleanToken.split('base64,')[1];
           }
-  
+    
           const functionUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/tiny-token-exchange`;
           const url = new URL(functionUrl);
           url.searchParams.set('endpoint', endpoint);
           url.searchParams.set('storeId', this.storeId);
-  
-          console.log('Buscando dados da integração');
+    
           const { data: integration, error: integrationError } = await this.supabaseClient
             .from('erp_integrations')
             .select('*')
@@ -348,27 +361,23 @@ class TinyProductSync {
             .eq('provider', 'tiny')
             .eq('active', true)
             .single();
-  
-          if (integrationError) {
-            throw new Error(`Erro ao buscar integração: ${integrationError.message}`);
-          }
-          if (!integration) {
+    
+          if (integrationError || !integration) {
             throw new Error('Integração não encontrada ou inativa');
           }
-  
-          // Verificar token
+
+          // Verificar se o token está próximo de expirar
           const expiresAt = new Date(integration.expires_at);
           const now = new Date();
           const minutesUntilExpiration = (expiresAt.getTime() - now.getTime()) / (1000 * 60);
-  
+
+          // Se faltar menos de 5 minutos para expirar, renovar o token
           if (minutesUntilExpiration < 5) {
-            console.log('Token próximo da expiração, renovando...');
             await this.refreshToken(integration);
           }
-  
+    
           url.searchParams.set('token', integration.access_token);
-  
-          console.log('Fazendo requisição para Edge Function:', url.toString());
+    
           const response = await fetch(url.toString(), {
             method,
             headers: {
@@ -378,63 +387,41 @@ class TinyProductSync {
             },
             body: body ? JSON.stringify(body) : undefined
           });
-  
-          const responseData = await response.json();
-          
+    
           if (!response.ok) {
-            console.error('Erro na resposta da Edge Function:', responseData);
-            throw new Error(responseData.error || `Erro na API do Tiny: ${response.status}`);
+            const error = await response.json();
+            throw new Error(error.error || `Erro na API do Tiny: ${response.status}`);
           }
-  
-          if (responseData.status === 'error') {
-            throw new Error(responseData.error || 'Erro desconhecido na API do Tiny');
-          }
-  
-          return responseData.data;
-        }, retryOptions);
-      } catch (error: any) {
-        console.error('Erro fatal na chamada da API:', {
-          message: error.message,
-          endpoint,
-          method,
-          body
-        });
-        throw new Error(`Erro na API do Tiny: ${error.message}`);
-      }
+    
+          const data = await response.json();
+          return data;
+        } catch (error: any) {
+          console.error('Erro na chamada da API:', error);
+          throw error;
+        }
+      }, retryOptions);
     });
   }
 
   private async listProducts(offset: number, limit: number): Promise<TinyProductListResponse> {
     try {
-      console.log('Listando produtos:', { offset, limit });
       const queryParams = new URLSearchParams({
-        situacao: 'A',
-        limit: String(limit),
-        offset: String(offset)
+        pagina: String(Math.floor(offset / limit) + 1),
+        registro_por_pagina: String(limit),
+        situacao: 'A'
       });
   
-      const response = await this.callTinyApi<any>(
+      const response = await this.callTinyApi<TinyApiResponse<TinyProductListRetorno>>(
         `produtos?${queryParams.toString()}`
       );
   
-      if (!response?.produtos?.length) {
-        console.warn('Nenhum produto retornado da API');
-        return {
-          itens: [],
-          paginacao: {
-            limit,
-            offset,
-            total: 0
-          }
-        };
-      }
-  
+      // Converter resposta da API para o formato interno
       return {
-        itens: response.produtos,
+        itens: response.retorno.produtos || [],
         paginacao: {
-          limit,
+          limit: response.retorno.numero_registros,
           offset,
-          total: response.total || 0
+          total: response.retorno.total
         }
       };
     } catch (error: any) {
