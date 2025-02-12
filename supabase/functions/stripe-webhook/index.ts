@@ -152,7 +152,7 @@ async function handleSubscriptionUpdated(event: Stripe.Event) {
   // Buscar stripe_subscription existente
   const { data: existingSub, error: existingSubError } = await supabase
     .from('stripe_subscriptions')
-    .select('id')
+    .select('id, store_id')
     .eq('subscription_id', subscription.id)
     .single();
 
@@ -160,7 +160,7 @@ async function handleSubscriptionUpdated(event: Stripe.Event) {
     throw existingSubError;
   }
 
-  // Buscar price com informações do produto
+  // Determinar o tipo do plano baseado no produto
   const { data: price, error: priceError } = await supabase
     .from('stripe_prices')
     .select(`
@@ -169,7 +169,7 @@ async function handleSubscriptionUpdated(event: Stripe.Event) {
       stripe_products (
         id,
         name,
-        description
+        metadata
       )
     `)
     .eq('price_id', subscription.items.data[0].price.id)
@@ -187,6 +187,9 @@ async function handleSubscriptionUpdated(event: Stripe.Event) {
   if (!planInfo) {
     throw new Error('Product information not found');
   }
+
+  // Determinar o tipo do plano
+  const planType = planInfo.metadata?.plan_type || 'basic';
 
   // Atualizar stripe_subscription
   const { error: updateError } = await supabase
@@ -214,6 +217,8 @@ async function handleSubscriptionUpdated(event: Stripe.Event) {
     .from('subscriptions')
     .update({
       status: subscription.status,
+      plan_type: planType,
+      active: subscription.status === 'active',
       next_payment_at: new Date(subscription.current_period_end * 1000),
       plan_id: planInfo.id,
       plan_name: planInfo.name,
@@ -227,6 +232,19 @@ async function handleSubscriptionUpdated(event: Stripe.Event) {
 
   if (storeSubError) {
     throw storeSubError;
+  }
+
+  // Atualizar o plano da loja
+  const { error: storeUpdateError } = await supabase
+    .from('stores')
+    .update({
+      plan_type: planType,
+      updated_at: new Date()
+    })
+    .eq('id', existingSub.store_id);
+
+  if (storeUpdateError) {
+    throw storeUpdateError;
   }
 }
 
