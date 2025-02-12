@@ -72,10 +72,18 @@ async function handleCheckoutSessionCompleted(event: Stripe.Event) {
     throw new Error(`Customer not found: ${customerError.message}`);
   }
 
-  // Buscar price
+  // Buscar price com informações do produto
   const { data: price, error: priceError } = await supabase
     .from('stripe_prices')
-    .select('id, product_id')
+    .select(`
+      id,
+      product_id,
+      stripe_products (
+        id,
+        name,
+        description
+      )
+    `)
     .eq('price_id', subscription.items.data[0].price.id)
     .single();
 
@@ -83,6 +91,15 @@ async function handleCheckoutSessionCompleted(event: Stripe.Event) {
     throw new Error(`Price not found: ${priceError.message}`);
   }
 
+  // Extrair informações do plano
+  const planInfo = Array.isArray(price.stripe_products) 
+    ? price.stripe_products[0] 
+    : price.stripe_products;
+
+  if (!planInfo) {
+    throw new Error('Product information not found');
+  }
+  
   // Salvar stripe_subscription
   const { data: stripeSubscription, error: subError } = await supabase
     .from('stripe_subscriptions')
@@ -105,7 +122,7 @@ async function handleCheckoutSessionCompleted(event: Stripe.Event) {
     throw subError;
   }
 
-  // Atualizar subscription da loja
+  // Atualizar subscription da loja com informações completas do plano
   const { error: storeSubError } = await supabase
     .from('subscriptions')
     .upsert({
@@ -114,6 +131,12 @@ async function handleCheckoutSessionCompleted(event: Stripe.Event) {
       status: subscription.status,
       trial_ends_at: subscription.trial_end ? new Date(subscription.trial_end * 1000) : null,
       next_payment_at: new Date(subscription.current_period_end * 1000),
+      plan_id: planInfo.id,
+      plan_name: planInfo.name,
+      plan_description: planInfo.description,
+      price_id: price.id,
+      amount: subscription.items.data[0].price.unit_amount,
+      currency: subscription.currency,
       updated_at: new Date()
     });
 
@@ -137,6 +160,34 @@ async function handleSubscriptionUpdated(event: Stripe.Event) {
     throw existingSubError;
   }
 
+  // Buscar price com informações do produto
+  const { data: price, error: priceError } = await supabase
+    .from('stripe_prices')
+    .select(`
+      id,
+      product_id,
+      stripe_products (
+        id,
+        name,
+        description
+      )
+    `)
+    .eq('price_id', subscription.items.data[0].price.id)
+    .single();
+
+  if (priceError) {
+    throw new Error(`Price not found: ${priceError.message}`);
+  }
+
+  // Extrair informações do plano
+  const planInfo = Array.isArray(price.stripe_products) 
+    ? price.stripe_products[0] 
+    : price.stripe_products;
+
+  if (!planInfo) {
+    throw new Error('Product information not found');
+  }
+
   // Atualizar stripe_subscription
   const { error: updateError } = await supabase
     .from('stripe_subscriptions')
@@ -149,6 +200,7 @@ async function handleSubscriptionUpdated(event: Stripe.Event) {
       canceled_at: subscription.canceled_at ? new Date(subscription.canceled_at * 1000) : null,
       trial_start: subscription.trial_start ? new Date(subscription.trial_start * 1000) : null,
       trial_end: subscription.trial_end ? new Date(subscription.trial_end * 1000) : null,
+      price_id: price.id,
       updated_at: new Date()
     })
     .eq('id', existingSub.id);
@@ -163,6 +215,12 @@ async function handleSubscriptionUpdated(event: Stripe.Event) {
     .update({
       status: subscription.status,
       next_payment_at: new Date(subscription.current_period_end * 1000),
+      plan_id: planInfo.id,
+      plan_name: planInfo.name,
+      plan_description: planInfo.description,
+      price_id: price.id,
+      amount: subscription.items.data[0].price.unit_amount,
+      currency: subscription.currency,
       updated_at: new Date()
     })
     .eq('stripe_subscription_id', existingSub.id);
