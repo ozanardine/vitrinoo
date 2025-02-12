@@ -17,7 +17,6 @@ export function PlansTab({ store, plans }: PlansTabProps) {
     try {
       setLoading(true);
       setError(null);
-      setError(null);
 
       await createCheckoutSession(priceId, store.id);
     } catch (error: any) {
@@ -68,7 +67,8 @@ export function PlansTab({ store, plans }: PlansTabProps) {
 
       <div className="grid md:grid-cols-3 gap-8">
         {plans.map((plan) => {
-          const isCurrentPlan = store.subscription.plan_type === plan.name.toLowerCase();
+          const planType = plan.name.toLowerCase();
+          const isCurrentPlan = store.subscription.plan_type === planType;
           
           return (
             <div
@@ -144,15 +144,16 @@ export function PlansTab({ store, plans }: PlansTabProps) {
                 {isCurrentPlan ? (
                   <button
                     onClick={handleManageSubscription}
-                    className="w-full py-2 px-4 border border-blue-500 text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900 rounded-lg font-medium"
+                    className="w-full py-2 px-4 border border-blue-500 text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900 rounded-lg font-medium disabled:opacity-50"
+                    disabled={loading}
                   >
-                    Gerenciar Assinatura
+                    {loading ? 'Processando...' : 'Gerenciar Assinatura'}
                   </button>
                 ) : (
                   <button
                     onClick={() => handleUpgrade(plan.price?.id)}
                     disabled={!plan.price?.id || loading || plan.price.amount === 0}
-                    className={`w-full py-2 px-4 rounded-lg font-medium ${
+                    className={`w-full py-2 px-4 rounded-lg font-medium transition-colors ${
                       plan.price.amount === 0
                         ? 'bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600'
                         : 'bg-blue-600 hover:bg-blue-700 text-white'
