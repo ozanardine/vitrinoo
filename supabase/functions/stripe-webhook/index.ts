@@ -15,7 +15,7 @@ const stripe = new Stripe(Deno.env.get('STRIPE_SECRET_KEY') || '', {
 
 const endpointSecret = Deno.env.get('STRIPE_WEBHOOK_SECRET');
 if (!endpointSecret) {
-  throw new Error('STRIPE_WEBHOOK_SECRET is not set');
+  throw new Error('STRIPE_WEBHOOK_SECRET não configurado');
 }
 
 // Configuração do Supabase
@@ -35,16 +35,13 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey, {
   }
 });
 
-// Interface para log de eventos
-interface EventLog {
-  event_id: string;
-  event_type: string;
-  processed_at: Date;
-  status: 'success' | 'error';
-  error_message?: string;
-}
-
 serve(async (req: Request) => {
+  // Log da requisição
+  console.log('Webhook request received:', {
+    method: req.method,
+    url: req.url
+  });
+
   // Tratamento de OPTIONS para CORS
   if (req.method === 'OPTIONS') {
     return new Response(null, {
@@ -54,16 +51,16 @@ serve(async (req: Request) => {
   }
 
   try {
+    // Verificar assinatura do Stripe
     const signature = req.headers.get('stripe-signature');
     if (!signature) {
-      console.error('Webhook Error: No signature provided');
-      throw new Error('No signature provided');
+      console.error('Webhook Error: Assinatura não fornecida');
+      throw new Error('Assinatura não fornecida');
     }
 
     const body = await req.text();
-    console.log('Webhook received body:', body.slice(0, 500));
-
-    // Construir e verificar evento
+    
+    // Construir evento do Stripe
     const event = stripe.webhooks.constructEvent(body, signature, endpointSecret);
     console.log('Processing webhook event:', {
       id: event.id,
@@ -71,21 +68,17 @@ serve(async (req: Request) => {
       created: event.created
     });
 
-    // Verificar se o evento já foi processado
-    const { data: existingEvent } = await supabase
+    // Registrar recebimento do webhook
+    await supabase
       .from('stripe_webhook_logs')
-      .select('id')
-      .eq('event_id', event.id)
-      .single();
-
-    if (existingEvent) {
-      console.log('Event already processed:', event.id);
-      return new Response(JSON.stringify({ received: true, status: 'already_processed' }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 200
+      .insert({
+        event_id: event.id,
+        event_type: event.type,
+        processed_at: new Date(),
+        status: 'processing'
       });
-    }
 
+    // Processar eventos específicos
     switch (event.type) {
       case 'checkout.session.completed': {
         const session = event.data.object;
@@ -96,7 +89,6 @@ serve(async (req: Request) => {
           payment_status: session.payment_status
         });
 
-        // Verificar se o pagamento foi bem-sucedido
         if (session.payment_status !== 'paid') {
           console.log('Payment not completed yet:', session.payment_status);
           return new Response(JSON.stringify({ received: true }), {
@@ -107,10 +99,9 @@ serve(async (req: Request) => {
 
         // Buscar assinatura no Stripe
         const subscription = await stripe.subscriptions.retrieve(session.subscription as string);
-        console.log('Retrieved subscription from Stripe:', {
+        console.log('Retrieved subscription:', {
           id: subscription.id,
-          status: subscription.status,
-          customer: subscription.customer
+          status: subscription.status
         });
 
         // Buscar customer
@@ -121,11 +112,8 @@ serve(async (req: Request) => {
           .single();
 
         if (customerError) {
-          console.error('Error fetching customer:', customerError);
           throw new Error(`Customer not found: ${customerError.message}`);
         }
-
-        console.log('Found customer in database:', customer);
 
         // Buscar price
         const { data: price, error: priceError } = await supabase
@@ -135,11 +123,8 @@ serve(async (req: Request) => {
           .single();
 
         if (priceError) {
-          console.error('Error fetching price:', priceError);
           throw new Error(`Price not found: ${priceError.message}`);
         }
-
-        console.log('Found price in database:', price);
 
         // Salvar stripe_subscription
         const { data: stripeSubscription, error: subError } = await supabase
@@ -160,11 +145,8 @@ serve(async (req: Request) => {
           .single();
 
         if (subError) {
-          console.error('Error saving stripe subscription:', subError);
           throw subError;
         }
-
-        console.log('Saved stripe subscription:', stripeSubscription);
 
         // Atualizar subscription da loja
         const { error: storeSubError } = await supabase
@@ -179,21 +161,15 @@ serve(async (req: Request) => {
           });
 
         if (storeSubError) {
-          console.error('Error updating store subscription:', storeSubError);
           throw storeSubError;
         }
 
-        console.log('Successfully updated store subscription');
         break;
       }
 
       case 'customer.subscription.updated': {
         const subscription = event.data.object;
-        console.log('Processing subscription update:', {
-          id: subscription.id,
-          status: subscription.status
-        });
-
+        
         // Buscar stripe_subscription existente
         const { data: existingSub, error: existingSubError } = await supabase
           .from('stripe_subscriptions')
@@ -202,7 +178,6 @@ serve(async (req: Request) => {
           .single();
 
         if (existingSubError) {
-          console.error('Error fetching existing subscription:', existingSubError);
           throw existingSubError;
         }
 
@@ -223,7 +198,6 @@ serve(async (req: Request) => {
           .eq('id', existingSub.id);
 
         if (updateError) {
-          console.error('Error updating subscription:', updateError);
           throw updateError;
         }
 
@@ -238,17 +212,14 @@ serve(async (req: Request) => {
           .eq('stripe_subscription_id', existingSub.id);
 
         if (storeSubError) {
-          console.error('Error updating store subscription:', storeSubError);
           throw storeSubError;
         }
 
-        console.log('Successfully updated subscription');
         break;
       }
 
       case 'customer.subscription.deleted': {
         const subscription = event.data.object;
-        console.log('Processing subscription deletion:', { id: subscription.id });
 
         // Buscar stripe_subscription existente
         const { data: existingSub, error: existingSubError } = await supabase
@@ -258,7 +229,6 @@ serve(async (req: Request) => {
           .single();
 
         if (existingSubError) {
-          console.error('Error fetching existing subscription:', existingSubError);
           throw existingSubError;
         }
 
@@ -273,7 +243,6 @@ serve(async (req: Request) => {
           .eq('id', existingSub.id);
 
         if (deleteError) {
-          console.error('Error marking subscription as canceled:', deleteError);
           throw deleteError;
         }
 
@@ -287,29 +256,27 @@ serve(async (req: Request) => {
           .eq('stripe_subscription_id', existingSub.id);
 
         if (storeSubError) {
-          console.error('Error updating store subscription:', storeSubError);
           throw storeSubError;
         }
 
-        console.log('Successfully marked subscription as canceled');
         break;
       }
     }
 
-    // Registrar evento processado
+    // Atualizar log com sucesso
     await supabase
       .from('stripe_webhook_logs')
-      .insert({
-        event_id: event.id,
-        event_type: event.type,
-        processed_at: new Date(),
-        status: 'success'
-      });
+      .update({ 
+        status: 'success',
+        updated_at: new Date()
+      })
+      .eq('event_id', event.id);
 
     return new Response(JSON.stringify({ received: true }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 200
     });
+
   } catch (error: any) {
     console.error('Webhook Error:', {
       message: error.message,
@@ -317,18 +284,20 @@ serve(async (req: Request) => {
     });
 
     // Registrar erro no log
-    if (error.type === 'StripeSignatureVerificationError') {
+    try {
       await supabase
         .from('stripe_webhook_logs')
         .insert({
-          event_id: 'signature_error',
-          event_type: 'verification_failed',
+          event_id: `error_${Date.now()}`,
+          event_type: 'error',
           processed_at: new Date(),
           status: 'error',
           error_message: error.message
         });
+    } catch (logError) {
+      console.error('Error logging webhook error:', logError);
     }
-    
+
     return new Response(
       JSON.stringify({ 
         error: error.message,
