@@ -35,7 +35,9 @@ export interface Store {
   subscription: {
     plan_type: 'free' | 'basic' | 'plus';
     active: boolean;
-    expires_at: string | null;
+    status: string;
+    trial_ends_at: string | null;
+    next_payment_at: string | null;
   };
   products_count: number;
   product_limit: number;

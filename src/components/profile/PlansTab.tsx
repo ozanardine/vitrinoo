@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Check, X, Loader2 } from 'lucide-react';
+import { Check, X, Loader2, AlertCircle } from 'lucide-react';
 import { Store } from '../../lib/types';
 import { createCheckoutSession, createPortalSession, Plan } from '../../lib/stripe';
 import { PLAN_LIMITS } from '../../lib/store';
@@ -12,8 +12,15 @@ interface PlansTabProps {
 export function PlansTab({ store, plans }: PlansTabProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showTrialAlert, setShowTrialAlert] = useState(false);
 
   const handleUpgrade = async (priceId: string) => {
+    // Se estiver em trial, mostrar alerta
+    if (store.subscription.status === 'trialing') {
+      setShowTrialAlert(true);
+      return;
+    }
+
     try {
       setLoading(true);
       setError(null);
@@ -55,6 +62,26 @@ export function PlansTab({ store, plans }: PlansTabProps) {
         <div className="p-4 bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-100 rounded-lg flex items-center gap-2">
           <AlertCircle className="w-5 h-5 flex-shrink-0" />
           <span>{error}</span>
+        </div>
+      )}
+
+      {showTrialAlert && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full">
+            <h3 className="text-xl font-semibold mb-4">Você está no período de demonstração</h3>
+            <p className="text-gray-600 dark:text-gray-400 mb-6">
+              Você já está usando todos os recursos do plano Plus gratuitamente durante o período de demonstração.
+              Após o término do período de demonstração, você poderá escolher um plano para continuar.
+            </p>
+            <div className="flex justify-end">
+              <button
+                onClick={() => setShowTrialAlert(false)}
+                className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+              >
+                Entendi
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -144,10 +171,14 @@ export function PlansTab({ store, plans }: PlansTabProps) {
                 {isCurrentPlan ? (
                   <button
                     onClick={handleManageSubscription}
-                    className="w-full py-2 px-4 border border-blue-500 text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900 rounded-lg font-medium disabled:opacity-50"
+                    className={`w-full py-2 px-4 border rounded-lg font-medium disabled:opacity-50 ${
+                      store.subscription.status === 'trialing'
+                        ? 'border-green-500 text-green-500 hover:bg-green-50 dark:hover:bg-green-900'
+                        : 'border-blue-500 text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900'
+                    }`}
                     disabled={loading}
                   >
-                    {loading ? 'Processando...' : 'Gerenciar Assinatura'}
+                    {loading ? 'Processando...' : store.subscription.status === 'trialing' ? 'Plano de Demonstração Ativo' : 'Gerenciar Assinatura'}
                   </button>
                 ) : (
                   <button

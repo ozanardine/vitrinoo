@@ -176,10 +176,34 @@ export function Profile() {
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow mb-8">
         <div className="p-6">
           <div className="flex items-start justify-between">
-            <div className="flex-1 pr-8">
+            <div className="flex-1 pr-8 space-y-4">
               <h2 className="text-xl font-semibold mb-4">
                 Plano {planLimits.name}
+                {store.subscription.status === 'trialing' && (
+                  <span className="ml-2 text-sm font-normal bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 px-3 py-1 rounded-full">
+                    Demonstração
+                  </span>
+                )}
               </h2>
+              
+              {store.subscription.status === 'trialing' && store.subscription.trial_ends_at && (
+                <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+                  <p className="text-blue-800 dark:text-blue-200">
+                    Seu período de demonstração termina em{' '}
+                    {new Date(store.subscription.trial_ends_at).toLocaleDateString('pt-BR', {
+                      day: '2-digit',
+                      month: '2-digit',
+                      year: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit'
+                    })}
+                  </p>
+                  <p className="text-sm text-blue-600 dark:text-blue-300 mt-2">
+                    Aproveite todos os recursos do plano Plus gratuitamente por 7 dias
+                  </p>
+                </div>
+              )}
+
               <div className="space-y-4">
                 <div>
                   <div className="flex items-center justify-between text-sm mb-2">
@@ -213,7 +237,7 @@ export function Profile() {
                 </div>
               </div>
             </div>
-            {store.subscription.plan_type !== 'plus' && (
+            {store.subscription.plan_type !== 'plus' && store.subscription.status !== 'trialing' && (
               <button 
                 onClick={() => setActiveTab('plans')}
                 className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium"
