@@ -5,10 +5,10 @@ import {
 } from 'lucide-react';
 import { useStoreCustomization } from '../StoreCustomizationContext';
 import { SectionHeader } from '../forms/SectionHeader';
+import PhoneInput from './PhoneInput';
 import { 
   countries, 
-  fetchCountries, 
-  formatPhoneNumber, 
+  fetchCountries,
   validatePhoneNumber, 
   getPhoneNumberDisplay 
 } from '../../../../lib/countries';
@@ -407,31 +407,28 @@ export function ContactsAndSocialNetworks() {
                 
                 <div className="flex-1">
                   <div className="flex items-center space-x-2">
-                    {(network.type === 'phone' || network.type === 'whatsapp') && (
-                      <select
-                        value={link.countryCode || 'BR'}
-                        onChange={(e) => handleUpdateLink(linkIndex, link.url, e.target.value)}
-                        className="w-40 p-2 border rounded dark:bg-gray-700 dark:border-gray-600"
-                      >
-                        {availableCountries.map((country, countryIndex) => (
-                          <option 
-                            key={`${linkIndex}-${country.code}-${countryIndex}`} 
-                            value={country.code}
-                          >
-                            {country.name} (+{country.dialCode})
-                          </option>
-                        ))}
-                      </select>
+                    {(network.type === 'phone' || network.type === 'whatsapp') ? (
+                      <div className="flex-1">
+                        <PhoneInput
+                          value={link.url}
+                          countryCode={link.countryCode || 'BR'}
+                          onChange={(value) => handleUpdateLink(linkIndex, value, link.countryCode)}
+                          onCountryChange={(countryCode) => handleUpdateLink(linkIndex, link.url, countryCode)}
+                          placeholder={network.placeholder}
+                          error={showError}
+                        />
+                      </div>
+                    ) : (
+                      <input
+                        type={network.type === 'email' ? 'email' : 'text'}
+                        value={link.url}
+                        onChange={(e) => handleUpdateLink(linkIndex, e.target.value, link.countryCode)}
+                        placeholder={network.placeholder}
+                        className={`flex-1 p-2 border rounded dark:bg-gray-700 dark:border-gray-600 ${
+                          showError ? 'border-red-500' : ''
+                        }`}
+                      />
                     )}
-                    <input
-                      type={network.type === 'email' ? 'email' : 'text'}
-                      value={link.url}
-                      onChange={(e) => handleUpdateLink(linkIndex, e.target.value, link.countryCode)}
-                      placeholder={network.placeholder}
-                      className={`flex-1 p-2 border rounded dark:bg-gray-700 dark:border-gray-600 ${
-                        showError ? 'border-red-500' : ''
-                      }`}
-                    />
                     <button
                       type="button"
                       onClick={() => handleRemoveLink(linkIndex)}
