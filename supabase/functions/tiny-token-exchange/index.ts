@@ -25,16 +25,9 @@ async function handleAPIRequest(url: URL, method: string, token: string, reqBody
       throw new Error('Endpoint é obrigatório');
     }
 
-    // Decodificar o endpoint para garantir que os parâmetros estejam corretos
     const decodedEndpoint = decodeURIComponent(endpoint);
     
-    console.log('Preparando requisição para Tiny API:', {
-      endpoint: decodedEndpoint,
-      method,
-      hasBody: !!reqBody
-    });
-
-    // Separar base endpoint e query params se houver
+    // Separar base endpoint e query params
     let [baseEndpoint, queryString] = decodedEndpoint.split('?');
     const apiUrl = new URL(`${TINY_API_URL}/${baseEndpoint}`);
     
@@ -46,41 +39,51 @@ async function handleAPIRequest(url: URL, method: string, token: string, reqBody
       });
     }
 
-    console.log('URL Final:', apiUrl.toString());
+    // Adicionar headers necessários para a API v3 do Tiny
+    const headers = {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json',
+      'Accept': 'application/json'
+    };
 
+    // Fazer requisição para a API do Tiny
     const response = await fetch(apiUrl.toString(), {
       method,
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json',
-        'Accept': 'application/json'
-      },
+      headers,
       body: method !== 'GET' ? reqBody : undefined
-    });
-
-    console.log('Resposta da Tiny API:', {
-      status: response.status,
-      statusText: response.statusText,
-      headers: Object.fromEntries(response.headers)
     });
 
     // Ler a resposta como texto primeiro
     const responseText = await response.text();
-    console.log('Corpo da resposta:', responseText);
+    
+    // Log para debug
+    console.log('Resposta da Tiny API:', {
+      status: response.status,
+      headers: Object.fromEntries(response.headers),
+      body: responseText.slice(0, 1000) // Log apenas os primeiros 1000 caracteres
+    });
 
-    // Tentar fazer o parse do JSON se houver conteúdo
+    // Verificar se a resposta está vazia
+    if (!responseText) {
+      throw new Error('Resposta vazia da API do Tiny');
+    }
+
+    // Tentar fazer o parse do JSON
     let data;
     try {
-      data = responseText ? JSON.parse(responseText) : null;
+      data = JSON.parse(responseText);
     } catch (e) {
       console.error('Erro ao fazer parse do JSON:', e);
-      throw new Error(`Erro ao processar resposta da API: ${responseText}`);
+      throw new Error(`Erro ao processar resposta da API: ${responseText.slice(0, 100)}...`);
     }
 
-    if (!response.ok) {
-      throw new Error(data?.message || `Erro na API do Tiny: ${response.status} - ${response.statusText}`);
+    // Verificar se a resposta contém erro
+    if (!response.ok || data.status === 'error' || data.statusCode >= 400) {
+      const errorMessage = data.message || data.error || `Erro na API do Tiny: ${response.status}`;
+      throw new Error(errorMessage);
     }
 
+    // Retornar resposta formatada
     return new Response(JSON.stringify(data), {
       status: 200,
       headers: {
@@ -88,9 +91,24 @@ async function handleAPIRequest(url: URL, method: string, token: string, reqBody
         'Content-Type': 'application/json'
       }
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Erro na chamada da API:', error);
-    throw error;
+    
+    // Retornar erro formatado
+    return new Response(
+      JSON.stringify({ 
+        error: error.message,
+        type: error.name,
+        details: error.stack
+      }),
+      { 
+        status: 500,
+        headers: {
+          ...corsHeaders,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
   }
 }
 
