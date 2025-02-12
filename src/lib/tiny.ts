@@ -227,6 +227,80 @@ export async function checkTinyIntegrationStatus(storeId: string) {
 
 // Product Synchronization Class
 class TinyProductSync {
+  private storeId: string;
+  private rateLimit: typeof RATE_LIMITS.basic;
+  private queue: pQueue;
+  private supabaseClient: typeof supabase;
+
+  constructor(storeId: string, plan: 'basic' | 'essential' | 'enterprise' = 'basic') {
+    this.storeId = storeId;
+    this.rateLimit = RATE_LIMITS[plan];
+    this.supabaseClient = supabase;
+    
+    // Inicializar queue com rate limiting
+    this.queue = new pQueue({
+      concurrency: 1,
+      interval: 60000,
+      intervalCap: this.rateLimit.total
+    });
+  }
+
+  private async refreshToken(integration: TinyCredentials): Promise<void> {
+    try {
+      const { data: keyData, error: keyError } = await this.supabaseClient
+        .from('function_keys')
+        .select('key')
+        .eq('name', 'tiny-token-exchange')
+        .single();
+
+      if (keyError) throw new Error('Erro ao obter chave de função');
+      if (!keyData?.key) throw new Error('Chave de função não encontrada');
+
+      let cleanToken = keyData.key.replace(/[\n\r\s]+/g, '');
+      if (cleanToken.includes('base64,')) {
+        cleanToken = cleanToken.split('base64,')[1];
+      }
+
+      const functionUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/tiny-token-exchange`;
+      
+      const response = await fetch(functionUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Authorization': `Bearer ${cleanToken}`
+        },
+        body: JSON.stringify({
+          refreshToken: integration.refresh_token,
+          clientId: integration.client_id,
+          clientSecret: integration.client_secret,
+          grantType: 'refresh_token'
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Erro na renovação do token');
+      }
+
+      const data = await response.json();
+
+      // Atualizar credenciais no banco
+      await saveTinyCredentials(
+        integration.store_id,
+        integration.client_id,
+        integration.client_secret,
+        data.access_token,
+        data.refresh_token,
+        data.expires_in
+      );
+
+    } catch (error: any) {
+      console.error('Erro ao renovar token:', error);
+      throw new Error(`Erro ao renovar token: ${error.message}`);
+    }
+  }
+
   private async callTinyApi<T>(endpoint: string, method: string = 'GET', body?: any): Promise<T> {
     return this.queue.add(async () => {
       const retryOptions = {
