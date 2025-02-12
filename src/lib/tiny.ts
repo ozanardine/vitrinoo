@@ -311,35 +311,36 @@ class TinyProductSync {
         randomize: true,
         onRetry: (error: any, attempt: number) => {
           console.warn(`Tentativa ${attempt} falhou:`, error.message);
-          
-          // Se for erro de rate limit, aguardar mais tempo
           if (error.message.includes('429') || error.message.includes('rate limit')) {
             return new Promise(resolve => setTimeout(resolve, 10000));
           }
         }
       };
-
-      return pRetry(async () => {
-        try {
+  
+      try {
+        return await pRetry(async () => {
+          console.log('Iniciando chamada API para endpoint:', endpoint);
+  
           const { data: keyData, error: keyError } = await this.supabaseClient
             .from('function_keys')
             .select('key')
             .eq('name', 'tiny-token-exchange')
             .single();
-    
-          if (keyError) throw new Error('Erro ao obter chave de função');
+  
+          if (keyError) throw new Error(`Erro ao obter chave de função: ${keyError.message}`);
           if (!keyData?.key) throw new Error('Chave de função não encontrada');
-    
+  
           let cleanToken = keyData.key.replace(/[\n\r\s]+/g, '');
           if (cleanToken.includes('base64,')) {
             cleanToken = cleanToken.split('base64,')[1];
           }
-    
+  
           const functionUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/tiny-token-exchange`;
           const url = new URL(functionUrl);
           url.searchParams.set('endpoint', endpoint);
           url.searchParams.set('storeId', this.storeId);
-    
+  
+          console.log('Buscando dados da integração');
           const { data: integration, error: integrationError } = await this.supabaseClient
             .from('erp_integrations')
             .select('*')
@@ -347,23 +348,27 @@ class TinyProductSync {
             .eq('provider', 'tiny')
             .eq('active', true)
             .single();
-    
-          if (integrationError || !integration) {
+  
+          if (integrationError) {
+            throw new Error(`Erro ao buscar integração: ${integrationError.message}`);
+          }
+          if (!integration) {
             throw new Error('Integração não encontrada ou inativa');
           }
-
-          // Verificar se o token está próximo de expirar
+  
+          // Verificar token
           const expiresAt = new Date(integration.expires_at);
           const now = new Date();
           const minutesUntilExpiration = (expiresAt.getTime() - now.getTime()) / (1000 * 60);
-
-          // Se faltar menos de 5 minutos para expirar, renovar o token
+  
           if (minutesUntilExpiration < 5) {
+            console.log('Token próximo da expiração, renovando...');
             await this.refreshToken(integration);
           }
-    
+  
           url.searchParams.set('token', integration.access_token);
-    
+  
+          console.log('Fazendo requisição para Edge Function:', url.toString());
           const response = await fetch(url.toString(), {
             method,
             headers: {
@@ -373,32 +378,69 @@ class TinyProductSync {
             },
             body: body ? JSON.stringify(body) : undefined
           });
-    
+  
+          const responseData = await response.json();
+          
           if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.error || `Erro na API do Tiny: ${response.status}`);
+            console.error('Erro na resposta da Edge Function:', responseData);
+            throw new Error(responseData.error || `Erro na API do Tiny: ${response.status}`);
           }
-    
-          const data = await response.json();
-          return data;
-        } catch (error: any) {
-          console.error('Erro na chamada da API:', error);
-          throw error;
-        }
-      }, retryOptions);
+  
+          if (responseData.status === 'error') {
+            throw new Error(responseData.error || 'Erro desconhecido na API do Tiny');
+          }
+  
+          return responseData.data;
+        }, retryOptions);
+      } catch (error: any) {
+        console.error('Erro fatal na chamada da API:', {
+          message: error.message,
+          endpoint,
+          method,
+          body
+        });
+        throw new Error(`Erro na API do Tiny: ${error.message}`);
+      }
     });
   }
 
   private async listProducts(offset: number, limit: number): Promise<TinyProductListResponse> {
-    const queryParams = new URLSearchParams({
-      situacao: 'A',
-      limit: String(limit),
-      offset: String(offset)
-    });
+    try {
+      console.log('Listando produtos:', { offset, limit });
+      const queryParams = new URLSearchParams({
+        situacao: 'A',
+        limit: String(limit),
+        offset: String(offset)
+      });
   
-    return this.callTinyApi<TinyProductListResponse>(
-      `produtos?${queryParams.toString()}`
-    );
+      const response = await this.callTinyApi<any>(
+        `produtos?${queryParams.toString()}`
+      );
+  
+      if (!response?.produtos?.length) {
+        console.warn('Nenhum produto retornado da API');
+        return {
+          itens: [],
+          paginacao: {
+            limit,
+            offset,
+            total: 0
+          }
+        };
+      }
+  
+      return {
+        itens: response.produtos,
+        paginacao: {
+          limit,
+          offset,
+          total: response.total || 0
+        }
+      };
+    } catch (error: any) {
+      console.error('Erro ao listar produtos:', error);
+      throw new Error(`Erro ao listar produtos: ${error.message}`);
+    }
   }
 
   private async getProductDetails(productId: number): Promise<TinyProductDetail> {

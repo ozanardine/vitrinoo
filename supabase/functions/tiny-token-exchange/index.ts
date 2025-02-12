@@ -25,90 +25,93 @@ async function handleAPIRequest(url: URL, method: string, token: string, reqBody
       throw new Error('Endpoint é obrigatório');
     }
 
+    console.log('Processando requisição para endpoint:', endpoint);
+
     const decodedEndpoint = decodeURIComponent(endpoint);
+    console.log('Endpoint decodificado:', decodedEndpoint);
     
-    // Separar base endpoint e query params
     let [baseEndpoint, queryString] = decodedEndpoint.split('?');
     const apiUrl = new URL(`${TINY_API_URL}/${baseEndpoint}`);
     
-    // Adicionar query params se existirem
     if (queryString) {
       queryString.split('&').forEach(param => {
         const [key, value] = param.split('=');
-        apiUrl.searchParams.append(key, value);
+        if (key && value) {
+          apiUrl.searchParams.append(key, value);
+        }
       });
     }
 
-    // Adicionar headers necessários para a API v3 do Tiny
-    const headers = {
-      'Authorization': `Bearer ${token}`,
-      'Content-Type': 'application/json',
-      'Accept': 'application/json'
-    };
+    console.log('URL final da API Tiny:', apiUrl.toString());
 
-    // Fazer requisição para a API do Tiny
-    const response = await fetch(apiUrl.toString(), {
+    const tinyResponse = await fetch(apiUrl.toString(), {
       method,
-      headers,
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
       body: method !== 'GET' ? reqBody : undefined
     });
 
-    // Ler a resposta como texto primeiro
-    const responseText = await response.text();
-    
-    // Log para debug
-    console.log('Resposta da Tiny API:', {
-      status: response.status,
-      headers: Object.fromEntries(response.headers),
-      body: responseText.slice(0, 1000) // Log apenas os primeiros 1000 caracteres
-    });
+    console.log('Status da resposta Tiny:', tinyResponse.status);
+    console.log('Headers da resposta:', Object.fromEntries(tinyResponse.headers));
 
-    // Verificar se a resposta está vazia
+    const responseText = await tinyResponse.text();
+    console.log('Corpo da resposta (primeiros 500 chars):', responseText.slice(0, 500));
+
     if (!responseText) {
       throw new Error('Resposta vazia da API do Tiny');
     }
 
-    // Tentar fazer o parse do JSON
     let data;
     try {
       data = JSON.parse(responseText);
     } catch (e) {
       console.error('Erro ao fazer parse do JSON:', e);
-      throw new Error(`Erro ao processar resposta da API: ${responseText.slice(0, 100)}...`);
+      throw new Error(`Resposta inválida da API do Tiny: ${responseText.slice(0, 100)}...`);
     }
 
-    // Verificar se a resposta contém erro
-    if (!response.ok || data.status === 'error' || data.statusCode >= 400) {
-      const errorMessage = data.message || data.error || `Erro na API do Tiny: ${response.status}`;
-      throw new Error(errorMessage);
+    // Verificar se a resposta da API do Tiny contém um erro
+    if (data.retorno?.status === 'Erro' || data.retorno?.codigo_erro) {
+      throw new Error(data.retorno?.mensagem || 'Erro desconhecido da API do Tiny');
     }
 
-    // Retornar resposta formatada
-    return new Response(JSON.stringify(data), {
+    // Verificar se a resposta da API do Tiny está no formato esperado
+    if (!data.retorno?.produtos && !data.retorno?.produto) {
+      console.warn('Resposta inesperada da API:', data);
+      throw new Error('Formato de resposta inesperado da API do Tiny');
+    }
+
+    return new Response(JSON.stringify({
+      data: data.retorno,
+      status: 'success'
+    }), {
       status: 200,
       headers: {
         ...corsHeaders,
         'Content-Type': 'application/json'
       }
     });
+
   } catch (error: any) {
-    console.error('Erro na chamada da API:', error);
-    
-    // Retornar erro formatado
-    return new Response(
-      JSON.stringify({ 
-        error: error.message,
-        type: error.name,
-        details: error.stack
-      }),
-      { 
-        status: 500,
-        headers: {
-          ...corsHeaders,
-          'Content-Type': 'application/json'
-        }
+    console.error('Erro detalhado:', {
+      message: error.message,
+      stack: error.stack,
+      cause: error.cause
+    });
+
+    return new Response(JSON.stringify({
+      error: error.message,
+      status: 'error',
+      details: error.stack
+    }), {
+      status: error.message.includes('Unauthorized') ? 401 : 500,
+      headers: {
+        ...corsHeaders,
+        'Content-Type': 'application/json'
       }
-    );
+    });
   }
 }
 
