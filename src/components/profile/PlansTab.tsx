@@ -93,7 +93,15 @@ export function PlansTab({ store, plans }: PlansTabProps) {
       </div>
 
       <div className="grid md:grid-cols-3 gap-8">
-        {plans.map((plan) => {
+        {Array.isArray(plans) && plans
+          .filter(plan => !plan.name.toLowerCase().includes('demonstra'))
+          .sort((a, b) => {
+            const order = { gratuito: 0, básico: 1, plus: 2 };
+            const aOrder = order[a.name.toLowerCase() as keyof typeof order] || 0;
+            const bOrder = order[b.name.toLowerCase() as keyof typeof order] || 0;
+            return aOrder - bOrder;
+          })
+          .map((plan) => {
           const planType = plan.name.toLowerCase();
           const isCurrentPlan = store.subscription.plan_type === planType;
           
@@ -115,7 +123,7 @@ export function PlansTab({ store, plans }: PlansTabProps) {
               <div className="p-6">
                 <h3 className="text-2xl font-bold mb-2">{plan.name}</h3>
                 <p className="text-4xl font-bold mb-6">
-                  {formatPrice(plan.price.amount / 100)}
+                  {plan.price?.amount ? formatPrice(plan.price.amount / 100) : 'Grátis'}
                   <span className="text-lg font-normal text-gray-600 dark:text-gray-400">
                     /mês
                   </span>
@@ -124,34 +132,54 @@ export function PlansTab({ store, plans }: PlansTabProps) {
                 <ul className="space-y-3 mb-8">
                   <li className="flex items-center">
                     <Check className="w-5 h-5 text-green-500 mr-2" />
-                    <span>
-                      {plan.features.products === Infinity
-                        ? 'Produtos ilimitados'
-                        : `Até ${plan.features.products.toLocaleString()} produtos`}
-                    </span>
+                    <span>Até {planType === 'gratuito' ? '100' : planType === 'básico' ? '1.000' : '10.000'} produtos</span>
                   </li>
                   <li className="flex items-center">
                     <Check className="w-5 h-5 text-green-500 mr-2" />
-                    <span>
-                      {plan.features.categories === Infinity
-                        ? 'Categorias ilimitadas'
-                        : `Até ${plan.features.categories.toLocaleString()} categorias`}
-                    </span>
+                    <span>Até {planType === 'gratuito' ? '10' : planType === 'básico' ? '50' : '200'} categorias principais</span>
                   </li>
                   <li className="flex items-center">
                     <Check className="w-5 h-5 text-green-500 mr-2" />
-                    <span>
-                      Até {plan.features.images_per_product} imagens por produto
-                    </span>
+                    <span>Até {planType === 'gratuito' ? '3' : planType === 'básico' ? '5' : '10'} imagens por produto</span>
                   </li>
-                  {plan.features.custom_domain && (
+                  <li className="flex items-center">
+                    <Check className="w-5 h-5 text-green-500 mr-2" />
+                    <span>Link compartilhável</span>
+                  </li>
+                  <li className="flex items-center">
+                    <Check className="w-5 h-5 text-green-500 mr-2" />
+                    <span>SSL gratuito</span>
+                  </li>
+                  <li className="flex items-center">
+                    <Check className="w-5 h-5 text-green-500 mr-2" />
+                    <span>Suporte por email</span>
+                  </li>
+                  {planType === 'básico' && (
+                    <>
+                      <li className="flex items-center">
+                        <Check className="w-5 h-5 text-green-500 mr-2" />
+                        <span>Domínio personalizado</span>
+                      </li>
+                      <li className="flex items-center">
+                        <Check className="w-5 h-5 text-green-500 mr-2" />
+                        <span>Upload de imagens</span>
+                      </li>
+                      <li className="flex items-center">
+                        <Check className="w-5 h-5 text-green-500 mr-2" />
+                        <span>Suporte prioritário</span>
+                      </li>
+                    </>
+                  )}
+                  {planType === 'plus' && (
+                    <>
                     <li className="flex items-center">
                       <Check className="w-5 h-5 text-green-500 mr-2" />
                       <span>Domínio personalizado</span>
                     </li>
-                  )}
-                  {plan.features.erp_integration && (
-                    <>
+                      <li className="flex items-center">
+                        <Check className="w-5 h-5 text-green-500 mr-2" />
+                        <span>Upload de imagens</span>
+                      </li>
                       <li className="flex items-center">
                         <Check className="w-5 h-5 text-green-500 mr-2" />
                         <span>Integração com ERP</span>
@@ -162,7 +190,15 @@ export function PlansTab({ store, plans }: PlansTabProps) {
                       </li>
                       <li className="flex items-center">
                         <Check className="w-5 h-5 text-green-500 mr-2" />
+                        <span>Geração de descrições com IA</span>
+                      </li>
+                      <li className="flex items-center">
+                        <Check className="w-5 h-5 text-green-500 mr-2" />
                         <span>Suporte prioritário</span>
+                      </li>
+                      <li className="flex items-center">
+                        <Check className="w-5 h-5 text-green-500 mr-2" />
+                        <span>Análises avançadas</span>
                       </li>
                     </>
                   )}
@@ -185,12 +221,12 @@ export function PlansTab({ store, plans }: PlansTabProps) {
                     onClick={() => handleUpgrade(plan.price?.id)}
                     disabled={!plan.price?.id || loading || plan.price.amount === 0}
                     className={`w-full py-2 px-4 rounded-lg font-medium transition-colors ${
-                      plan.price.amount === 0
+                      !plan.price?.amount || plan.price.amount === 0
                         ? 'bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600'
                         : 'bg-blue-600 hover:bg-blue-700 text-white'
                     } disabled:opacity-50 disabled:cursor-not-allowed`}
                   >
-                    {loading ? 'Processando...' : plan.price.amount === 0 ? 'Começar Grátis' : 'Fazer Upgrade'}
+                    {loading ? 'Processando...' : (!plan.price?.amount || plan.price.amount === 0) ? 'Começar Grátis' : 'Fazer Upgrade'}
                   </button>
                 )}
               </div>

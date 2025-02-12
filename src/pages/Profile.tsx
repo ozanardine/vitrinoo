@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { User, Package, Grid, Link, Palette, Store, CreditCard } from 'lucide-react';
 import { useStore } from '../lib/store';
 import { supabase } from '../lib/supabase';
@@ -40,10 +40,13 @@ const TabButton = ({ tab, icon: Icon, label, activeTab, onClick }: TabButtonProp
 
 export function Profile() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { user } = useStore();
   const [store, setStore] = useState<StoreType | null>(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<TabType>('profile');
+  const [activeTab, setActiveTab] = useState<TabType>(
+    (searchParams.get('tab') as TabType) || 'profile'
+  );
   const [showStoreModal, setShowStoreModal] = useState(false);
   const [plans, setPlans] = useState([]);
 
@@ -55,6 +58,12 @@ export function Profile() {
 
     loadData();
   }, [user, navigate]);
+
+  // Atualizar URL quando a aba mudar
+  const handleTabChange = (tab: TabType) => {
+    setActiveTab(tab);
+    setSearchParams({ tab });
+  };
 
   const loadData = async () => {
     try {
@@ -72,11 +81,13 @@ export function Profile() {
         .from('stores')
         .select(`
           *,
-          subscriptions!inner (
-            id,
+          subscriptions!inner(
+            id, 
             plan_type,
             active,
-            expires_at
+            status,
+            trial_ends_at,
+            next_payment_at
           )
         `)
         .eq('user_id', user?.id)
@@ -106,10 +117,18 @@ export function Profile() {
       const subscription = storeData.subscriptions[0];
       const planType = subscription.plan_type as keyof typeof PLAN_LIMITS;
       const planLimits = PLAN_LIMITS[planType];
+      const isTrialing = subscription.status === 'trialing';
+      const trialEndsAt = isTrialing ? subscription.trial_ends_at : null;
+      const nextPaymentAt = subscription.next_payment_at;
 
       setStore({
         ...storeData,
-        subscription,
+        subscription: {
+          ...subscription,
+          status: isTrialing ? 'trialing' : subscription.status || 'active',
+          trial_ends_at: trialEndsAt,
+          next_payment_at: nextPaymentAt
+        },
         products_count: productsCount.count || 0,
         product_limit: planLimits.products,
         categories_count: categoriesCount.count || 0,
@@ -120,6 +139,78 @@ export function Profile() {
     } finally {
       setLoading(false);
     }
+  };
+
+  // Função para renderizar mensagem de trial
+  const renderTrialMessage = () => {
+    if (!store.subscription.trial_ends_at) return null;
+
+    const trialEnd = new Date(store.subscription.trial_ends_at);
+    const now = new Date();
+    const daysLeft = Math.ceil((trialEnd.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+
+    if (daysLeft <= 0) {
+      return (
+        <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
+          <h4 className="font-medium text-yellow-800 dark:text-yellow-200 mb-2">
+            Seu período de demonstração terminou
+          </h4>
+          <p className="text-yellow-700 dark:text-yellow-300">
+            Escolha um plano para continuar aproveitando todos os recursos ou continue gratuitamente com recursos limitados.
+          </p>
+          <div className="mt-4 flex gap-3">
+            <button
+              onClick={() => handleTabChange('plans')}
+              className="px-4 py-2 bg-yellow-600 hover:bg-yellow-700 text-white rounded-lg"
+            >
+              Ver Planos
+            </button>
+            <button
+              onClick={() => handleTabChange('profile')}
+              className="px-4 py-2 border border-yellow-600 text-yellow-600 hover:bg-yellow-50 dark:hover:bg-yellow-900/20 rounded-lg"
+            >
+              Continuar Grátis
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    if (daysLeft <= 2) {
+      return (
+        <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
+          <h4 className="font-medium text-yellow-800 dark:text-yellow-200 mb-2">
+            Seu período de demonstração está acabando!
+          </h4>
+          <p className="text-yellow-700 dark:text-yellow-300">
+            Faltam apenas {daysLeft} {daysLeft === 1 ? 'dia' : 'dias'} para o fim do seu período de demonstração.
+            Escolha um plano agora para não perder acesso aos recursos premium.
+          </p>
+          <button
+            onClick={() => handleTabChange('plans')}
+            className="mt-4 px-4 py-2 bg-yellow-600 hover:bg-yellow-700 text-white rounded-lg"
+          >
+            Ver Planos
+          </button>
+        </div>
+      );
+    }
+
+    return (
+      <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+        <h4 className="font-medium text-blue-800 dark:text-blue-200 mb-2">
+          Período de Demonstração
+        </h4>
+        <p className="text-blue-700 dark:text-blue-300">
+          Aproveite todos os recursos do plano Plus gratuitamente por mais {daysLeft} dias.
+          Seu período de demonstração termina em {trialEnd.toLocaleDateString('pt-BR', {
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric'
+          })}.
+        </p>
+      </div>
+    );
   };
 
   if (loading) {
@@ -186,23 +277,7 @@ export function Profile() {
                 )}
               </h2>
               
-              {store.subscription.status === 'trialing' && store.subscription.trial_ends_at && (
-                <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
-                  <p className="text-blue-800 dark:text-blue-200">
-                    Seu período de demonstração termina em{' '}
-                    {new Date(store.subscription.trial_ends_at).toLocaleDateString('pt-BR', {
-                      day: '2-digit',
-                      month: '2-digit',
-                      year: 'numeric',
-                      hour: '2-digit',
-                      minute: '2-digit'
-                    })}
-                  </p>
-                  <p className="text-sm text-blue-600 dark:text-blue-300 mt-2">
-                    Aproveite todos os recursos do plano Plus gratuitamente por 7 dias
-                  </p>
-                </div>
-              )}
+              {renderTrialMessage()}
 
               <div className="space-y-4">
                 <div>
@@ -239,7 +314,7 @@ export function Profile() {
             </div>
             {store.subscription.plan_type !== 'plus' && store.subscription.status !== 'trialing' && (
               <button 
-                onClick={() => setActiveTab('plans')}
+                onClick={() => handleTabChange('plans')}
                 className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium"
               >
                 Fazer Upgrade
@@ -257,42 +332,42 @@ export function Profile() {
               icon={User}
               label="Perfil"
               activeTab={activeTab}
-              onClick={setActiveTab}
+              onClick={handleTabChange}
             />
             <TabButton
               tab="catalog"
               icon={Palette}
               label="Catálogo"
               activeTab={activeTab}
-              onClick={setActiveTab}
+              onClick={handleTabChange}
             />
             <TabButton
               tab="products"
               icon={Package}
               label="Produtos"
               activeTab={activeTab}
-              onClick={setActiveTab}
+              onClick={handleTabChange}
             />
             <TabButton
               tab="categories"
               icon={Grid}
               label="Categorias"
               activeTab={activeTab}
-              onClick={setActiveTab}
+              onClick={handleTabChange}
             />
             <TabButton
               tab="integrations"
               icon={Link}
               label="Integrações"
               activeTab={activeTab}
-              onClick={setActiveTab}
+              onClick={handleTabChange}
             />
             <TabButton
               tab="plans"
               icon={CreditCard}
               label="Planos"
               activeTab={activeTab}
-              onClick={setActiveTab}
+              onClick={handleTabChange}
             />
           </div>
         </div>
