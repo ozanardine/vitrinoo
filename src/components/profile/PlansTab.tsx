@@ -11,26 +11,18 @@ interface PlansTabProps {
 
 export function PlansTab({ store, plans }: PlansTabProps) {
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleUpgrade = async (priceId: string) => {
     try {
       setLoading(true);
-      const response = await createCheckoutSession(priceId, store.id);
-      
-      // Se retornou uma URL, é portal session para downgrade
-      if ('url' in response) {
-        window.location.href = response.url;
-        return;
-      }
+      setError(null);
+      setError(null);
 
-      // Se retornou um ID, é checkout session para upgrade
-      if ('id' in response) {
-        const stripe = (window as any).Stripe(import.meta.env.VITE_STRIPE_PUBLIC_KEY);
-        await stripe.redirectToCheckout({ sessionId: response.id });
-      }
+      await createCheckoutSession(priceId, store.id);
     } catch (error: any) {
       console.error('Erro ao iniciar upgrade:', error);
-      alert(error.message);
+      setError(error.message);
     } finally {
       setLoading(false);
     }
@@ -60,6 +52,13 @@ export function PlansTab({ store, plans }: PlansTabProps) {
 
   return (
     <div className="space-y-8">
+      {error && (
+        <div className="p-4 bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-100 rounded-lg flex items-center gap-2">
+          <AlertCircle className="w-5 h-5 flex-shrink-0" />
+          <span>{error}</span>
+        </div>
+      )}
+
       <div className="text-center">
         <h2 className="text-2xl font-bold mb-2">Planos e Preços</h2>
         <p className="text-gray-600 dark:text-gray-400">
@@ -68,12 +67,12 @@ export function PlansTab({ store, plans }: PlansTabProps) {
       </div>
 
       <div className="grid md:grid-cols-3 gap-8">
-        {Object.entries(PLAN_LIMITS).map(([planType, plan]) => {
-          const isCurrentPlan = store.subscription.plan_type === planType;
+        {plans.map((plan) => {
+          const isCurrentPlan = store.subscription.plan_type === plan.name.toLowerCase();
           
           return (
             <div
-              key={planType}
+              key={`plan-${plan.price?.id || plan.name.toLowerCase()}`}
               className={`rounded-lg border ${
                 isCurrentPlan
                   ? 'border-blue-500 shadow-lg'
@@ -89,7 +88,7 @@ export function PlansTab({ store, plans }: PlansTabProps) {
               <div className="p-6">
                 <h3 className="text-2xl font-bold mb-2">{plan.name}</h3>
                 <p className="text-4xl font-bold mb-6">
-                  {formatPrice(plan.price)}
+                  {formatPrice(plan.price.amount / 100)}
                   <span className="text-lg font-normal text-gray-600 dark:text-gray-400">
                     /mês
                   </span>
@@ -99,32 +98,32 @@ export function PlansTab({ store, plans }: PlansTabProps) {
                   <li className="flex items-center">
                     <Check className="w-5 h-5 text-green-500 mr-2" />
                     <span>
-                      {plan.products === Infinity
+                      {plan.features.products === Infinity
                         ? 'Produtos ilimitados'
-                        : `Até ${plan.products.toLocaleString()} produtos`}
+                        : `Até ${plan.features.products.toLocaleString()} produtos`}
                     </span>
                   </li>
                   <li className="flex items-center">
                     <Check className="w-5 h-5 text-green-500 mr-2" />
                     <span>
-                      {plan.categories === Infinity
+                      {plan.features.categories === Infinity
                         ? 'Categorias ilimitadas'
-                        : `Até ${plan.categories.toLocaleString()} categorias`}
+                        : `Até ${plan.features.categories.toLocaleString()} categorias`}
                     </span>
                   </li>
                   <li className="flex items-center">
                     <Check className="w-5 h-5 text-green-500 mr-2" />
                     <span>
-                      Até {plan.images_per_product} imagens por produto
+                      Até {plan.features.images_per_product} imagens por produto
                     </span>
                   </li>
-                  {planType === 'basic' && (
+                  {plan.features.custom_domain && (
                     <li className="flex items-center">
                       <Check className="w-5 h-5 text-green-500 mr-2" />
                       <span>Domínio personalizado</span>
                     </li>
                   )}
-                  {planType === 'plus' && (
+                  {plan.features.erp_integration && (
                     <>
                       <li className="flex items-center">
                         <Check className="w-5 h-5 text-green-500 mr-2" />
@@ -151,14 +150,15 @@ export function PlansTab({ store, plans }: PlansTabProps) {
                   </button>
                 ) : (
                   <button
-                    onClick={() => handleUpgrade(planType)}
+                    onClick={() => handleUpgrade(plan.price?.id)}
+                    disabled={!plan.price?.id || loading || plan.price.amount === 0}
                     className={`w-full py-2 px-4 rounded-lg font-medium ${
-                      plan.price === 0
+                      plan.price.amount === 0
                         ? 'bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600'
                         : 'bg-blue-600 hover:bg-blue-700 text-white'
-                    }`}
+                    } disabled:opacity-50 disabled:cursor-not-allowed`}
                   >
-                    {plan.price === 0 ? 'Começar Grátis' : 'Fazer Upgrade'}
+                    {loading ? 'Processando...' : plan.price.amount === 0 ? 'Começar Grátis' : 'Fazer Upgrade'}
                   </button>
                 )}
               </div>

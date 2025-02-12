@@ -14,11 +14,9 @@ const stripe = new Stripe(Deno.env.get('STRIPE_SECRET_KEY') || '', {
 
 const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
 const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
-
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
 serve(async (req) => {
-  // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response(null, {
       status: 204,
@@ -27,13 +25,32 @@ serve(async (req) => {
   }
 
   try {
-    const requestBody = await req.json();
-    console.log('Request body:', requestBody);
-    const { priceId, storeId } = requestBody;
+    const { priceId, storeId } = await req.json();
+    console.log('Creating checkout session:', { priceId, storeId });
 
-    // Validar parâmetros
     if (!priceId || !storeId) {
-      throw new Error('priceId e storeId são obrigatórios');
+      throw new Error('ID do plano e ID da loja são obrigatórios');
+    }
+
+    // Log da chave Stripe sendo usada (parcial)
+    const stripeKey = Deno.env.get('STRIPE_SECRET_KEY') || '';
+    console.log('Using Stripe key:', `${stripeKey.slice(0, 8)}...`);
+
+    // Verificar price no Stripe
+    try {
+      const price = await stripe.prices.retrieve(priceId);
+      console.log('Retrieved price:', { 
+        id: price.id, 
+        active: price.active,
+        type: price.type
+      });
+
+      if (!price.active) {
+        throw new Error('Plano não está ativo');
+      }
+    } catch (error) {
+      console.error('Error retrieving price from Stripe:', error);
+      throw new Error('Plano não encontrado ou inativo no Stripe');
     }
 
     const authHeader = req.headers.get('Authorization');
@@ -49,7 +66,7 @@ serve(async (req) => {
       throw new Error('Usuário não autenticado');
     }
 
-    // Verificar se a loja pertence ao usuário
+    // Verificar loja
     const { data: store, error: storeError } = await supabase
       .from('stores')
       .select(`
@@ -58,7 +75,8 @@ serve(async (req) => {
           id,
           stripe_subscription_id,
           stripe_subscriptions (
-            subscription_id
+            subscription_id,
+            status
           )
         )
       `)
@@ -66,12 +84,12 @@ serve(async (req) => {
       .eq('user_id', user.id)
       .single();
 
-    if (storeError || !store) {
+    if (storeError) {
       console.error('Store error:', storeError);
       throw new Error('Loja não encontrada ou não pertence ao usuário');
     }
 
-    // Verificar se já existe um customer
+    // Verificar customer
     let { data: customer } = await supabase
       .from('stripe_customers')
       .select('customer_id')
@@ -79,9 +97,8 @@ serve(async (req) => {
       .single();
 
     if (!customer) {
-      console.log('Creating new customer for user:', user.id);
+      console.log('Creating new Stripe customer for user:', user.id);
       
-      // Criar customer no Stripe
       const stripeCustomer = await stripe.customers.create({
         email: user.email,
         metadata: {
@@ -89,7 +106,6 @@ serve(async (req) => {
         }
       });
 
-      // Salvar customer no banco
       const { data: newCustomer, error: customerError } = await supabase
         .from('stripe_customers')
         .insert({
@@ -108,57 +124,67 @@ serve(async (req) => {
       customer = newCustomer;
     }
 
-    // Se já existe uma subscription, criar portal session para fazer downgrade
-    const currentSubscription = store.subscriptions?.[0]?.stripe_subscriptions?.[0]?.subscription_id;
+    // Verificar subscription existente
+    const currentSubscription = store.subscriptions?.[0]?.stripe_subscriptions?.subscription_id;
     if (currentSubscription) {
-      console.log('Creating portal session for existing subscription');
-
+      console.log('Creating portal session for existing subscription:', currentSubscription);
+      
       const session = await stripe.billingPortal.sessions.create({
-        customer: customer?.customer_id,
+        customer: customer.customer_id,
         return_url: `${req.headers.get('origin')}/profile`,
       });
 
       return new Response(
         JSON.stringify({ url: session.url }),
-        {
+        { 
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
           status: 200
         }
       );
     }
 
-    // Se não tem subscription, criar checkout session
-    console.log('Creating checkout session for customer:', customer?.customer_id);
-
+    // Criar checkout session
+    console.log('Creating new checkout session');
     const session = await stripe.checkout.sessions.create({
-      customer: customer?.customer_id,
+      customer: customer.customer_id,
       line_items: [{ price: priceId, quantity: 1 }],
       mode: 'subscription',
       success_url: `${req.headers.get('origin')}/profile?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${req.headers.get('origin')}/profile`,
+      allow_promotion_codes: true,
       metadata: {
         store_id: storeId
+      },
+      payment_method_types: ['card'],
+      billing_address_collection: 'required',
+      customer_update: {
+        address: 'auto',
+        name: 'auto'
       }
     });
 
-    console.log('Checkout session created:', session.id);
+    console.log('Checkout session created:', { 
+      id: session.id,
+      url: session.url,
+      status: session.status
+    });
 
     return new Response(
       JSON.stringify({ id: session.id }),
-      {
+      { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 200
       }
     );
   } catch (error: any) {
     console.error('Function error:', error);
-
+    
     return new Response(
-      JSON.stringify({
+      JSON.stringify({ 
         error: error.message || 'Internal server error',
-        details: error.stack
+        details: error instanceof Error ? error.stack : undefined
       }),
-      {
+      { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 400
       }

@@ -27,17 +27,9 @@ export interface Plan {
 export async function getPlans(): Promise<Plan[]> {
   const { data: products, error: productsError } = await supabase
     .from('stripe_products')
-    .select(`*,
-      id,
-      name,
-      description,
-      features,
-      stripe_prices (
-        price_id,
-        unit_amount,
-        currency,
-        interval
-      )
+    .select(`
+      *,
+      stripe_prices!inner(*)
     `)
     .eq('active', true)
     .eq('stripe_prices.active', true)
@@ -49,35 +41,85 @@ export async function getPlans(): Promise<Plan[]> {
     throw new Error('Nenhum plano disponível no momento');
   }
 
-  return products.map(product => ({
-    id: product.stripe_prices[0].price_id,
-    name: product.name,
-    description: product.description,
-    features: product.features,
-    price: {
-      id: product.stripe_prices[0].price_id,
-      amount: product.stripe_prices[0].unit_amount,
-      currency: product.stripe_prices[0].currency,
-      interval: product.stripe_prices[0].interval
-    }
-  }));
+  return products.map(product => {
+    const price = product.stripe_prices?.[0];
+    return {
+      id: price?.price_id,
+      name: product.name,
+      description: product.description,
+      features: product.features,
+      price: price ? {
+        id: price.price_id,
+        amount: price.unit_amount,
+        currency: price.currency,
+        interval: price.interval
+      } : {
+        id: '',
+        amount: 0,
+        currency: 'brl',
+        interval: 'month'
+      }
+    };
+  });
 }
 
 export async function createCheckoutSession(priceId: string, storeId: string) {
   try {
+    console.log('Creating checkout session:', { priceId, storeId });
+
+    if (!priceId || !storeId) {
+      throw new Error('ID do plano e ID da loja são obrigatórios');
+    }
+
+    const stripe = await stripePromise;
+    if (!stripe) {
+      throw new Error('Erro ao inicializar Stripe');
+    }
+
+    // Log da chave pública (parcial)
+    console.log('Using Stripe public key:', 
+      `${import.meta.env.VITE_STRIPE_PUBLIC_KEY.slice(0, 8)}...`
+    );
+
     const { data, error } = await supabase.functions.invoke('create-checkout-session', {
       body: { priceId, storeId }
     });
 
-    if (error) throw error;
-    return data;
-  } catch (error: any) {
-    console.error('Erro ao criar sessão:', error);
-    let errorMessage = 'Erro ao processar pagamento';
-    if (error.message) {
-      errorMessage += `: ${error.message}`;
+    if (error) {
+      console.error('Supabase function error:', error);
+      throw error;
     }
-    throw new Error(errorMessage);
+
+    console.log('Checkout session response:', data);
+
+    if ('url' in data) {
+      window.location.href = data.url;
+      return data;
+    }
+
+    if ('id' in data) {
+      // Adicionar delay antes do redirect
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      const { error: checkoutError } = await stripe.redirectToCheckout({
+        sessionId: data.id
+      });
+
+      if (checkoutError) {
+        console.error('Stripe checkout error:', checkoutError);
+        throw checkoutError;
+      }
+
+      return data;
+    }
+
+    throw new Error('Resposta inválida do servidor');
+  } catch (error: any) {
+    console.error('Error creating checkout session:', error);
+    throw new Error(
+      error.message || 
+      'Erro ao processar pagamento. Por favor, tente novamente.'
+    );
   }
 }
 
@@ -89,10 +131,11 @@ export async function createPortalSession() {
       throw new Error('Usuário não autenticado');
     }
 
+    console.log('Creating portal session');
     const { data, error } = await supabase.functions.invoke('create-portal-session');
 
     if (error) {
-      console.error('Erro ao criar sessão do portal:', error);
+      console.error('Portal session error:', error);
       throw error;
     }
 
@@ -100,9 +143,13 @@ export async function createPortalSession() {
       throw new Error('Erro ao acessar portal de pagamento. Por favor, tente novamente.');
     }
 
+    console.log('Portal session created:', data);
+
+    // Redirecionar para o portal
+    window.location.href = data.url;
     return data;
   } catch (error: any) {
-    console.error('Erro ao criar sessão do portal:', error);
+    console.error('Error creating portal session:', error);
     
     throw new Error(
       error.message === 'Cliente não encontrado' 

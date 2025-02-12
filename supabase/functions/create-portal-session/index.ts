@@ -9,11 +9,9 @@ const stripe = new Stripe(Deno.env.get('STRIPE_SECRET_KEY') || '', {
 
 const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
 const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
-
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
 serve(async (req) => {
-  // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response(null, {
       status: 204,
@@ -23,7 +21,6 @@ serve(async (req) => {
 
   try {
     const authHeader = req.headers.get('Authorization');
-    
     if (!authHeader) {
       throw new Error('Não autorizado');
     }
@@ -32,8 +29,11 @@ serve(async (req) => {
     const { data: { user }, error: userError } = await supabase.auth.getUser(token);
 
     if (userError || !user) {
+      console.error('User error:', userError);
       throw new Error('Você precisa estar logado para acessar o portal de pagamento');
     }
+
+    console.log('Creating portal session for user:', user.id);
 
     // Buscar customer
     const { data: customer, error: customerError } = await supabase
@@ -47,20 +47,20 @@ serve(async (req) => {
       throw new Error('Você ainda não tem uma assinatura ativa');
     }
 
-    if (!customer) {
-      throw new Error('Você ainda não tem uma assinatura ativa');
-    }
-
-    // Verify if customer exists in Stripe
+    // Verificar customer no Stripe
     try {
-      await stripe.customers.retrieve(customer.customer_id);
+      const stripeCustomer = await stripe.customers.retrieve(customer.customer_id);
+      console.log('Retrieved Stripe customer:', {
+        id: stripeCustomer.id,
+        email: stripeCustomer.email
+      });
     } catch (stripeError) {
       console.error('Stripe customer error:', stripeError);
       throw new Error('Erro ao verificar assinatura. Por favor, entre em contato com o suporte.');
     }
 
     try {
-      // Criar portal session
+      console.log('Creating portal session');
       const session = await stripe.billingPortal.sessions.create({
         customer: customer.customer_id,
         return_url: `${req.headers.get('origin')}/profile`,
@@ -93,6 +93,11 @@ serve(async (req) => {
         }
       });
 
+      console.log('Portal session created:', {
+        id: session.id,
+        url: session.url
+      });
+
       return new Response(
         JSON.stringify({ url: session.url }),
         { 
@@ -103,7 +108,6 @@ serve(async (req) => {
     } catch (stripeError: any) {
       console.error('Stripe error:', stripeError);
       
-      // Handle specific Stripe errors
       if (stripeError.type === 'StripeInvalidRequestError') {
         if (stripeError.message.includes('No configuration provided')) {
           throw new Error('Portal do cliente não está configurado. Por favor, entre em contato com o suporte.');
