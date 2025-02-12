@@ -28,6 +28,7 @@ interface Category {
 
 // Add new helper function to build category tree
 const buildCategoryTree = (categories: Category[]): Category[] => {
+  console.log("categories:", categories);
   const categoryMap = new Map<string, Category>();
   const rootCategories: Category[] = [];
 
@@ -122,7 +123,7 @@ const CategoryTree = ({
             </div>
             {hasChildren && isExpanded && (
               <CategoryTree
-                categories={category.children}
+                categories={category.children || []}
                 selectedId={selectedId}
                 onSelect={onSelect}
                 level={level + 1}
@@ -230,16 +231,17 @@ export function StoreSearch({ onSearch, categories, brands, tags }: StoreSearchP
                 handleSearchInput(e.target.value);
               }}
               placeholder="Buscar produtos por nome, marca, categoria..."
-              className="w-full pl-10 pr-4 py-3 border rounded-lg dark:bg-gray-700 dark:border-gray-600 focus:border-blue-500 dark:focus:border-blue-400 focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800"
+              className="w-full pl-10 pr-4 py-3 border rounded-md shadow-sm dark:bg-gray-700 dark:border-gray-600 focus:border-blue-500 dark:focus:border-blue-400 focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 transition-colors"
             />
-            <Search className="absolute left-3 top-3.5 w-5 h-5 text-gray-400" />
+            <Search className="absolute left-3 top-3.5 w-5 h-5 text-gray-400" aria-hidden="true" />
             {searchTerm && (
               <button
                 onClick={() => {
                   setSearchTerm('');
                   handleSearchInput('');
                 }}
-                className="absolute right-3 top-3.5 text-gray-400 hover:text-gray-600"
+                className="absolute right-3 top-3.5 text-gray-400 hover:text-gray-600 transition-colors"
+                aria-label="Limpar pesquisa"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -248,23 +250,23 @@ export function StoreSearch({ onSearch, categories, brands, tags }: StoreSearchP
           <button
             onClick={() => setShowFilters(!showFilters)}
             className={`
-              px-4 py-2 rounded-lg border flex items-center space-x-2
-              ${showFilters 
-                ? 'bg-blue-50 border-blue-200 text-blue-600 dark:bg-blue-900/20 dark:border-blue-800' 
+              px-4 py-2 rounded-md border flex items-center space-x-2 transition-colors
+              ${showFilters
+                ? 'bg-blue-50 border-blue-200 text-blue-600 dark:bg-blue-900/20 dark:border-blue-800'
                 : 'hover:bg-gray-50 dark:hover:bg-gray-700'
               }
             `}
+            aria-expanded={showFilters}
           >
-            <Filter className="w-5 h-5" />
+            <Filter className="w-5 h-5" aria-hidden="true" />
             <span>Filtros</span>
             {showFilters ? (
-              <ChevronUp className="w-4 h-4" />
+              <ChevronUp className="w-4 h-4" aria-hidden="true" />
             ) : (
-              <ChevronDown className="w-4 h-4" />
+              <ChevronDown className="w-4 h-4" aria-hidden="true" />
             )}
           </button>
         </div>
-
       </div>
 
       {/* Active Filters */}
@@ -381,11 +383,13 @@ export function StoreSearch({ onSearch, categories, brands, tags }: StoreSearchP
               Categorias
             </h3>
             <div className="max-h-[400px] overflow-y-auto custom-scrollbar pr-2">
-              <CategoryTree
-                categories={categoryTree}
-                selectedId={filters.categoryId}
-                onSelect={(id) => setFilters({ ...filters, categoryId: id })}
-              />
+              {categoryTree && (
+                <CategoryTree
+                  categories={categoryTree}
+                  selectedId={filters.categoryId}
+                  onSelect={(id) => setFilters({ ...filters, categoryId: id })}
+                />
+              )}
             </div>
           </div>
 

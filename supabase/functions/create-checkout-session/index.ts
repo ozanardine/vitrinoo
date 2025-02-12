@@ -27,8 +27,9 @@ serve(async (req) => {
   }
 
   try {
-    const { priceId, storeId } = await req.json();
-    console.log('Request body:', { priceId, storeId });
+    const requestBody = await req.json();
+    console.log('Request body:', requestBody);
+    const { priceId, storeId } = requestBody;
 
     // Validar parâmetros
     if (!priceId || !storeId) {
@@ -108,18 +109,18 @@ serve(async (req) => {
     }
 
     // Se já existe uma subscription, criar portal session para fazer downgrade
-    const currentSubscription = store.subscriptions?.[0]?.stripe_subscriptions?.subscription_id;
+    const currentSubscription = store.subscriptions?.[0]?.stripe_subscriptions?.[0]?.subscription_id;
     if (currentSubscription) {
       console.log('Creating portal session for existing subscription');
-      
+
       const session = await stripe.billingPortal.sessions.create({
-        customer: customer.customer_id,
+        customer: customer?.customer_id,
         return_url: `${req.headers.get('origin')}/profile`,
       });
 
       return new Response(
         JSON.stringify({ url: session.url }),
-        { 
+        {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
           status: 200
         }
@@ -127,10 +128,10 @@ serve(async (req) => {
     }
 
     // Se não tem subscription, criar checkout session
-    console.log('Creating checkout session for customer:', customer.customer_id);
+    console.log('Creating checkout session for customer:', customer?.customer_id);
 
     const session = await stripe.checkout.sessions.create({
-      customer: customer.customer_id,
+      customer: customer?.customer_id,
       line_items: [{ price: priceId, quantity: 1 }],
       mode: 'subscription',
       success_url: `${req.headers.get('origin')}/profile?session_id={CHECKOUT_SESSION_ID}`,
@@ -144,20 +145,20 @@ serve(async (req) => {
 
     return new Response(
       JSON.stringify({ id: session.id }),
-      { 
+      {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 200
       }
     );
-  } catch (error) {
+  } catch (error: any) {
     console.error('Function error:', error);
-    
+
     return new Response(
-      JSON.stringify({ 
+      JSON.stringify({
         error: error.message || 'Internal server error',
         details: error.stack
       }),
-      { 
+      {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 400
       }

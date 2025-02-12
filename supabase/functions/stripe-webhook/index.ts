@@ -12,13 +12,16 @@ const stripe = new Stripe(Deno.env.get('STRIPE_SECRET_KEY') || '', {
   apiVersion: '2023-10-16',
 });
 
-const endpointSecret = Deno.env.get('STRIPE_WEBHOOK_SECRET') || '';
+const endpointSecret = Deno.env.get('STRIPE_WEBHOOK_SECRET');
+if (!endpointSecret) {
+  throw new Error('STRIPE_WEBHOOK_SECRET is not set');
+}
 const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
 const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
 
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-serve(async (req) => {
+serve(async (req: Request) => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response(null, {
@@ -35,6 +38,23 @@ serve(async (req) => {
 
     const body = await req.text();
     const event = stripe.webhooks.constructEvent(body, signature, endpointSecret);
+
+    console.log('Received event:', event.id, event.type);
+
+    // Check if event has already been processed
+    const { data: existingEvent } = await supabase
+      .from('stripe_events')
+      .select('id')
+      .eq('event_id', event.id)
+      .single();
+
+    if (existingEvent) {
+      console.log('Event already processed:', event.id);
+      return new Response(JSON.stringify({ received: true }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 200
+      });
+    }
 
     switch (event.type) {
       case 'checkout.session.completed': {
@@ -134,11 +154,20 @@ serve(async (req) => {
       }
     }
 
+    // Save event to database
+    await supabase
+      .from('stripe_events')
+      .insert({
+        event_id: event.id,
+        type: event.type,
+        data: event.data
+      });
+
     return new Response(JSON.stringify({ received: true }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 200
     });
-  } catch (error) {
+  } catch (error: any) {
     return new Response(
       JSON.stringify({ error: error.message }),
       { 
