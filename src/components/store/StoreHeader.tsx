@@ -4,7 +4,7 @@ import {
   Youtube, Store as TikTok, Twitter, Link2 
 } from 'lucide-react';
 import { generateHeaderStyles } from '../../lib/colors';
-import { generateSocialUrl } from '../../lib/countries';
+import { generateSocialUrl } from '../../lib/constants';
 
 interface StoreHeaderProps {
   name: string;

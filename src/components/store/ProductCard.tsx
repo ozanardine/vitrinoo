@@ -3,13 +3,14 @@ import { Package } from 'lucide-react';
 import { Product } from '../../lib/types';
 import ReactMarkdown from 'react-markdown';
 
-interface ProductCardProps {
+interface ProductCardProps extends React.HTMLAttributes<HTMLDivElement> {
   product: Product;
   onClick: () => void;
   view?: 'grid' | 'list';
+  style?: 'default' | 'compact' | 'minimal';
 }
 
-export function ProductCard({ product, onClick, view = 'grid' }: ProductCardProps) {
+export function ProductCard({ product, onClick, view = 'grid', style = 'default', className, ...props }: ProductCardProps) {
   const getTypeLabel = (type: string) => {
     switch (type) {
       case 'variable': return 'Produto com Variações';
@@ -23,10 +24,13 @@ export function ProductCard({ product, onClick, view = 'grid' }: ProductCardProp
   if (view === 'list') {
     return (
       <div 
+        {...props}
         onClick={onClick}
-        className="bg-white dark:bg-gray-800 rounded-lg shadow-sm overflow-hidden hover:shadow-md transition-all cursor-pointer group flex"
+        className={`bg-white dark:bg-gray-800 rounded-lg shadow-sm overflow-hidden hover:shadow-md transition-all cursor-pointer group flex ${className || ''}`}
       >
-        <div className="w-48 h-48 relative overflow-hidden bg-gray-100 dark:bg-gray-700 flex-shrink-0">
+        <div className={`relative overflow-hidden bg-gray-100 dark:bg-gray-700 flex-shrink-0 ${
+          style === 'compact' ? 'w-32 h-32' : 'w-48 h-48'
+        }`}>
           {product.images && product.images[0] ? (
             <img
               src={product.images[0]}
@@ -95,10 +99,18 @@ export function ProductCard({ product, onClick, view = 'grid' }: ProductCardProp
 
   return (
     <div 
+      {...props}
       onClick={onClick}
-      className="bg-white dark:bg-gray-800 rounded-lg shadow-sm overflow-hidden hover:shadow-md transition-all cursor-pointer group"
+      className={`
+        bg-white dark:bg-gray-800 rounded-lg shadow-sm overflow-hidden hover:shadow-md transition-all cursor-pointer group w-full
+        ${style === 'minimal' ? 'border-0' : 'border border-gray-200 dark:border-gray-700'}
+        ${className || ''}
+      `}
     >
-      <div className="aspect-square relative overflow-hidden bg-gray-100 dark:bg-gray-700">
+      <div className={`
+        relative overflow-hidden bg-gray-100 dark:bg-gray-700
+        ${style === 'minimal' ? 'aspect-[4/5]' : style === 'compact' ? 'aspect-[3/2]' : 'aspect-square'}
+      `}>
         {product.images && product.images[0] ? (
           <img
             src={product.images[0]}
@@ -124,30 +136,58 @@ export function ProductCard({ product, onClick, view = 'grid' }: ProductCardProp
           </span>
         </div>
       </div>
-      <div className="p-4">
-        <div className="mb-2">
-          <h3 className="font-semibold text-lg line-clamp-1">{product.title}</h3>
-          <p className="text-sm text-gray-500 dark:text-gray-400">{product.brand}</p>
+      <div className={`
+        ${style === 'minimal' ? 'p-3 text-center' : 'p-4'}
+        ${style === 'compact' ? 'flex items-center justify-between' : ''}
+        ${style === 'minimal' ? 'space-y-2' : ''}
+      `}>
+        <div className={`${style !== 'minimal' ? 'mb-2' : ''}`}>
+          <h3 className={`
+            font-semibold line-clamp-1
+            ${style === 'minimal' ? 'text-base' : 'text-lg'}
+          `}>{product.title}</h3>
+          <p className={`
+            text-sm text-gray-500 dark:text-gray-400
+            ${style === 'minimal' ? 'text-center' : ''}
+          `}>{product.brand}</p>
         </div>
-        <div className="prose prose-sm dark:prose-invert line-clamp-2 mb-3 h-10">
+        <div className={`
+          prose prose-sm dark:prose-invert line-clamp-2 mb-3
+          ${style === 'minimal' ? 'h-8 text-sm' : 'h-10'}
+          ${style === 'compact' ? 'hidden' : ''}
+          ${style === 'minimal' ? 'text-center' : ''}
+        `}>
           <ReactMarkdown>{product.description}</ReactMarkdown>
         </div>
-        <div className="flex flex-wrap gap-1 mb-3">
+        <div className={`
+          flex flex-wrap gap-1 mb-3
+          ${style === 'minimal' ? 'justify-center' : ''}
+          ${style === 'compact' ? 'hidden' : ''}
+        `}>
           {product.tags.slice(0, 3).map((tag) => (
             <span
               key={tag}
-              className="text-xs px-2 py-1 bg-gray-100 dark:bg-gray-700 rounded-full"
+              className={`
+                text-xs px-2 py-1 bg-gray-100 dark:bg-gray-700 rounded-full
+                ${style === 'minimal' ? 'inline-block mx-1' : ''}
+              `}
             >
               {tag}
             </span>
           ))}
           {product.tags.length > 3 && (
-            <span className="text-xs px-2 py-1 bg-gray-100 dark:bg-gray-700 rounded-full">
+            <span className={`
+              text-xs px-2 py-1 bg-gray-100 dark:bg-gray-700 rounded-full
+              ${style === 'minimal' ? 'inline-block mx-1' : ''}
+            `}>
               +{product.tags.length - 3}
             </span>
           )}
         </div>
-        <div className="mt-auto">
+        <div className={`
+          ${style === 'minimal' ? 'text-center' : 'mt-auto'}
+          ${style === 'compact' ? 'text-right' : ''}
+        `}>
           {product.promotional_price ? (
             <div className="space-y-1">
               <p className="text-sm text-gray-500 line-through">

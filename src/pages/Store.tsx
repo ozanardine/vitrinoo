@@ -24,10 +24,31 @@ interface StoreData {
   description: string | null;
   primary_color: string;
   secondary_color: string;
+  accent_color: string;
+  header_style: 'solid' | 'gradient' | 'image';
+  header_height: string;
+  header_image: string | null;
+  header_gradient: string;
+  header_overlay_opacity: string;
+  header_alignment: 'left' | 'center' | 'right';
+  logo_size: string;
+  title_size: string;
+  description_size: string;
+  title_font: string;
+  body_font: string;
+  product_card_style: 'default' | 'compact' | 'minimal';
+  grid_columns: string;
+  grid_gap: string;
+  container_width: string;
   social_links: Array<{
     type: string;
     url: string;
+    countryCode?: string;
   }>;
+  social_settings?: {
+    contacts_position: 'above' | 'below';
+    display_format: 'username' | 'network';
+  };
 }
 
 export function Store() {
@@ -42,7 +63,6 @@ export function Store() {
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [currentView, setCurrentView] = useState<'grid' | 'list'>('grid');
   const [currentSort, setCurrentSort] = useState<'recent' | 'price-asc' | 'price-desc'>('recent');
-  const [currentCategory, setCurrentCategory] = useState<string | null>(null);
 
   useEffect(() => {
     loadStoreData();
@@ -101,7 +121,7 @@ export function Store() {
     try {
       setLoading(true);
 
-      const { data, error } = await supabase.rpc('search_products', {
+      const { data, error } = await supabase.rpc('search_products_v2', {
         p_store_id: store.id,
         p_search: filters.search || null,
         p_category_id: filters.categoryId,
@@ -109,7 +129,9 @@ export function Store() {
         p_max_price: filters.maxPrice,
         p_has_promotion: filters.hasPromotion,
         p_tags: filters.selectedTags.length > 0 ? filters.selectedTags : null,
-        p_brand: filters.brand
+        p_brand: filters.brand,
+        p_limit: 100,
+        p_offset: 0
       });
 
       if (error) throw error;
@@ -153,6 +175,10 @@ export function Store() {
     );
   }
 
+  const containerClass = store.container_width === 'max-w-full' 
+    ? 'container-fluid px-4'
+    : `container mx-auto px-4 ${store.container_width}`;
+
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       {/* Theme Toggle */}
@@ -167,10 +193,38 @@ export function Store() {
         primaryColor={store.primary_color}
         secondaryColor={store.secondary_color}
         socialLinks={store.social_links}
+        customization={{
+          headerStyle: store.header_style,
+          headerHeight: store.header_height,
+          headerImage: store.header_image,
+          headerGradient: store.header_gradient,
+          headerAlignment: store.header_alignment,
+          headerOverlayOpacity: store.header_overlay_opacity,
+          logoSize: store.logo_size,
+          titleSize: store.title_size,
+          descriptionSize: store.description_size,
+          titleFont: store.title_font,
+          bodyFont: store.body_font,
+          socialSettings: store.social_settings
+        }}
+        customization={{
+          headerStyle: store.header_style,
+          headerHeight: store.header_height,
+          headerImage: store.header_image,
+          headerGradient: store.header_gradient,
+          headerAlignment: store.header_alignment,
+          headerOverlayOpacity: store.header_overlay_opacity,
+          logoSize: store.logo_size,
+          titleSize: store.title_size,
+          descriptionSize: store.description_size,
+          titleFont: store.title_font,
+          bodyFont: store.body_font,
+          socialSettings: store.social_settings
+        }}
       />
 
-      <main className="container mx-auto px-4 py-8">
-        <div className="mb-8">
+      <main className={containerClass}>
+        <div className="py-8">
           <StoreSearch
             onSearch={handleSearch}
             categories={categories}
@@ -224,17 +278,28 @@ export function Store() {
             </p>
           </div>
         ) : (
-          <div className={`grid gap-6 ${
-            currentView === 'grid' 
-              ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4' 
-              : 'grid-cols-1'
-          }`}>
+          <div 
+            className={`grid ${
+              currentView === 'grid'
+                ? `sm:grid-cols-2 ${
+                    store.grid_columns === '3' ? 'lg:grid-cols-3' :
+                    store.grid_columns === '4' ? 'lg:grid-cols-4' :
+                    store.grid_columns === '5' ? 'lg:grid-cols-5' :
+                    'lg:grid-cols-2'
+                  }`
+                : 'grid-cols-1 gap-4'
+            }`} 
+            style={{
+              gap: currentView === 'grid' ? `${store.grid_gap}px` : '1rem'
+            }}
+          >
             {sortProducts(products).map((product) => (
               <ProductCard
                 key={product.id}
                 product={product}
                 onClick={() => setSelectedProduct(product)}
                 view={currentView}
+                style={store.product_card_style}
               />
             ))}
           </div>
@@ -243,7 +308,7 @@ export function Store() {
 
       {/* Platform Footer */}
       <footer className="bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 py-8 mt-12">
-        <div className="container mx-auto px-4">
+        <div className={containerClass}>
           <div className="flex flex-col items-center justify-center text-center">
             <StoreIcon className="w-8 h-8 text-blue-600 mb-2" />
             <p className="text-gray-600 dark:text-gray-400 mb-4">

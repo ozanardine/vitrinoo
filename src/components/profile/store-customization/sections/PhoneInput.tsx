@@ -1,5 +1,5 @@
 import React from 'react';
-import { countries, formatPhoneNumber, validatePhoneNumber } from '../../../../lib/countries';
+import { countries, formatPhoneNumber } from '../../../../lib/countries';
 
 interface PhoneInputProps {
   value: string;
@@ -71,7 +71,7 @@ const PhoneInput = ({
         className="w-40 p-2 border rounded dark:bg-gray-700 dark:border-gray-600"
       >
         {countries.map((country) => (
-          <option key={country.code} value={country.code}>
+          <option key={`${country.code}-${country.dialCode}`} value={country.code}>
             {country.name} (+{country.dialCode})
           </option>
         ))}

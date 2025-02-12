@@ -54,10 +54,10 @@ export function ProductModal({
     status: product?.status ?? true,
     attributes: product?.attributes || {},
     // Service specific fields
-    duration: product?.duration || '',
+    duration: product?.duration || '01:00',
     availability: product?.availability || { weekdays: [], hours: [] },
     service_location: product?.service_location || '',
-    service_modality: product?.service_modality || ''
+    service_modality: product?.service_modality || null
   });
 
   useEffect(() => {
@@ -138,10 +138,21 @@ export function ProductModal({
         throw new Error(`O plano ${planLimits.name} permite apenas ${planLimits.images_per_product} imagens por produto`);
       }
 
+      // Format duration for services
+      let duration = null;
+      if (productType === 'service' && form.duration) {
+        const [hours, minutes] = form.duration.split(':').map(Number);
+        duration = `${hours} hours ${minutes} minutes`;
+      }
+
+      // Prepare product data
       const productData = {
         ...form,
         store_id: storeId,
         type: productType,
+        duration,
+        // Only include service_modality if it's a service and has a value
+        service_modality: productType === 'service' ? form.service_modality : null,
         variation_attributes: productType === 'variable' ? variationAttributes : [],
         updated_at: new Date().toISOString()
       };
@@ -246,7 +257,8 @@ export function ProductModal({
 
       onSuccess();
     } catch (err: any) {
-      setError(err.message);
+      setError(err.message || 'Erro ao salvar produto. Por favor, tente novamente.');
+      console.error('Erro:', err);
     } finally {
       setLoading(false);
     }
