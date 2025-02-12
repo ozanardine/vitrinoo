@@ -2,172 +2,24 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { rateLimit } from './rateLimit.ts';
 
 const TINY_TOKEN_URL = 'https://accounts.tiny.com.br/realms/tiny/protocol/openid-connect/token';
-const TINY_API_URL = 'https://api.tiny.com.br/public-api/v3';
 const FUNCTION_KEY = Deno.env.get('FUNCTION_KEY');
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': 'https://vitrinoo.netlify.app',
-  'Access-Control-Allow-Methods': 'POST, GET, OPTIONS',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, accept',
   'Access-Control-Max-Age': '86400',
   'Access-Control-Allow-Credentials': 'true'
 };
 
+// Rate limiting configuration
 const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 100
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100 // limit each IP to 100 requests per windowMs
 });
 
-async function handleAPIRequest(url: URL, method: string, token: string, reqBody?: string) {
-  try {
-    const endpoint = url.searchParams.get('endpoint');
-    if (!endpoint) {
-      throw new Error('Endpoint é obrigatório');
-    }
-
-    console.log('Processando requisição para endpoint:', endpoint);
-
-    const decodedEndpoint = decodeURIComponent(endpoint);
-    console.log('Endpoint decodificado:', decodedEndpoint);
-    
-    let [baseEndpoint, queryString] = decodedEndpoint.split('?');
-    const apiUrl = new URL(`${TINY_API_URL}/${baseEndpoint}`);
-    
-    if (queryString) {
-      queryString.split('&').forEach(param => {
-        const [key, value] = param.split('=');
-        if (key && value) {
-          apiUrl.searchParams.append(key, value);
-        }
-      });
-    }
-
-    console.log('URL final da API Tiny:', apiUrl.toString());
-
-    const tinyResponse = await fetch(apiUrl.toString(), {
-      method,
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json',
-        'Accept': 'application/json'
-      },
-      body: method !== 'GET' ? reqBody : undefined
-    });
-
-    console.log('Status da resposta Tiny:', tinyResponse.status);
-    console.log('Headers da resposta:', Object.fromEntries(tinyResponse.headers));
-
-    const responseText = await tinyResponse.text();
-    console.log('Corpo da resposta (primeiros 500 chars):', responseText.slice(0, 500));
-
-    if (!responseText) {
-      throw new Error('Resposta vazia da API do Tiny');
-    }
-
-    let data;
-    try {
-      data = JSON.parse(responseText);
-    } catch (e) {
-      console.error('Erro ao fazer parse do JSON:', e);
-      throw new Error(`Resposta inválida da API do Tiny: ${responseText.slice(0, 100)}...`);
-    }
-
-    // Verificar se a resposta da API do Tiny contém um erro
-    if (data.retorno?.status === 'Erro' || data.retorno?.codigo_erro) {
-      throw new Error(data.retorno?.mensagem || 'Erro desconhecido da API do Tiny');
-    }
-
-    // Verificar se a resposta da API do Tiny está no formato esperado
-    if (!data.retorno?.produtos && !data.retorno?.produto) {
-      console.warn('Resposta inesperada da API:', data);
-      throw new Error('Formato de resposta inesperado da API do Tiny');
-    }
-
-    return new Response(JSON.stringify({
-      data: data.retorno,
-      status: 'success'
-    }), {
-      status: 200,
-      headers: {
-        ...corsHeaders,
-        'Content-Type': 'application/json'
-      }
-    });
-
-  } catch (error: any) {
-    console.error('Erro detalhado:', {
-      message: error.message,
-      stack: error.stack,
-      cause: error.cause
-    });
-
-    return new Response(JSON.stringify({
-      error: error.message,
-      status: 'error',
-      details: error.stack
-    }), {
-      status: error.message.includes('Unauthorized') ? 401 : 500,
-      headers: {
-        ...corsHeaders,
-        'Content-Type': 'application/json'
-      }
-    });
-  }
-}
-
-async function handleTokenRequest(req: Request) {
-  const requestBody = await req.json();
-  const { code, clientId, clientSecret, redirectUri, grantType, refreshToken } = requestBody;
-
-  if (!clientId || !clientSecret) {
-    throw new Error('Client ID e Client Secret são obrigatórios');
-  }
-
-  if (grantType === 'authorization_code' && (!code || !redirectUri)) {
-    throw new Error('Code e Redirect URI são obrigatórios para authorization_code');
-  }
-
-  if (grantType === 'refresh_token' && !refreshToken) {
-    throw new Error('Refresh token é obrigatório para refresh_token');
-  }
-
-  const params = new URLSearchParams();
-  params.append('grant_type', grantType);
-  params.append('client_id', clientId);
-  params.append('client_secret', clientSecret);
-
-  if (grantType === 'authorization_code') {
-    params.append('code', code);
-    params.append('redirect_uri', redirectUri);
-  } else if (grantType === 'refresh_token') {
-    params.append('refresh_token', refreshToken);
-  }
-
-  const response = await fetch(TINY_TOKEN_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-      'Accept': 'application/json'
-    },
-    body: params.toString()
-  });
-
-  const data = await response.json();
-
-  if (!response.ok) {
-    throw new Error(data.error_description || 'Erro na comunicação com o Tiny ERP');
-  }
-
-  return new Response(JSON.stringify(data), {
-    status: 200,
-    headers: {
-      ...corsHeaders,
-      'Content-Type': 'application/json'
-    }
-  });
-}
-
 serve(async (req) => {
+  // Log da requisição recebida
   console.log('Request received:', {
     method: req.method,
     url: req.url,
@@ -176,6 +28,7 @@ serve(async (req) => {
 
   const clientIp = req.headers.get('x-forwarded-for') || 'unknown';
   
+  // Handle CORS preflight requests primeiro
   if (req.method === 'OPTIONS') {
     return new Response(null, { 
       status: 204,
@@ -187,6 +40,7 @@ serve(async (req) => {
     });
   }
 
+  // Apply rate limiting
   try {
     await limiter.check(req, clientIp);
   } catch (error) {
@@ -207,28 +61,103 @@ serve(async (req) => {
   try {
     // Verificar autorização
     const authHeader = req.headers.get('Authorization');
-    if (!authHeader || !authHeader.startsWith('Bearer ') || authHeader.split(' ')[1] !== FUNCTION_KEY) {
+    console.log('Auth header recebido:', authHeader?.substring(0, 20) + '...');
+
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      console.error('Header de autorização inválido');
       throw new Error('Unauthorized');
     }
 
-    const url = new URL(req.url);
-    const reqBody = req.method !== 'GET' ? await req.text() : undefined;
+    const token = authHeader.split(' ')[1];
+    console.log('Token extraído:', token.substring(0, 20) + '...');
 
-    // Se não tiver token nos parâmetros, é uma requisição de token
-    const token = url.searchParams.get('token');
-    if (!token) {
-      return handleTokenRequest(new Request(req.url, {
-        method: req.method,
-        headers: req.headers,
-        body: reqBody
-      }));
+    if (token !== FUNCTION_KEY) {
+      console.error('Token não corresponde à chave da função');
+      throw new Error('Unauthorized');
     }
 
-    // Se tiver token, é uma requisição para a API
-    return await handleAPIRequest(url, req.method, token, reqBody);
+    // Parse request body
+    let requestBody;
+    try {
+      requestBody = await req.json();
+      console.log('Request body parsed successfully');
+    } catch (e) {
+      console.error('Error parsing request body:', e);
+      throw new Error('Invalid request body');
+    }
 
+    const { code, clientId, clientSecret, redirectUri, grantType, refreshToken } = requestBody;
+
+    console.log(`Processing ${grantType} request for client ${clientId}`);
+
+    // Validação de parâmetros obrigatórios
+    if (!clientId || !clientSecret) {
+      throw new Error('Client ID e Client Secret são obrigatórios');
+    }
+
+    if (grantType === 'authorization_code' && (!code || !redirectUri)) {
+      throw new Error('Code e Redirect URI são obrigatórios para authorization_code');
+    }
+
+    if (grantType === 'refresh_token' && !refreshToken) {
+      throw new Error('Refresh token é obrigatório para refresh_token');
+    }
+
+    // Prepare parameters based on grant type
+    const params = new URLSearchParams();
+    params.append('grant_type', grantType);
+    params.append('client_id', clientId);
+    params.append('client_secret', clientSecret);
+
+    if (grantType === 'authorization_code') {
+      params.append('code', code);
+      params.append('redirect_uri', redirectUri);
+    } else if (grantType === 'refresh_token') {
+      params.append('refresh_token', refreshToken);
+    }
+
+    console.log('Making request to Tiny API');
+
+    // Make request to Tiny
+    const response = await fetch(TINY_TOKEN_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Accept': 'application/json'
+      },
+      body: params.toString()
+    });
+
+    console.log('Tiny API response status:', response.status);
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      console.error('Tiny API error:', {
+        status: response.status,
+        statusText: response.statusText,
+        error: data
+      });
+      throw new Error(data.error_description || 'Erro na comunicação com o Tiny ERP');
+    }
+
+    // Log success (sem dados sensíveis)
+    console.log(`Successfully processed ${grantType} request for client ${clientId}`);
+
+    // Return response with appropriate CORS headers
+    return new Response(JSON.stringify(data), {
+      status: 200,
+      headers: {
+        ...corsHeaders,
+        'Content-Type': 'application/json'
+      }
+    });
   } catch (error) {
-    console.error('Function error:', error);
+    console.error('Function error:', {
+      name: error.name,
+      message: error.message,
+      stack: error.stack
+    });
     
     return new Response(
       JSON.stringify({ 

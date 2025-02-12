@@ -122,11 +122,11 @@ export function formatPhoneNumber(value: string, country: Country): string {
 
   // Aplica a máscara do país
   let format = country.format;
-  let result = `+${country.dialCode}`;
+  let result = '';
   let numberIndex = 0;
 
   // Para cada caractere no formato
-  for (let i = country.dialCode.length + 1; i < format.length && numberIndex < numbers.length; i++) {
+  for (let i = 0; i < format.length && numberIndex < numbers.length; i++) {
     if (format[i] === '#') {
       result += numbers[numberIndex];
       numberIndex++;
@@ -140,6 +140,22 @@ export function formatPhoneNumber(value: string, country: Country): string {
   }
 
   return result;
+}
+
+export function validatePhoneNumber(value: string, country: Country): boolean {
+  // Remove tudo que não for número
+  const numbers = value.replace(/\D/g, '');
+  
+  // Verifica se tem o número mínimo de dígitos para o país
+  const minLength = country.format.split('#').length - 1;
+  const maxLength = minLength + 2; // Permite até 2 dígitos extras para flexibilidade
+  
+  return numbers.length >= minLength && numbers.length <= maxLength;
+}
+
+export function getPhoneNumberDisplay(value: string, country: Country): string {
+  const formattedNumber = formatPhoneNumber(value, country);
+  return `${country.name} (+${country.dialCode}) ${formattedNumber}`;
 }
 
 export function parsePhoneNumber(formattedNumber: string): { countryCode: string; number: string } | null {

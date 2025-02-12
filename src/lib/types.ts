@@ -41,4 +41,8 @@ export interface Store {
   product_limit: number;
   categories_count: number;
   category_limit: number;
+  social_settings?: {
+    contacts_position: 'above' | 'below';
+    display_format: 'username' | 'network';
+  };
 }
