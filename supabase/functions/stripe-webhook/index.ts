@@ -1,12 +1,7 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
+import { corsHeaders } from '../_shared/cors.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.7';
 import Stripe from 'https://esm.sh/stripe@13.11.0';
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, stripe-signature',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS'
-};
 
 // Configuração do Stripe
 const stripe = new Stripe(Deno.env.get('STRIPE_SECRET_KEY') || '', {
@@ -36,6 +31,8 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey, {
 });
 
 serve(async (req: Request) => {
+  // Bypass Supabase auth for webhook
+  req.headers.set('Authorization', `Bearer ${supabaseServiceKey}`);
   // Log da requisição
   console.log('Webhook request received:', {
     method: req.method,
