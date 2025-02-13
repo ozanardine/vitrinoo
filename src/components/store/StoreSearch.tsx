@@ -172,27 +172,18 @@ export function StoreSearch({ onSearch, categories, brands, tags }: StoreSearchP
   // Build category tree once when component mounts
   const categoryTree = useMemo(() => buildCategoryTree(categories), [categories]);
 
-  const handleSearchInput = (term: string) => {
-    const searchValue = term ?? searchTerm;
-    setSearchTerm(searchValue);
-    
-    const newFilters = {
-      ...filters,
-      search: searchValue
-    };
-    setFilters(newFilters);
-    // Save filters to localStorage
-    localStorage.setItem('store_search_filters', JSON.stringify(newFilters));
-    debouncedSearch(newFilters);
-  };
-
-  // Update filters in real-time
   const updateFilters = (updates: Partial<SearchFilters>) => {
     const newFilters = { ...filters, ...updates };
     setFilters(newFilters);
     // Save filters to localStorage
     localStorage.setItem('store_search_filters', JSON.stringify(newFilters));
     debouncedSearch(newFilters);
+  };
+
+  const handleSearchInput = (term: string) => {
+    const searchValue = term ?? searchTerm;
+    setSearchTerm(searchValue);
+    updateFilters({ search: searchValue });
   };
 
   const clearFilters = () => {
@@ -278,11 +269,7 @@ export function StoreSearch({ onSearch, categories, brands, tags }: StoreSearchP
               <Package className="w-4 h-4" />
               {categories.find(c => c.id === filters.categoryId)?.name}
               <button
-                onClick={() => setFilters({
-                  ...filters,
-                  categoryId: null,
-                })}
-                onClickCapture={() => updateFilters({ categoryId: null })}
+                onClick={() => updateFilters({ categoryId: null })}
                 className="ml-1 hover:text-blue-800 dark:hover:text-blue-200"
               >
                 <X className="w-4 h-4" />
@@ -294,11 +281,7 @@ export function StoreSearch({ onSearch, categories, brands, tags }: StoreSearchP
               <Star className="w-4 h-4" />
               {filters.brand}
               <button
-                onClick={() => setFilters({
-                  ...filters,
-                  brand: null,
-                })}
-                onClickCapture={() => updateFilters({ brand: null })}
+                onClick={() => updateFilters({ brand: null })}
                 className="ml-1 hover:text-green-800 dark:hover:text-green-200"
               >
                 <X className="w-4 h-4" />
@@ -313,11 +296,7 @@ export function StoreSearch({ onSearch, categories, brands, tags }: StoreSearchP
               <Tag className="w-4 h-4" />
               {tag}
               <button
-                onClick={() => setFilters({
-                  ...filters,
-                  selectedTags: filters.selectedTags.filter(t => t !== tag)
-                })}
-                onClickCapture={() => updateFilters({
+                onClick={() => updateFilters({
                   selectedTags: filters.selectedTags.filter(t => t !== tag)
                 })}
                 className="ml-1 hover:text-purple-800 dark:hover:text-purple-200"
@@ -336,12 +315,7 @@ export function StoreSearch({ onSearch, categories, brands, tags }: StoreSearchP
                 : `Até R$ ${filters.maxPrice}`
               }
               <button
-                onClick={() => setFilters({
-                  ...filters,
-                  minPrice: null, 
-                  maxPrice: null,
-                })}
-                onClickCapture={() => updateFilters({ minPrice: null, maxPrice: null })}
+                onClick={() => updateFilters({ minPrice: null, maxPrice: null })}
                 className="ml-1 hover:text-yellow-800 dark:hover:text-yellow-200"
               >
                 <X className="w-4 h-4" />
@@ -353,11 +327,7 @@ export function StoreSearch({ onSearch, categories, brands, tags }: StoreSearchP
               <DollarSign className="w-4 h-4" />
               Em promoção
               <button
-                onClick={() => setFilters({
-                  ...filters,
-                  hasPromotion: null,
-                })}
-                onClickCapture={() => updateFilters({ hasPromotion: null })}
+                onClick={() => updateFilters({ hasPromotion: null })}
                 className="ml-1 hover:text-red-800 dark:hover:text-red-200"
               >
                 <X className="w-4 h-4" />
@@ -387,7 +357,7 @@ export function StoreSearch({ onSearch, categories, brands, tags }: StoreSearchP
                 <CategoryTree
                   categories={categoryTree}
                   selectedId={filters.categoryId}
-                  onSelect={(id) => setFilters({ ...filters, categoryId: id })}
+                  onSelect={(id) => updateFilters({ categoryId: id })}
                 />
               )}
             </div>
@@ -405,10 +375,12 @@ export function StoreSearch({ onSearch, categories, brands, tags }: StoreSearchP
                   <span className="absolute left-3 top-2 text-gray-500">R$</span>
                   <input
                     type="number"
-                    value={filters.minPrice || ''}
+                    value={filters.minPrice ?? ''}
                     onChange={(e) => {
-                      const value = e.target.value ? Number(e.target.value) : null;
-                      updateFilters({ minPrice: value });
+                      const value = e.target.value === '' ? null : Number(e.target.value);
+                      if (value === null || !isNaN(value)) {
+                        updateFilters({ minPrice: value });
+                      }
                     }}
                     placeholder="Mínimo"
                     className="w-full pl-10 p-2 border rounded dark:bg-gray-700 dark:border-gray-600"
@@ -421,10 +393,12 @@ export function StoreSearch({ onSearch, categories, brands, tags }: StoreSearchP
                   <span className="absolute left-3 top-2 text-gray-500">R$</span>
                   <input
                     type="number"
-                    value={filters.maxPrice || ''}
+                    value={filters.maxPrice ?? ''}
                     onChange={(e) => {
-                      const value = e.target.value ? Number(e.target.value) : null;
-                      updateFilters({ maxPrice: value });
+                      const value = e.target.value === '' ? null : Number(e.target.value);
+                      if (value === null || !isNaN(value)) {
+                        updateFilters({ maxPrice: value });
+                      }
                     }}
                     placeholder="Máximo"
                     className="w-full pl-10 p-2 border rounded dark:bg-gray-700 dark:border-gray-600"
