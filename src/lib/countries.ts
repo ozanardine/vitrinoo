@@ -116,37 +116,19 @@ export async function fetchCountries(): Promise<Country[]> {
 export function formatPhoneNumber(value: string, country: Country): string {
   // Remove tudo que não for número
   const numbers = value.replace(/\D/g, '');
-  
-  // Se não tiver números, retorna vazio
-  if (!numbers) return '';
-
-  // Garante que o número não comece com o código do país
-  const numberWithoutCountryCode = numbers.startsWith(country.dialCode) 
-    ? numbers.slice(country.dialCode.length)
-    : numbers;
 
   // Aplica a máscara do país
   let format = country.format;
   let result = '';
   let numberIndex = 0;
 
-  // Para cada caractere no formato
-  for (let i = 0; i < format.length && numberIndex < numberWithoutCountryCode.length; i++) {
+  for (let i = 0; i < format.length && numberIndex < numbers.length; i++) {
     if (format[i] === '#') {
-      result += numberWithoutCountryCode[numberIndex];
+      result += numbers[numberIndex];
       numberIndex++;
     } else {
       result += format[i];
-      // Se ainda tiver números, adiciona o próximo separador
-      if (numberIndex < numberWithoutCountryCode.length) {
-        format = format.substring(0, i + 1) + format.substring(i + 1);
-      }
     }
-  }
-
-  // Garante que o resultado sempre comece com o código do país
-  if (!result.startsWith('+')) {
-    result = `+${country.dialCode}${result.startsWith(' ') ? '' : ' '}${result}`;
   }
 
   return result;

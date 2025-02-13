@@ -39,11 +39,8 @@ const PhoneInput = ({
     // Remove tudo que não for número
     const numericValue = extractNumbersOnly(inputValue);
     
-    // Remove o código do país se presente
-    const valueWithoutCountryCode = removeCountryCode(numericValue, selectedCountry.dialCode);
-    
-    // Formata o número mantendo o código do país
-    const formattedValue = formatPhoneNumber(valueWithoutCountryCode, selectedCountry);
+    // Formata o número
+    const formattedValue = formatPhoneNumber(numericValue, selectedCountry);
     
     onChange(formattedValue);
   };
@@ -52,12 +49,8 @@ const PhoneInput = ({
     const newCountryCode = e.target.value;
     const newCountry = countries.find(c => c.code === newCountryCode) || countries[0];
     
-    // Remove a formatação atual e o código do país antigo
-    const numericValue = extractNumbersOnly(value);
-    const valueWithoutCountryCode = removeCountryCode(numericValue, selectedCountry.dialCode);
-    
     // Formata com o novo padrão do país
-    const formattedValue = formatPhoneNumber(valueWithoutCountryCode, newCountry);
+    const formattedValue = formatPhoneNumber('', newCountry);
     
     onCountryChange(newCountryCode);
     onChange(formattedValue);

@@ -7,6 +7,7 @@ interface StoreSearchProps {
   categories: Category[];
   brands: string[];
   tags: string[];
+  searchResults?: any[]; // Assuming the search results are an array of products
 }
 
 export interface SearchFilters {
@@ -136,7 +137,7 @@ const CategoryTree = ({
   );
 };
 
-export function StoreSearch({ onSearch, categories, brands, tags }: StoreSearchProps) {
+export function StoreSearch({ onSearch, categories, brands, tags, searchResults }: StoreSearchProps) {
   const [showFilters, setShowFilters] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const searchRef = useRef<HTMLDivElement>(null);
@@ -472,6 +473,13 @@ export function StoreSearch({ onSearch, categories, brands, tags }: StoreSearchP
               ))}
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Display "No products found" message */}
+      {searchResults && searchResults.length === 0 && (
+        <div className="text-center text-gray-500 dark:text-gray-400">
+          Nenhum produto encontrado.
         </div>
       )}
     </div>
