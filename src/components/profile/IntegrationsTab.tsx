@@ -104,9 +104,6 @@ export function IntegrationsTab({ store }: IntegrationsTabProps) {
           <button className="px-4 py-2 bg-yellow-600 hover:bg-yellow-700 text-white rounded-lg">
             Fazer Upgrade
           </button>
-          <button className="px-4 py-2 border border-yellow-600 text-yellow-600 hover:bg-yellow-50 dark:hover:bg-yellow-900/20 rounded-lg">
-            Receber Notificação
-          </button>
         </div>
       </div>
     );
@@ -114,29 +111,6 @@ export function IntegrationsTab({ store }: IntegrationsTabProps) {
 
   return (
     <div className="space-y-8">
-      <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-6">
-        <h3 className="text-lg font-semibold text-yellow-800 dark:text-yellow-200 mb-2">
-          Integrações em Desenvolvimento
-        </h3>
-        <p className="text-yellow-700 dark:text-yellow-300 mb-4">
-          Nossas integrações com ERPs estão em fase final de desenvolvimento. 
-          Como assinante Plus, você terá acesso prioritário assim que forem lançadas.
-        </p>
-        <div className="space-y-3">
-          <div className="flex items-center gap-2 text-yellow-700 dark:text-yellow-300">
-            <ArrowRight className="w-5 h-5" />
-            <span>Tiny ERP - Lançamento em Março/2024</span>
-          </div>
-          <div className="flex items-center gap-2 text-yellow-700 dark:text-yellow-300">
-            <ArrowRight className="w-5 h-5" />
-            <span>Bling - Lançamento em Abril/2024</span>
-          </div>
-          <div className="flex items-center gap-2 text-yellow-700 dark:text-yellow-300">
-            <ArrowRight className="w-5 h-5" />
-            <span>Conta Azul - Lançamento em Maio/2024</span>
-          </div>
-        </div>
-      </div>
 
       {alert && (
         <div className={`p-4 rounded-lg flex items-center space-x-2 ${
@@ -171,28 +145,23 @@ export function IntegrationsTab({ store }: IntegrationsTabProps) {
             Em Desenvolvimento
           </h4>
           <p className="text-yellow-700 dark:text-yellow-300 mb-6">
-            Nossas integrações com ERPs estão em fase final de desenvolvimento.
+            Nossas integrações com ERPs estão em fase de desenvolvimento.
             Como assinante Plus, você terá acesso prioritário assim que forem lançadas.
           </p>
           <div className="space-y-4">
             <div className="flex items-center gap-2 text-yellow-700 dark:text-yellow-300">
               <ArrowRight className="w-5 h-5" />
-              <span>Tiny ERP - Lançamento em Março/2024</span>
+              <span>Olist ERP - Sem previsão</span>
             </div>
             <div className="flex items-center gap-2 text-yellow-700 dark:text-yellow-300">
               <ArrowRight className="w-5 h-5" />
-              <span>Bling - Lançamento em Abril/2024</span>
+              <span>Bling - Sem previsão</span>
             </div>
             <div className="flex items-center gap-2 text-yellow-700 dark:text-yellow-300">
               <ArrowRight className="w-5 h-5" />
-              <span>Conta Azul - Lançamento em Maio/2024</span>
+              <span>Conta Azul - Sem previsão</span>
             </div>
           </div>
-          <button
-            className="mt-6 px-4 py-2 bg-yellow-600 hover:bg-yellow-700 text-white rounded-lg"
-          >
-            Receber Notificação
-          </button>
         </div>
       </div>
     </div>

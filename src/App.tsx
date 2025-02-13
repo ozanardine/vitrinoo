@@ -248,7 +248,7 @@ function App() {
                 <ul className="space-y-4">
                   <li className="flex items-center gap-2">
                     <ArrowRight className="w-5 h-5 text-blue-500" />
-                    <span>Tiny ERP - Sem previsão</span>
+                    <span>Olist ERP - Sem previsão</span>
                   </li>
                 </ul>
               </div>
