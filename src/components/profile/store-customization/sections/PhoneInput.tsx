@@ -22,20 +22,28 @@ const PhoneInput = ({
 }: PhoneInputProps) => {
   const selectedCountry = countries.find(c => c.code === countryCode) || countries[0];
 
+  const extractNumbersOnly = (input: string): string => {
+    return input.replace(/\D/g, '');
+  };
+
+  const removeCountryCode = (number: string, countryDialCode: string): string => {
+    if (number.startsWith(countryDialCode)) {
+      return number.slice(countryDialCode.length);
+    }
+    return number;
+  };
+
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const inputValue = e.target.value;
     
-    // Remove o prefixo do input se presente
-    const prefixToRemove = `+${selectedCountry.dialCode}`;
-    const valueWithoutPrefix = inputValue.startsWith(prefixToRemove) 
-      ? inputValue.slice(prefixToRemove.length) 
-      : inputValue;
-    
     // Remove tudo que não for número
-    let numericValue = valueWithoutPrefix.replace(/\D/g, '');
+    const numericValue = extractNumbersOnly(inputValue);
     
-    // Formata o número conforme o padrão do país
-    const formattedValue = formatPhoneNumber(numericValue, selectedCountry);
+    // Remove o código do país se presente
+    const valueWithoutCountryCode = removeCountryCode(numericValue, selectedCountry.dialCode);
+    
+    // Formata o número mantendo o código do país
+    const formattedValue = formatPhoneNumber(valueWithoutCountryCode, selectedCountry);
     
     onChange(formattedValue);
   };
@@ -44,27 +52,22 @@ const PhoneInput = ({
     const newCountryCode = e.target.value;
     const newCountry = countries.find(c => c.code === newCountryCode) || countries[0];
     
-    // Remove a formatação atual
-    const numericValue = value.replace(/\D/g, '');
-    
-    // Remove o código do país antigo se presente
-    const prefixToRemove = selectedCountry.dialCode;
-    const valueWithoutOldCode = numericValue.startsWith(prefixToRemove) 
-      ? numericValue.slice(prefixToRemove.length)
-      : numericValue;
+    // Remove a formatação atual e o código do país antigo
+    const numericValue = extractNumbersOnly(value);
+    const valueWithoutCountryCode = removeCountryCode(numericValue, selectedCountry.dialCode);
     
     // Formata com o novo padrão do país
-    const formattedValue = formatPhoneNumber(valueWithoutOldCode, newCountry);
+    const formattedValue = formatPhoneNumber(valueWithoutCountryCode, newCountry);
     
     onCountryChange(newCountryCode);
     onChange(formattedValue);
   };
 
   // Prepara o valor para exibição no input
-  const displayValue = value;
+  const displayValue = value.replace(new RegExp(`^\\+${selectedCountry.dialCode}\\s*`), '').trim();
 
   return (
-    <div className="flex gap-2 relative">
+    <div className="flex gap-2">
       <select
         value={countryCode}
         onChange={handleCountryChange}
@@ -77,18 +80,20 @@ const PhoneInput = ({
         ))}
       </select>
       <div className="flex-1 relative">
-        <input
-          type="tel"
-          value={displayValue}
-          onChange={handleInputChange}
-          placeholder={placeholder}
-          className={`w-full p-2 pl-14 border rounded dark:bg-gray-700 dark:border-gray-600 ${
-            error ? 'border-red-500' : ''
-          } ${className}`}
-        />
-        <span className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-500">
-          +{selectedCountry.dialCode}
-        </span>
+        <div className="flex items-center">
+          <span className="absolute left-2 z-10 text-gray-500 select-none bg-transparent">
+            +{selectedCountry.dialCode}
+          </span>
+          <input
+            type="tel"
+            value={displayValue}
+            onChange={handleInputChange}
+            placeholder={placeholder}
+            className={`w-full p-2 pl-[calc(${selectedCountry.dialCode.length}ch+2ch)] border rounded dark:bg-gray-700 dark:border-gray-600 ${
+              error ? 'border-red-500' : ''
+            } ${className}`}
+          />
+        </div>
       </div>
     </div>
   );
