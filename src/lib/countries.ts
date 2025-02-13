@@ -1,4 +1,5 @@
 import { Phone, Instagram, Facebook, Twitter, Youtube, Linkedin, MessageCircle, Mail, Globe, GitBranch as BrandTiktok } from 'lucide-react';
+import { getCountryCallingCode, AsYouType, CountryCode } from 'libphonenumber-js'
 
 // List of countries with calling codes
 export interface Country {
@@ -6,7 +7,6 @@ export interface Country {
   code: string;
   dialCode: string;
   format: string;
-  priority?: number;
 }
 
 // Default countries list
@@ -15,68 +15,21 @@ export const defaultCountries: Country[] = [
     name: 'Brasil',
     code: 'BR',
     dialCode: '55',
-    format: '+## (##) #####-####',
-    priority: 1
+    format: '(##) #####-####'
   },
   {
     name: 'Portugal',
     code: 'PT',
     dialCode: '351',
-    format: '+### ### ### ###'
+    format: '### ### ###'
   },
   {
     name: 'Estados Unidos',
     code: 'US',
     dialCode: '1',
-    format: '+# (###) ###-####'
-  },
-  {
-    name: 'Argentina',
-    code: 'AR',
-    dialCode: '54',
-    format: '+## (##) ####-####'
-  },
-  {
-    name: 'Chile',
-    code: 'CL',
-    dialCode: '56',
-    format: '+## # #### ####'
-  },
-  {
-    name: 'Colômbia',
-    code: 'CO',
-    dialCode: '57',
-    format: '+## ### ### ####'
-  },
-  {
-    name: 'México',
-    code: 'MX',
-    dialCode: '52',
-    format: '+## (##) #### ####'
-  },
-  {
-    name: 'Peru',
-    code: 'PE',
-    dialCode: '51',
-    format: '+## ### ### ###'
-  },
-  {
-    name: 'Uruguai',
-    code: 'UY',
-    dialCode: '598',
-    format: '+### #### ####'
-  },
-  {
-    name: 'Paraguai',
-    code: 'PY',
-    dialCode: '595',
-    format: '+### (###) ### ###'
+    format: '(###) ###-####'
   }
-].sort((a, b) => {
-  if (a.priority && !b.priority) return -1;
-  if (!a.priority && b.priority) return 1;
-  return a.name.localeCompare(b.name);
-});
+];
 
 // Export countries as the default list initially
 export const countries = [...defaultCountries];
@@ -84,28 +37,20 @@ export const countries = [...defaultCountries];
 // Fetch countries from REST Countries API
 export async function fetchCountries(): Promise<Country[]> {
   try {
-    const response = await fetch('https://restcountries.com/v3.1/all?fields=name,idd');
+    const response = await fetch('https://restcountries.com/v3.1/all?fields=name,cca2,idd');
     const data = await response.json();
-    
-    const fetchedCountries = data
-      .filter((country: any) => country.idd.root && country.idd.suffixes)
-      .map((country: any) => ({
-        name: country.name.common,
-        code: country.cca2,
-        dialCode: country.idd.root.replace('+', '') + country.idd.suffixes[0],
-        format: `+${country.idd.root.replace('+', '')}${country.idd.suffixes[0]} ### ### ###`,
-        priority: country.cca2 === 'BR' ? 1 : undefined
-      }))
-      .sort((a: Country, b: Country) => {
-        if (a.priority && !b.priority) return -1;
-        if (!a.priority && b.priority) return 1;
-        return a.name.localeCompare(b.name);
-      });
+
+    const fetchedCountries = data.map((country: any) => ({
+      name: country.name.common,
+      code: country.cca2,
+      dialCode: country.idd.root.replace('+', '') + (country.idd.suffixes ? country.idd.suffixes[0] : ''),
+      format: '' // Placeholder for format
+    }));
 
     // Update the countries array with fetched data
     countries.length = 0;
     countries.push(...fetchedCountries);
-    
+
     return countries;
   } catch (error) {
     console.error('Error fetching countries:', error);
@@ -114,24 +59,8 @@ export async function fetchCountries(): Promise<Country[]> {
 }
 
 export function formatPhoneNumber(value: string, country: Country): string {
-  // Remove tudo que não for número
-  const numbers = value.replace(/\D/g, '');
-
-  // Aplica a máscara do país
-  let format = country.format;
-  let result = '';
-  let numberIndex = 0;
-
-  for (let i = 0; i < format.length && numberIndex < numbers.length; i++) {
-    if (format[i] === '#') {
-      result += numbers[numberIndex];
-      numberIndex++;
-    } else {
-      result += format[i];
-    }
-  }
-
-  return result;
+  const formatter = new AsYouType(country.code as CountryCode)
+  return formatter.input(value)
 }
 
 export function validatePhoneNumber(value: string, country: Country): boolean {
@@ -146,8 +75,7 @@ export function validatePhoneNumber(value: string, country: Country): boolean {
 }
 
 export function getPhoneNumberDisplay(value: string, country: Country): string {
-  const formattedNumber = formatPhoneNumber(value, country);
-  return `${country.name} (+${country.dialCode}) ${formattedNumber}`;
+  return `(+${country.dialCode}) ${value}`;
 }
 
 export function parsePhoneNumber(formattedNumber: string): { countryCode: string; number: string } | null {
