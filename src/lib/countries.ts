@@ -6,7 +6,7 @@ export interface Country {
   name: string;
   code: string;
   dialCode: string;
-  format: string;
+  format?: string;
 }
 
 // Default countries list
@@ -32,7 +32,7 @@ export const defaultCountries: Country[] = [
 ];
 
 // Export countries as the default list initially
-export const countries = [...defaultCountries];
+export let countries: Country[] = [...defaultCountries];
 
 // Fetch countries from REST Countries API
 export async function fetchCountries(): Promise<Country[]> {
@@ -48,8 +48,7 @@ export async function fetchCountries(): Promise<Country[]> {
     }));
 
     // Update the countries array with fetched data
-    countries.length = 0;
-    countries.push(...fetchedCountries);
+    countries = fetchedCountries;
 
     return countries;
   } catch (error) {
@@ -68,7 +67,7 @@ export function validatePhoneNumber(value: string, country: Country): boolean {
   const numbers = value.replace(/\D/g, '');
   
   // Verifica se tem o número mínimo de dígitos para o país
-  const minLength = country.format.split('#').length - 1;
+  const minLength = (country.format || '').split('#').length - 1;
   const maxLength = minLength + 2; // Permite até 2 dígitos extras para flexibilidade
   
   return numbers.length >= minLength && numbers.length <= maxLength;
