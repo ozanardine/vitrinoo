@@ -207,20 +207,6 @@ export function Store() {
           bodyFont: store.body_font,
           socialSettings: store.social_settings
         }}
-        customization={{
-          headerStyle: store.header_style,
-          headerHeight: store.header_height,
-          headerImage: store.header_image,
-          headerGradient: store.header_gradient,
-          headerAlignment: store.header_alignment,
-          headerOverlayOpacity: store.header_overlay_opacity,
-          logoSize: store.logo_size,
-          titleSize: store.title_size,
-          descriptionSize: store.description_size,
-          titleFont: store.title_font,
-          bodyFont: store.body_font,
-          socialSettings: store.social_settings
-        }}
       />
 
       <main className={containerClass}>
