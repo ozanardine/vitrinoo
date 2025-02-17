@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { 
   Phone, Mail, MessageCircle, Instagram, Facebook, 
   Youtube, Store as TikTok, Twitter, Link2 
@@ -6,39 +6,49 @@ import {
 import { generateHeaderStyles } from '../../lib/colors';
 import { generateSocialUrl } from '../../lib/constants';
 
+interface HeaderVisibility {
+  logo: boolean;
+  title: boolean;
+  description: boolean;
+  socialLinks: boolean;
+}
+
+interface SocialSettings {
+  contactsPosition: 'above' | 'below';
+  displayFormat: 'username' | 'network';
+}
+
+interface CustomGradient {
+  colors: string[];
+  direction: string;
+}
+
 interface StoreHeaderProps {
   name: string;
   description: string | null;
   logoUrl: string | null;
   primaryColor: string;
   secondaryColor: string;
+  accentColor?: string;
   socialLinks: Array<{
     type: string;
     url: string;
     countryCode?: string;
   }>;
-  customization?: {
-    headerStyle?: 'solid' | 'gradient' | 'image';
-    headerHeight?: string;
-    headerImage?: string;
-    headerGradient?: string;
-    headerAlignment?: 'left' | 'center' | 'right';
-    headerOverlayOpacity?: string;
-    headerVisibility?: {
-      logo?: boolean;
-      title?: boolean;
-      description?: boolean;
-      socialLinks?: boolean;
-    };
-    logoSize?: string;
-    titleSize?: string;
-    descriptionSize?: string;
-    titleFont?: string;
-    bodyFont?: string;
-    socialSettings?: {
-      contactsPosition: 'above' | 'below';
-      displayFormat: 'username' | 'network';
-    };
+  customization: {
+    headerStyle: 'solid' | 'gradient' | 'image';
+    headerHeight: string;
+    headerImage: string | null;
+    headerGradient?: CustomGradient;
+    headerAlignment: 'left' | 'center' | 'right';
+    headerOverlayOpacity: string;
+    headerVisibility: HeaderVisibility;
+    logoSize: string;
+    titleSize: string;
+    descriptionSize: string;
+    titleFont: string;
+    bodyFont: string;
+    socialSettings: SocialSettings;
   };
 }
 
@@ -53,7 +63,7 @@ const SOCIAL_ICONS = {
   tiktok: TikTok,
   twitter: Twitter,
   website: Link2
-};
+} as const;
 
 const SOCIAL_NAMES = {
   phone: 'Telefone',
@@ -66,7 +76,7 @@ const SOCIAL_NAMES = {
   tiktok: 'TikTok',
   twitter: 'Twitter',
   website: 'Website'
-};
+} as const;
 
 export function StoreHeader({
   name,
@@ -74,102 +84,136 @@ export function StoreHeader({
   logoUrl,
   primaryColor,
   secondaryColor,
+  accentColor = '#3B82F6',
   socialLinks,
-  customization = {}
+  customization
 }: StoreHeaderProps) {
-  const {
-    headerStyle = 'solid',
-    headerHeight = '400px',
-    headerImage = '',
-    headerGradient = 'to bottom',
-    headerAlignment = 'center',
-    headerOverlayOpacity = '50',
-    headerVisibility = {
-      logo: true,
-      title: true,
-      description: true,
-      socialLinks: true
-    },
-    logoSize = '160px',
-    titleSize = '48px',
-    descriptionSize = '18px',
-    titleFont = 'sans',
-    bodyFont = 'sans',
-    socialSettings = {
-      contactsPosition: 'above',
-      displayFormat: 'username'
-    }
-  } = customization;
+  // Memoize header styles
+  const headerStyles = useMemo(() => {
+    const baseStyles = generateHeaderStyles(
+      primaryColor, 
+      secondaryColor, 
+      customization.headerStyle,
+      customization.headerGradient?.direction || 'to bottom'
+    );
 
-  // Generate base styles
-  const baseStyles = generateHeaderStyles(primaryColor, secondaryColor, headerStyle, headerGradient);
+    return {
+      ...baseStyles,
+      minHeight: customization.headerHeight,
+      ...(customization.headerStyle === 'image' && {
+        backgroundImage: `url(${customization.headerImage})`,
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+        position: 'relative' as const,
+        backgroundRepeat: 'no-repeat'
+      })
+    };
+  }, [
+    primaryColor,
+    secondaryColor,
+    customization.headerStyle,
+    customization.headerGradient,
+    customization.headerHeight,
+    customization.headerImage
+  ]);
 
-  // Create header styles
-  const headerStyles = {
-    ...baseStyles,
-    minHeight: headerHeight,
-    ...(headerStyle === 'image' && {
-      backgroundImage: `url(${headerImage})`,
-      backgroundSize: 'cover',
-      backgroundPosition: 'center',
-      position: 'relative' as const
-    })
+  // Memoize overlay styles
+  const overlayStyles = useMemo(() => {
+    if (customization.headerStyle !== 'image') return {};
+
+    return {
+      position: 'absolute' as const,
+      inset: 0,
+      backgroundColor: 'black',
+      opacity: Number(customization.headerOverlayOpacity) / 100,
+      zIndex: 1,
+      transition: 'opacity 0.3s ease-in-out'
+    };
+  }, [customization.headerStyle, customization.headerOverlayOpacity]);
+
+  // Memoize content styles
+  const contentStyles = useMemo(() => {
+    const alignmentMap = {
+      left: 'flex-start',
+      center: 'center',
+      right: 'flex-end'
+    };
+
+    return {
+      textAlign: customization.headerAlignment as any,
+      alignItems: alignmentMap[customization.headerAlignment],
+      position: 'relative' as const,
+      zIndex: 2,
+      transition: 'all 0.3s ease-in-out'
+    };
+  }, [customization.headerAlignment]);
+
+  // Filter and sort social links
+  const { contactInfo, socialMediaLinks } = useMemo(() => {
+    const contacts = socialLinks.filter(link => 
+      link.type === 'phone' || link.type === 'email'
+    );
+    const socials = socialLinks.filter(link => 
+      !['phone', 'email'].includes(link.type)
+    );
+
+    return {
+      contactInfo: contacts,
+      socialMediaLinks: socials
+    };
+  }, [socialLinks]);
+
+  // Handle image loading error
+  const handleLogoError = (e: React.SyntheticEvent<HTMLImageElement>) => {
+    e.currentTarget.src = '/api/placeholder/400/400';
+    e.currentTarget.alt = 'Logo não disponível';
   };
 
-  // Create overlay styles for image background
-  const overlayStyles = headerStyle === 'image' ? {
-    position: 'absolute' as const,
-    inset: 0,
-    backgroundColor: 'black',
-    opacity: Number(headerOverlayOpacity) / 100,
-    zIndex: 1
-  } : {};
+  // Render contact information
+  const renderContactInfo = () => {
+    if (!contactInfo.length) return null;
 
-  // Create content styles
-  const contentStyles = {
-    textAlign: headerAlignment as any,
-    ...(headerAlignment === 'left' ? { alignItems: 'flex-start' } : 
-       headerAlignment === 'right' ? { alignItems: 'flex-end' } : 
-       { alignItems: 'center' }),
-    position: 'relative' as const,
-    zIndex: 2
-  };
-
-  // Separate contact info from social links
-  const contactInfo = socialLinks.filter(link => link.type === 'phone' || link.type === 'email');
-  const socialMediaLinks = socialLinks.filter(link => !['phone', 'email'].includes(link.type));
-
-  const renderContactInfo = () => (
-    contactInfo.length > 0 && (
-      <div className="text-center mb-2">
+    return (
+      <div className="text-center mb-2 transition-opacity duration-300">
         {contactInfo.map((link, index) => (
           <React.Fragment key={`${link.type}-${index}`}>
             {link.type === 'email' ? (
               <a 
                 href={`mailto:${link.url}`}
-                className="hover:underline"
+                className="hover:underline transition-colors duration-200"
+                style={{ color: secondaryColor }}
               >
                 {link.url}
               </a>
             ) : (
-              <span>{link.url}</span>
+              <span style={{ color: secondaryColor }}>
+                {link.url}
+              </span>
             )}
             {index < contactInfo.length - 1 && (
-              <span className="mx-2">|</span>
+              <span 
+                className="mx-2"
+                style={{ color: `${secondaryColor}60` }}
+              >
+                |
+              </span>
             )}
           </React.Fragment>
         ))}
       </div>
-    )
-  );
+    );
+  };
 
-  const renderSocialLinks = () => (
-    socialMediaLinks.length > 0 && (
+  // Render social media links
+  const renderSocialLinks = () => {
+    if (!socialMediaLinks.length) return null;
+
+    return (
       <div className="flex flex-wrap justify-center gap-4">
         {socialMediaLinks.map((link, index) => {
           const Icon = SOCIAL_ICONS[link.type as keyof typeof SOCIAL_ICONS] || Link2;
           const url = generateSocialUrl(link.type, link.url, link.countryCode);
-          const displayText = socialSettings.displayFormat === 'network' 
+          const displayText = customization.socialSettings.displayFormat === 'network' 
             ? SOCIAL_NAMES[link.type as keyof typeof SOCIAL_NAMES]
             : link.url;
           
@@ -179,7 +223,13 @@ export function StoreHeader({
               href={url}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center gap-2 px-4 py-2 rounded-full transition-colors backdrop-blur-sm bg-white/10 hover:bg-white/20"
+              className="flex items-center gap-2 px-4 py-2 rounded-full transition-all duration-300 
+                backdrop-blur-sm hover:scale-105"
+              style={{
+                backgroundColor: `${secondaryColor}20`,
+                color: secondaryColor
+              }}
+              aria-label={`Visite nosso ${SOCIAL_NAMES[link.type as keyof typeof SOCIAL_NAMES]}`}
             >
               <Icon className="w-5 h-5" />
               <span>{displayText}</span>
@@ -187,61 +237,86 @@ export function StoreHeader({
           );
         })}
       </div>
-    )
-  );
+    );
+  };
 
   return (
-    <header className="relative" style={headerStyles}>
-      {headerStyle === 'image' && <div style={overlayStyles} />}
+    <header 
+      className="relative transition-all duration-300"
+      style={headerStyles}
+      role="banner"
+    >
+      {/* Overlay for image background */}
+      {customization.headerStyle === 'image' && (
+        <div style={overlayStyles} aria-hidden="true" />
+      )}
       
+      {/* Main content container */}
       <div 
-        className="container mx-auto px-4 py-12 flex flex-col"
+        className="container mx-auto px-4 py-12 flex flex-col transition-all duration-300"
         style={contentStyles}
       >
-        {headerVisibility.logo && logoUrl && (
+        {/* Logo */}
+        {customization.headerVisibility.logo && logoUrl && (
           <div 
-            className="mb-8 rounded-lg overflow-hidden bg-white/10 p-4 flex items-center justify-center backdrop-blur-sm"
-            style={{ width: logoSize, height: logoSize }}
+            className="mb-8 rounded-lg overflow-hidden backdrop-blur-sm 
+              flex items-center justify-center transition-all duration-300"
+            style={{ 
+              width: customization.logoSize,
+              height: customization.logoSize,
+              backgroundColor: `${secondaryColor}10`
+            }}
           >
             <img 
               src={logoUrl} 
-              alt={name}
-              className="max-w-full max-h-full w-auto h-auto object-contain"
+              alt={`${name} logo`}
+              className="max-w-full max-h-full w-auto h-auto object-contain transition-opacity duration-300"
+              onError={handleLogoError}
+              loading="eager"
             />
           </div>
         )}
         
-        {headerVisibility.title && (
+        {/* Store Title */}
+        {customization.headerVisibility.title && (
           <h1 
-            className="font-bold mb-4"
+            className="font-bold mb-4 transition-all duration-300"
             style={{ 
-              fontSize: titleSize,
-              fontFamily: titleFont === 'sans' ? 'ui-sans-serif, system-ui, sans-serif' :
-                         titleFont === 'serif' ? 'ui-serif, Georgia, serif' :
-                         'ui-monospace, monospace'
+              fontSize: customization.titleSize,
+              fontFamily: customization.titleFont === 'sans' 
+                ? 'ui-sans-serif, system-ui, sans-serif'
+                : customization.titleFont === 'serif' 
+                ? 'ui-serif, Georgia, serif'
+                : 'ui-monospace, monospace',
+              color: secondaryColor
             }}
           >
             {name}
           </h1>
         )}
         
-        {headerVisibility.description && description && (
+        {/* Store Description */}
+        {customization.headerVisibility.description && description && (
           <p 
-            className="max-w-2xl mx-auto mb-8 opacity-90"
+            className="max-w-2xl mx-auto mb-8 transition-all duration-300"
             style={{ 
-              fontSize: descriptionSize,
-              fontFamily: bodyFont === 'sans' ? 'ui-sans-serif, system-ui, sans-serif' :
-                         bodyFont === 'serif' ? 'ui-serif, Georgia, serif' :
-                         'ui-monospace, monospace'
+              fontSize: customization.descriptionSize,
+              fontFamily: customization.bodyFont === 'sans'
+                ? 'ui-sans-serif, system-ui, sans-serif'
+                : customization.bodyFont === 'serif'
+                ? 'ui-serif, Georgia, serif'
+                : 'ui-monospace, monospace',
+              color: `${secondaryColor}90`
             }}
           >
             {description}
           </p>
         )}
 
-        {headerVisibility.socialLinks && (
-          <div className="flex flex-col items-center gap-4">
-            {socialSettings.contactsPosition === 'above' ? (
+        {/* Social Links */}
+        {customization.headerVisibility.socialLinks && (
+          <div className="flex flex-col items-center gap-4 transition-all duration-300">
+            {customization.socialSettings.contactsPosition === 'above' ? (
               <>
                 {renderContactInfo()}
                 {renderSocialLinks()}
