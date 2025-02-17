@@ -12,6 +12,7 @@ interface StoreSearchProps {
   searchResults?: any[];
   loading?: boolean;
   storeId: string;
+  initialProducts?: any[]; // Adicionado para ter acesso aos produtos iniciais
 }
 
 interface SearchFilters {
@@ -48,25 +49,29 @@ export function StoreSearch({
   tags,
   searchResults = [],
   loading = false,
-  storeId
+  storeId,
+  initialProducts = []
 }: StoreSearchProps) {
-  // Recupera filtros salvos ou usa iniciais
-  const getSavedFilters = () => {
-    try {
-      const saved = localStorage.getItem(`${STORE_FILTERS_KEY}-${storeId}`);
-      return saved ? JSON.parse(saved) : initialFilters;
-    } catch {
-      return initialFilters;
-    }
-  };
-
+  // Estados e refs
   const [filters, setFilters] = useState<SearchFilters>(getSavedFilters());
   const [activeFiltersCount, setActiveFiltersCount] = useState(0);
   const [showFilterDropdown, setShowFilterDropdown] = useState(false);
   const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
   const [showTagsDropdown, setShowTagsDropdown] = useState(false);
   const [showBrandsDropdown, setShowBrandsDropdown] = useState(false);
+  const [isSearching, setIsSearching] = useState(false);
   const filterRef = useRef<HTMLDivElement>(null);
+  const searchTimeoutRef = useRef<NodeJS.Timeout>();
+
+  // Função para recuperar filtros salvos
+  function getSavedFilters(): SearchFilters {
+    try {
+      const saved = localStorage.getItem(`${STORE_FILTERS_KEY}-${storeId}`);
+      return saved ? JSON.parse(saved) : initialFilters;
+    } catch {
+      return initialFilters;
+    }
+  }
 
   // Persiste filtros no localStorage
   useEffect(() => {
@@ -100,15 +105,71 @@ export function StoreSearch({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Busca com debounce
+  // Cleanup timeout no unmount
+  useEffect(() => {
+    return () => {
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  // Função de busca com debounce
   const debouncedSearch = useCallback(
     debounce((newFilters: SearchFilters) => {
+      setIsSearching(true);
+      
+      // Aplica os filtros localmente primeiro
+      const filteredProducts = initialProducts.filter(product => {
+        // Filtro de texto
+        if (newFilters.search && !product.title.toLowerCase().includes(newFilters.search.toLowerCase())) {
+          return false;
+        }
+
+        // Filtro de categoria
+        if (newFilters.categoryId && product.category_id !== newFilters.categoryId) {
+          return false;
+        }
+
+        // Filtro de marca
+        if (newFilters.brand && product.brand !== newFilters.brand) {
+          return false;
+        }
+
+        // Filtro de tags
+        if (newFilters.selectedTags.length > 0 && 
+            !newFilters.selectedTags.every(tag => product.tags.includes(tag))) {
+          return false;
+        }
+
+        // Filtro de preço
+        if (newFilters.minPrice && product.price < newFilters.minPrice) {
+          return false;
+        }
+        if (newFilters.maxPrice && product.price > newFilters.maxPrice) {
+          return false;
+        }
+
+        // Filtro de promoção
+        if (newFilters.hasPromotion && !product.promotional_price) {
+          return false;
+        }
+
+        return true;
+      });
+
+      // Chama o callback com os resultados filtrados
       onSearch(newFilters);
+      
+      // Remove loading após um curto delay
+      searchTimeoutRef.current = setTimeout(() => {
+        setIsSearching(false);
+      }, 300);
     }, 300),
-    [onSearch]
+    [onSearch, initialProducts]
   );
 
-  // Atualiza filtros e dispara busca
+  // Atualiza filtros
   const updateFilters = useCallback((updates: Partial<SearchFilters>) => {
     setFilters(prev => {
       const newFilters = { ...prev, ...updates };
@@ -117,7 +178,7 @@ export function StoreSearch({
     });
   }, [debouncedSearch]);
 
-  // Limpa todos os filtros
+  // Limpa filtros
   const clearFilters = useCallback((e?: React.MouseEvent) => {
     if (e) {
       e.preventDefault();
@@ -130,7 +191,7 @@ export function StoreSearch({
     localStorage.removeItem(`${STORE_FILTERS_KEY}-${storeId}`);
   }, [debouncedSearch, storeId]);
 
-  // Toggle tag selecionada
+  // Toggle tag
   const toggleTag = useCallback((tag: string, e?: React.MouseEvent) => {
     if (e) {
       e.preventDefault();
@@ -154,7 +215,7 @@ export function StoreSearch({
     e.stopPropagation();
   }, []);
 
-  // Fecha outros dropdowns ao abrir um novo
+  // Gerencia dropdowns
   const handleDropdownToggle = useCallback((dropdown: string) => {
     setShowFilterDropdown(prev => dropdown === 'filter' ? !prev : false);
     setShowCategoryDropdown(prev => dropdown === 'category' ? !prev : false);
@@ -520,15 +581,15 @@ export function StoreSearch({
         </div>
       )}
 
-      {/* Loading State */}
-      {loading && (
+      {/* Estado de Loading */}
+      {isSearching && (
         <div className="flex justify-center py-4">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
         </div>
       )}
 
-      {/* No Results */}
-      {!loading && searchResults.length === 0 && activeFiltersCount > 0 && (
+      {/* Sem Resultados */}
+      {!isSearching && searchResults.length === 0 && activeFiltersCount > 0 && (
         <div className="text-center py-8">
           <Package className="w-16 h-16 text-gray-400 mx-auto mb-4" />
           <p className="text-gray-600 dark:text-gray-400">
