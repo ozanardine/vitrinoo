@@ -2,6 +2,8 @@ import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { Search, X, Tag, Package, Star, DollarSign, Filter, ChevronDown } from 'lucide-react';
 import { debounce } from 'lodash';
 
+const STORE_FILTERS_KEY = 'store-filters';
+
 interface StoreSearchProps {
   onSearch: (filters: SearchFilters) => void;
   categories: Category[];
@@ -9,6 +11,7 @@ interface StoreSearchProps {
   tags: string[];
   searchResults?: any[];
   loading?: boolean;
+  storeId: string;
 }
 
 interface SearchFilters {
@@ -28,18 +31,36 @@ interface Category {
   children?: Category[];
 }
 
-export function StoreSearch({ onSearch, categories, brands, tags, searchResults = [], loading = false }: StoreSearchProps) {
-  const [filters, setFilters] = useState<SearchFilters>({
-    search: '',
-    categoryId: null,
-    minPrice: null,
-    maxPrice: null,
-    hasPromotion: null,
-    selectedTags: [],
-    brand: null
-  });
+const initialFilters: SearchFilters = {
+  search: '',
+  categoryId: null,
+  minPrice: null,
+  maxPrice: null,
+  hasPromotion: null,
+  selectedTags: [],
+  brand: null
+};
 
-  const [showFilters, setShowFilters] = useState(false);
+export function StoreSearch({
+  onSearch,
+  categories,
+  brands,
+  tags,
+  searchResults = [],
+  loading = false,
+  storeId
+}: StoreSearchProps) {
+  // Recupera filtros salvos ou usa iniciais
+  const getSavedFilters = () => {
+    try {
+      const saved = localStorage.getItem(`${STORE_FILTERS_KEY}-${storeId}`);
+      return saved ? JSON.parse(saved) : initialFilters;
+    } catch {
+      return initialFilters;
+    }
+  };
+
+  const [filters, setFilters] = useState<SearchFilters>(getSavedFilters());
   const [activeFiltersCount, setActiveFiltersCount] = useState(0);
   const [showFilterDropdown, setShowFilterDropdown] = useState(false);
   const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
@@ -47,7 +68,12 @@ export function StoreSearch({ onSearch, categories, brands, tags, searchResults 
   const [showBrandsDropdown, setShowBrandsDropdown] = useState(false);
   const filterRef = useRef<HTMLDivElement>(null);
 
-  // Calcula número de filtros ativos
+  // Persiste filtros no localStorage
+  useEffect(() => {
+    localStorage.setItem(`${STORE_FILTERS_KEY}-${storeId}`, JSON.stringify(filters));
+  }, [filters, storeId]);
+
+  // Calcula filtros ativos
   useEffect(() => {
     let count = 0;
     if (filters.search) count++;
@@ -74,7 +100,7 @@ export function StoreSearch({ onSearch, categories, brands, tags, searchResults 
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Debounce search function
+  // Busca com debounce
   const debouncedSearch = useCallback(
     debounce((newFilters: SearchFilters) => {
       onSearch(newFilters);
@@ -82,39 +108,65 @@ export function StoreSearch({ onSearch, categories, brands, tags, searchResults 
     [onSearch]
   );
 
-  const updateFilters = (updates: Partial<SearchFilters>) => {
-    const newFilters = { ...filters, ...updates };
-    setFilters(newFilters);
-    debouncedSearch(newFilters);
-  };
+  // Atualiza filtros e dispara busca
+  const updateFilters = useCallback((updates: Partial<SearchFilters>) => {
+    setFilters(prev => {
+      const newFilters = { ...prev, ...updates };
+      debouncedSearch(newFilters);
+      return newFilters;
+    });
+  }, [debouncedSearch]);
 
-  const clearFilters = () => {
-    const initialFilters = {
-      search: '',
-      categoryId: null,
-      minPrice: null,
-      maxPrice: null,
-      hasPromotion: null,
-      selectedTags: [],
-      brand: null
-    };
+  // Limpa todos os filtros
+  const clearFilters = useCallback((e?: React.MouseEvent) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+
     setFilters(initialFilters);
     debouncedSearch(initialFilters);
     setShowFilterDropdown(false);
-  };
+    localStorage.removeItem(`${STORE_FILTERS_KEY}-${storeId}`);
+  }, [debouncedSearch, storeId]);
 
-  const toggleTag = (tag: string) => {
-    const newTags = filters.selectedTags.includes(tag)
-      ? filters.selectedTags.filter(t => t !== tag)
-      : [...filters.selectedTags, tag];
-    updateFilters({ selectedTags: newTags });
-  };
+  // Toggle tag selecionada
+  const toggleTag = useCallback((tag: string, e?: React.MouseEvent) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+
+    setFilters(prev => {
+      const newTags = prev.selectedTags.includes(tag)
+        ? prev.selectedTags.filter(t => t !== tag)
+        : [...prev.selectedTags, tag];
+      
+      const newFilters = { ...prev, selectedTags: newTags };
+      debouncedSearch(newFilters);
+      return newFilters;
+    });
+  }, [debouncedSearch]);
+
+  // Previne submit do form
+  const handleSubmit = useCallback((e: React.FormEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+  }, []);
+
+  // Fecha outros dropdowns ao abrir um novo
+  const handleDropdownToggle = useCallback((dropdown: string) => {
+    setShowFilterDropdown(prev => dropdown === 'filter' ? !prev : false);
+    setShowCategoryDropdown(prev => dropdown === 'category' ? !prev : false);
+    setShowTagsDropdown(prev => dropdown === 'tags' ? !prev : false);
+    setShowBrandsDropdown(prev => dropdown === 'brands' ? !prev : false);
+  }, []);
 
   return (
-    <div className="space-y-4" ref={filterRef}>
-      {/* Search Bar & Quick Filters */}
+    <form onSubmit={handleSubmit} className="space-y-4" ref={filterRef}>
+      {/* Barra de Busca e Filtros Rápidos */}
       <div className="flex flex-col lg:flex-row gap-4">
-        {/* Search Input */}
+        {/* Input de Busca */}
         <div className="relative flex-1">
           <input
             type="text"
@@ -126,7 +178,11 @@ export function StoreSearch({ onSearch, categories, brands, tags, searchResults 
           <Search className="absolute left-4 top-3.5 w-5 h-5 text-gray-400" aria-hidden="true" />
           {filters.search && (
             <button
-              onClick={() => updateFilters({ search: '' })}
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                updateFilters({ search: '' });
+              }}
               className="absolute right-4 top-3.5 text-gray-400 hover:text-gray-600 transition-colors"
             >
               <X className="w-5 h-5" />
@@ -134,20 +190,21 @@ export function StoreSearch({ onSearch, categories, brands, tags, searchResults 
           )}
         </div>
 
-        {/* Quick Filter Buttons */}
+        {/* Botões de Filtro Rápido */}
         <div className="flex gap-2 items-center">
+          {/* Categorias */}
           <div className="relative">
             <button
-              onClick={() => {
-                setShowCategoryDropdown(!showCategoryDropdown);
-                setShowFilterDropdown(false);
-                setShowTagsDropdown(false);
-                setShowBrandsDropdown(false);
-              }}
-              className="flex items-center gap-2 px-4 py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+              type="button"
+              onClick={() => handleDropdownToggle('category')}
+              className={`
+                flex items-center gap-2 px-4 py-3 rounded-lg border transition-colors
+                ${filters.categoryId ? 'bg-blue-50 border-blue-200 text-blue-600 dark:bg-blue-900/20 dark:border-blue-800' : 
+                'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700'}
+              `}
             >
               <Package className="w-5 h-5" />
-              <span>Categorias</span>
+              <span>{filters.categoryId ? categories.find(c => c.id === filters.categoryId)?.name : 'Categorias'}</span>
               <ChevronDown className="w-4 h-4" />
             </button>
 
@@ -157,9 +214,10 @@ export function StoreSearch({ onSearch, categories, brands, tags, searchResults 
                   {categories.map(category => (
                     <button
                       key={category.id}
+                      type="button"
                       onClick={() => {
                         updateFilters({ categoryId: category.id });
-                        setShowCategoryDropdown(false);
+                        handleDropdownToggle('');
                       }}
                       className={`w-full text-left px-3 py-2 rounded-lg transition-colors ${
                         filters.categoryId === category.id
@@ -175,18 +233,19 @@ export function StoreSearch({ onSearch, categories, brands, tags, searchResults 
             )}
           </div>
 
+          {/* Marcas */}
           <div className="relative">
             <button
-              onClick={() => {
-                setShowBrandsDropdown(!showBrandsDropdown);
-                setShowFilterDropdown(false);
-                setShowCategoryDropdown(false);
-                setShowTagsDropdown(false);
-              }}
-              className="flex items-center gap-2 px-4 py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+              type="button"
+              onClick={() => handleDropdownToggle('brands')}
+              className={`
+                flex items-center gap-2 px-4 py-3 rounded-lg border transition-colors
+                ${filters.brand ? 'bg-blue-50 border-blue-200 text-blue-600 dark:bg-blue-900/20 dark:border-blue-800' : 
+                'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700'}
+              `}
             >
               <Star className="w-5 h-5" />
-              <span>Marcas</span>
+              <span>{filters.brand || 'Marcas'}</span>
               <ChevronDown className="w-4 h-4" />
             </button>
 
@@ -196,9 +255,10 @@ export function StoreSearch({ onSearch, categories, brands, tags, searchResults 
                   {brands.map(brand => (
                     <button
                       key={brand}
+                      type="button"
                       onClick={() => {
                         updateFilters({ brand });
-                        setShowBrandsDropdown(false);
+                        handleDropdownToggle('');
                       }}
                       className={`w-full text-left px-3 py-2 rounded-lg transition-colors ${
                         filters.brand === brand
@@ -214,28 +274,30 @@ export function StoreSearch({ onSearch, categories, brands, tags, searchResults 
             )}
           </div>
 
+          {/* Tags */}
           <div className="relative">
             <button
-              onClick={() => {
-                setShowTagsDropdown(!showTagsDropdown);
-                setShowFilterDropdown(false);
-                setShowCategoryDropdown(false);
-                setShowBrandsDropdown(false);
-              }}
-              className="flex items-center gap-2 px-4 py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+              type="button"
+              onClick={() => handleDropdownToggle('tags')}
+              className={`
+                flex items-center gap-2 px-4 py-3 rounded-lg border transition-colors
+                ${filters.selectedTags.length > 0 ? 'bg-blue-50 border-blue-200 text-blue-600 dark:bg-blue-900/20 dark:border-blue-800' : 
+                'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700'}
+              `}
             >
               <Tag className="w-5 h-5" />
-              <span>Tags</span>
+              <span>Tags {filters.selectedTags.length > 0 && `(${filters.selectedTags.length})`}</span>
               <ChevronDown className="w-4 h-4" />
             </button>
 
             {showTagsDropdown && (
               <div className="absolute top-full mt-2 w-64 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50 max-h-96 overflow-y-auto">
-                <div className="p-2 flex flex-wrap gap-2">
+                <div className="p-3 flex flex-wrap gap-2">
                   {tags.map(tag => (
                     <button
                       key={tag}
-                      onClick={() => toggleTag(tag)}
+                      type="button"
+                      onClick={(e) => toggleTag(tag, e)}
                       className={`px-3 py-1 rounded-full text-sm transition-colors ${
                         filters.selectedTags.includes(tag)
                           ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300'
@@ -250,20 +312,15 @@ export function StoreSearch({ onSearch, categories, brands, tags, searchResults 
             )}
           </div>
 
+          {/* Outros Filtros */}
           <div className="relative">
             <button
-              onClick={() => {
-                setShowFilterDropdown(!showFilterDropdown);
-                setShowCategoryDropdown(false);
-                setShowTagsDropdown(false);
-                setShowBrandsDropdown(false);
-              }}
+              type="button"
+              onClick={() => handleDropdownToggle('filter')}
               className={`
                 flex items-center gap-2 px-4 py-3 rounded-lg border transition-colors relative
-                ${showFilterDropdown
-                  ? 'bg-blue-50 border-blue-200 text-blue-600 dark:bg-blue-900/20 dark:border-blue-800'
-                  : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700'
-                }
+                ${showFilterDropdown ? 'bg-blue-50 border-blue-200 text-blue-600 dark:bg-blue-900/20 dark:border-blue-800' : 
+                'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700'}
               `}
             >
               <Filter className="w-5 h-5" />
@@ -278,6 +335,7 @@ export function StoreSearch({ onSearch, categories, brands, tags, searchResults 
             {showFilterDropdown && (
               <div className="absolute top-full right-0 mt-2 w-72 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50">
                 <div className="p-4 space-y-4">
+                  {/* Filtro de Preço */}
                   <div>
                     <h3 className="font-medium mb-2 flex items-center gap-2">
                       <DollarSign className="w-5 h-5 text-green-500" />
@@ -317,6 +375,8 @@ export function StoreSearch({ onSearch, categories, brands, tags, searchResults 
                           />
                         </div>
                       </div>
+
+                      {/* Checkbox Promoção */}
                       <label className="flex items-center gap-2 cursor-pointer">
                         <input
                           type="checkbox"
@@ -331,16 +391,19 @@ export function StoreSearch({ onSearch, categories, brands, tags, searchResults 
                     </div>
                   </div>
 
+                  {/* Botões de Ação */}
                   <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
                     <div className="flex justify-between items-center">
                       <button
+                        type="button"
                         onClick={clearFilters}
                         className="text-sm text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
                       >
                         Limpar filtros
                       </button>
                       <button
-                        onClick={() => setShowFilterDropdown(false)}
+                        type="button"
+                        onClick={() => handleDropdownToggle('')}
                         className="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
                       >
                         Fechar
@@ -354,7 +417,7 @@ export function StoreSearch({ onSearch, categories, brands, tags, searchResults 
         </div>
       </div>
 
-      {/* Active Filters */}
+      {/* Filtros Ativos */}
       {activeFiltersCount > 0 && (
         <div className="flex flex-wrap gap-2 items-center py-2">
           {filters.categoryId && (
@@ -362,7 +425,11 @@ export function StoreSearch({ onSearch, categories, brands, tags, searchResults 
               <Package className="w-4 h-4" />
               {categories.find(c => c.id === filters.categoryId)?.name}
               <button
-                onClick={() => updateFilters({ categoryId: null })}
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  updateFilters({ categoryId: null });
+                }}
                 className="ml-1 hover:text-blue-800 dark:hover:text-blue-200"
               >
                 <X className="w-4 h-4" />
@@ -375,7 +442,11 @@ export function StoreSearch({ onSearch, categories, brands, tags, searchResults 
               <Star className="w-4 h-4" />
               {filters.brand}
               <button
-                onClick={() => updateFilters({ brand: null })}
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  updateFilters({ brand: null });
+                }}
                 className="ml-1 hover:text-green-800 dark:hover:text-green-200"
               >
                 <X className="w-4 h-4" />
@@ -391,7 +462,8 @@ export function StoreSearch({ onSearch, categories, brands, tags, searchResults 
               <Tag className="w-4 h-4" />
               {tag}
               <button
-                onClick={() => toggleTag(tag)}
+                type="button"
+                onClick={(e) => toggleTag(tag, e)}
                 className="ml-1 hover:text-purple-800 dark:hover:text-purple-200"
               >
                 <X className="w-4 h-4" />
@@ -409,7 +481,11 @@ export function StoreSearch({ onSearch, categories, brands, tags, searchResults 
                 : `Até R$ ${filters.maxPrice}`
               }
               <button
-                onClick={() => updateFilters({ minPrice: null, maxPrice: null })}
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  updateFilters({ minPrice: null, maxPrice: null });
+                }}
                 className="ml-1 hover:text-yellow-800 dark:hover:text-yellow-200"
               >
                 <X className="w-4 h-4" />
@@ -422,7 +498,11 @@ export function StoreSearch({ onSearch, categories, brands, tags, searchResults 
               <DollarSign className="w-4 h-4" />
               Em promoção
               <button
-                onClick={() => updateFilters({ hasPromotion: null })}
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  updateFilters({ hasPromotion: null });
+                }}
                 className="ml-1 hover:text-red-800 dark:hover:text-red-200"
               >
                 <X className="w-4 h-4" />
@@ -431,6 +511,7 @@ export function StoreSearch({ onSearch, categories, brands, tags, searchResults 
           )}
 
           <button
+            type="button"
             onClick={clearFilters}
             className="text-sm text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
           >
@@ -454,6 +535,7 @@ export function StoreSearch({ onSearch, categories, brands, tags, searchResults 
             Nenhum produto encontrado com os filtros selecionados
           </p>
           <button
+            type="button"
             onClick={clearFilters}
             className="mt-4 text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
           >
@@ -461,6 +543,6 @@ export function StoreSearch({ onSearch, categories, brands, tags, searchResults 
           </button>
         </div>
       )}
-    </div>
+    </form>
   );
 }
