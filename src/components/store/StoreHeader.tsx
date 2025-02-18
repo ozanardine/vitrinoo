@@ -232,7 +232,7 @@ export function StoreHeader({
             : link.url;
           
           return (
-            
+            <a
               key={`${link.type}-${index}`}
               href={url}
               target="_blank"
@@ -351,7 +351,7 @@ export function StoreHeader({
           className="absolute left-0 right-0 h-1 transition-colors duration-300"
           style={{ 
             backgroundColor: themeColors.accent,
-            [customization.headerAlignment === 'top' ? 'top' : 'bottom']: 0 
+            bottom: 0
           }}
         />
       )}
