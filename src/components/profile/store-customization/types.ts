@@ -32,8 +32,8 @@ export interface StoreFormData {
   logoSize: string;
   titleSize: string;
   descriptionSize: string;
-  titleFont: 'sans' | 'serif' | 'mono' | 'display';
-  bodyFont: 'sans' | 'serif' | 'mono';
+  titleFont: string;
+  bodyFont: string;
 
   // Layout Settings
   productCardStyle: 'default' | 'compact' | 'minimal';
@@ -65,6 +65,8 @@ export interface StoreCustomizationContextType {
   success: string | null;
   setSuccess: (success: string | null) => void;
   onSave: () => Promise<void>;
+  localData: Partial<StoreFormData>;
+  setLocalData: (data: Partial<StoreFormData> | ((prev: Partial<StoreFormData>) => Partial<StoreFormData>)) => void;
 }
 
 export interface Section {
@@ -76,12 +78,4 @@ export interface Section {
 export interface StoreCustomizationProps {
   store: Store;
   onUpdate: () => void;
-}
-
-export interface ColorPickerProps {
-  label: string;
-  value: string;
-  onChange: (color: string) => void;
-  description?: string;
-  presets?: string[];
 }

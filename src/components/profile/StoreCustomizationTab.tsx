@@ -20,6 +20,7 @@ export function StoreCustomizationTab({ store, onUpdate }: StoreCustomizationTab
   const [activeSection, setActiveSection] = useState<string>('general');
   const [localThemeData, setLocalThemeData] = useState<Partial<StoreFormData>>({});
   const [selectedThemePreset, setSelectedThemePreset] = useState<string | null>(null);
+  const [localTypographyData, setLocalTypographyData] = useState<Partial<StoreFormData>>({});
 
   const sections = [
     { id: 'general', title: 'Informações Gerais', icon: Store },
@@ -49,7 +50,7 @@ export function StoreCustomizationTab({ store, onUpdate }: StoreCustomizationTab
       case 'header':
         return <HeaderSettings />;
       case 'typography':
-        return <TypographySettings />;
+        return <TypographySettings onLocalChange={(data) => setLocalTypographyData(data)} />;
       case 'layout':
         return <LayoutSettings />;
       case 'contacts':
@@ -99,17 +100,19 @@ export function StoreCustomizationTab({ store, onUpdate }: StoreCustomizationTab
 
             {/* Área principal de conteúdo */}
             <div className="flex-1">
-              <form onSubmit={(e) => {
-                e.preventDefault();
-                
-                // Se estivermos na seção de tema e houver alterações locais,
-                // atualizar o formData antes de salvar
-                if (activeSection === 'theme' && Object.keys(localThemeData).length > 0) {
-                  context.updateFormData(localThemeData);
-                }
-                
-                context.onSave();
-              }} className="space-y-8">
+                <form onSubmit={(e) => {
+                  e.preventDefault();
+                  
+                  if (activeSection === 'theme' && Object.keys(localThemeData).length > 0) {
+                    context.updateFormData(localThemeData);
+                  }
+                  
+                  if (activeSection === 'typography' && Object.keys(localTypographyData).length > 0) {
+                    context.updateFormData(localTypographyData);
+                  }
+                  
+                  context.onSave();
+                }} className="space-y-8">
                 {renderSection(context)}
 
                 {/* Preview - Hidden for Layout section */}

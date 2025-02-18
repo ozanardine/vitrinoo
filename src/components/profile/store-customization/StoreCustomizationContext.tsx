@@ -61,6 +61,8 @@ export function StoreCustomizationProvider({ children, store, onUpdate }: Provid
     socialSettings: store.social_settings || DEFAULT_VALUES.socialSettings
   });
 
+  // Estado local para mudanças não salvas
+  const [localData, setLocalData] = useState<Partial<StoreFormData>>({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -87,36 +89,42 @@ export function StoreCustomizationProvider({ children, store, onUpdate }: Provid
         throw new Error('Esta URL já está em uso. Por favor, escolha outra.');
       }
 
+      // Mesclar dados locais com formData
+      const finalData = {
+        ...formData,
+        ...localData
+      };
+
       const { error: updateError } = await supabase
         .from('stores')
         .update({
-          name: formData.name,
-          slug: formData.slug,
-          description: formData.description || null,
-          logo_url: formData.logoUrl || null,
-          primary_color: formData.primaryColor,
-          secondary_color: formData.secondaryColor,
-          accent_color: formData.accentColor,
-          header_background: formData.headerBackground,
-          allow_theme_toggle: formData.allowThemeToggle,
-          header_style: formData.headerStyle,
-          header_height: `${formData.headerHeight}px`,
-          header_image: formData.headerImage || null,
-          header_gradient: formData.headerGradient,
-          header_overlay_opacity: formData.headerOverlayOpacity,
-          header_alignment: formData.headerAlignment,
-          header_visibility: formData.headerVisibility,
-          logo_size: `${formData.logoSize}px`,
-          title_size: `${formData.titleSize}px`,
-          description_size: `${formData.descriptionSize}px`,
-          title_font: formData.titleFont,
-          body_font: formData.bodyFont,
-          product_card_style: formData.productCardStyle,
-          grid_columns: formData.gridColumns,
-          grid_gap: formData.gridGap,
-          container_width: formData.containerWidth,
-          social_links: formData.socialLinks,
-          social_settings: formData.socialSettings,
+          name: finalData.name,
+          slug: finalData.slug,
+          description: finalData.description || null,
+          logo_url: finalData.logoUrl || null,
+          primary_color: finalData.primaryColor,
+          secondary_color: finalData.secondaryColor,
+          accent_color: finalData.accentColor,
+          header_background: finalData.headerBackground,
+          allow_theme_toggle: finalData.allowThemeToggle,
+          header_style: finalData.headerStyle,
+          header_height: `${finalData.headerHeight}px`,
+          header_image: finalData.headerImage || null,
+          header_gradient: finalData.headerGradient,
+          header_overlay_opacity: finalData.headerOverlayOpacity,
+          header_alignment: finalData.headerAlignment,
+          header_visibility: finalData.headerVisibility,
+          logo_size: `${finalData.logoSize}px`,
+          title_size: `${finalData.titleSize}px`,
+          description_size: `${finalData.descriptionSize}px`,
+          title_font: finalData.titleFont,
+          body_font: finalData.bodyFont,
+          product_card_style: finalData.productCardStyle,
+          grid_columns: finalData.gridColumns,
+          grid_gap: finalData.gridGap,
+          container_width: finalData.containerWidth,
+          social_links: finalData.socialLinks,
+          social_settings: finalData.socialSettings,
           updated_at: new Date().toISOString()
         })
         .eq('id', store.id);
@@ -124,6 +132,8 @@ export function StoreCustomizationProvider({ children, store, onUpdate }: Provid
       if (updateError) throw updateError;
 
       setSuccess('Loja atualizada com sucesso!');
+      // Limpar estado local após salvar
+      setLocalData({});
       onUpdate();
     } catch (err: any) {
       setError(err.message);
@@ -141,7 +151,9 @@ export function StoreCustomizationProvider({ children, store, onUpdate }: Provid
     setError,
     success,
     setSuccess,
-    onSave
+    onSave,
+    localData,
+    setLocalData
   };
 
   return (
