@@ -305,77 +305,32 @@ export function ThemeSettings({ onLocalChange, selectedPreset, onPresetChange }:
         </div>
       </div>
 
-      {/* Theme Toggle Settings */}
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <h3 className="text-lg font-semibold mb-1">Alternador de Tema</h3>
-            <p className="text-sm text-gray-600 dark:text-gray-400">
-              Permitir que os visitantes alternem entre tema claro e escuro
-            </p>
-          </div>
-          <div className="flex items-center gap-4">
-            <StoreThemeToggle
-              preview={true}
-              allowPreviewToggle={true}
-              accentColor={localThemeData.accentColor}
-            />
-            <label className="relative inline-flex items-center cursor-pointer">
-              <input
-                type="checkbox"
-                checked={localThemeData.allowThemeToggle}
-                onChange={(e) => setLocalThemeData(prev => ({
-                  ...prev,
-                  allowThemeToggle: e.target.checked
-                }))}
-                className="sr-only peer"
-              />
-              <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600" />
-            </label>
-          </div>
-        </div>
-
-        <div className="p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
-          <div className="flex items-center gap-2 text-yellow-800 dark:text-yellow-200">
-            <AlertCircle className="w-5 h-5 flex-shrink-0" />
-            <p className="text-sm">
-              O tema da loja é independente do tema do site principal.
-              Atualmente o site está em modo <strong>{siteTheme}</strong> e
-              a loja em modo <strong>{storeTheme}</strong>.
-            </p>
-          </div>
-        </div>
-      </div>
-
       {/* Preview */}
       <div className="space-y-4">
         <h3 className="text-lg font-semibold">Prévia</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Light Theme Preview */}
-          <div 
-            className="p-6 rounded-lg transition-all duration-300"
-            style={previewStyles.container}
-          >
-            <div className="mb-4">
-              <h4 className="text-xl font-semibold mb-2">Exemplo de Título</h4>
-              <p className="text-sm opacity-80">
-                Exemplo de como seu conteúdo aparecerá com as cores selecionadas
-              </p>
-            </div>
-            <div className="space-y-3">
-              <button
-                className="w-full px-4 py-2 rounded-lg transition-all duration-300"
-                style={previewStyles.button}
-                disabled
-              >
-                Botão de Ação
-              </button>
-              <div 
-                className="p-3 rounded-lg transition-all duration-300"
-                style={previewStyles.card}
-              >
-                <span className="opacity-80">Elemento secundário</span>
-              </div>
+        <div 
+          className="p-6 rounded-lg transition-all duration-300"
+          style={previewStyles.container}
+        >
+          <div className="mb-4">
+            <h4 className="text-xl font-semibold mb-2">Exemplo de Título</h4>
+            <p className="text-sm opacity-80">
+              Exemplo de como seu conteúdo aparecerá com as cores selecionadas
+            </p>
+          </div>
+          <div className="space-y-3">
+            <button
+              className="w-full px-4 py-2 rounded-lg transition-all duration-300"
+              style={previewStyles.button}
+              disabled
+            >
+              Botão de Ação
+            </button>
+            <div 
+              className="p-3 rounded-lg transition-all duration-300"
+              style={previewStyles.card}
+            >
+              <span className="opacity-80">Elemento secundário</span>
             </div>
           </div>
         </div>

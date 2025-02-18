@@ -118,7 +118,7 @@ export function StoreCustomizationTab({ store, onUpdate }: StoreCustomizationTab
                 {/* Preview - Hidden for Layout section */}
                 {activeSection !== 'layout' && (
                   <div>
-                    <h3 className="text-lg font-semibold mb-4">Prévia</h3>
+                    <h3 className="text-lg font-semibold mb-4">Preview</h3>
                     <div className="rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700">
                       <StoreHeader
                         name={context.formData.name}
@@ -139,12 +139,9 @@ export function StoreCustomizationTab({ store, onUpdate }: StoreCustomizationTab
                           logoSize: `${context.formData.logoSize}px`,
                           titleSize: `${context.formData.titleSize}px`,
                           descriptionSize: `${context.formData.descriptionSize}px`,
-                          titleFont: context.formData.titleFont,
-                          bodyFont: context.formData.bodyFont,
+                          titleFont: activeSection === 'typography' ? localTypographyData.titleFont || context.formData.titleFont : context.formData.titleFont,
+                          bodyFont: activeSection === 'typography' ? localTypographyData.bodyFont || context.formData.bodyFont : context.formData.bodyFont,
                           socialSettings: context.formData.socialSettings,
-                          allowThemeToggle: activeSection === 'theme' 
-                            ? localThemeData.allowThemeToggle ?? context.formData.allowThemeToggle 
-                            : context.formData.allowThemeToggle,
                           preview: true
                         }}
                       />

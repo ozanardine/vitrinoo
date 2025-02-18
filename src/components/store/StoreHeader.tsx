@@ -95,7 +95,6 @@ interface StoreHeaderProps {
       contactsPosition: 'above' | 'below';
       displayFormat: 'username' | 'network';
     };
-    allowThemeToggle?: boolean;
   };
   preview?: boolean;
 }
@@ -191,10 +190,15 @@ export function StoreHeader({
 
   // Função para obter fonte correta
   const getFontFamily = (font: string) => ({
-    sans: 'ui-sans-serif, system-ui, sans-serif',
-    serif: 'ui-serif, Georgia, serif',
-    mono: 'ui-monospace, monospace'
-  }[font] || 'ui-sans-serif, system-ui, sans-serif');
+    roboto: 'Roboto, ui-sans-serif, system-ui, sans-serif',
+    'open-sans': 'Open Sans, ui-sans-serif, system-ui, sans-serif',
+    lato: 'Lato, ui-sans-serif, system-ui, sans-serif',
+    montserrat: 'Montserrat, ui-sans-serif, system-ui, sans-serif',
+    playfair: 'Playfair Display, ui-serif, Georgia, serif',
+    merriweather: 'Merriweather, ui-serif, Georgia, serif',
+    'source-code-pro': 'Source Code Pro, ui-monospace, monospace',
+    'fira-mono': 'Fira Mono, ui-monospace, monospace'
+  }[font] || 'Roboto, ui-sans-serif, system-ui, sans-serif');
 
   // Renderizar informações de contato
   const renderContactInfo = () => {
@@ -277,16 +281,6 @@ export function StoreHeader({
       style={headerStyles}
       role="banner"
     >
-      {/* Theme Toggle */}
-      {customization.allowThemeToggle && (
-        <div className="absolute top-4 right-4 z-50">
-          <StoreThemeToggle 
-            accentColor={themeColors.accent}
-            preview={true}
-          />
-        </div>
-      )}
-
       {/* Overlay para background com imagem */}
       {customization.headerStyle === 'image' && (
         <div 

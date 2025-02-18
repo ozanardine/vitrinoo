@@ -1,5 +1,4 @@
 import React from 'react';
-import { ThemeToggle } from '../ThemeToggle';
 import { StoreHeader } from './StoreHeader';
 import { StoreFooter } from './StoreFooter';
 import { StoreData } from '../../lib/types';
@@ -27,11 +26,6 @@ export function StoreLayout({ store, children }: StoreLayoutProps) {
         color: themeStyles.text
       }}
     >
-      {/* Theme Toggle */}
-      <div className="fixed top-4 right-4 z-50">
-        <ThemeToggle />
-      </div>
-
       {/* Store Header */}
       <StoreHeader
         name={store.name}
