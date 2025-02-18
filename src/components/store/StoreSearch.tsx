@@ -1,9 +1,11 @@
-import React, { useState, useCallback, useEffect, useRef } from 'react';
-import { Search, X, Tag, Package, Star, DollarSign, Filter, ChevronDown } from 'lucide-react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { 
+  Search, X, Tag, Package, Star, DollarSign, Filter, 
+  ChevronDown, ChevronUp, AlertCircle 
+} from 'lucide-react';
 import { debounce } from 'lodash';
 
-const STORE_FILTERS_KEY = 'store-filters';
-
+// Types
 interface StoreSearchProps {
   onSearch: (filters: SearchFilters) => void;
   categories: Category[];
@@ -12,7 +14,11 @@ interface StoreSearchProps {
   searchResults?: any[];
   loading?: boolean;
   storeId: string;
-  initialProducts?: any[]; // Adicionado para ter acesso aos produtos iniciais
+  initialProducts?: any[];
+  accentColor?: string;
+  secondaryColor?: string;
+  primaryColor?: string;
+  fontFamily?: string;
 }
 
 interface SearchFilters {
@@ -32,7 +38,16 @@ interface Category {
   children?: Category[];
 }
 
-const initialFilters: SearchFilters = {
+interface DropdownState {
+  filter: boolean;
+  categories: boolean;
+  tags: boolean;
+  brands: boolean;
+}
+
+// Constants
+const STORE_FILTERS_KEY = 'store-filters';
+const INITIAL_FILTERS: SearchFilters = {
   search: '',
   categoryId: null,
   minPrice: null,
@@ -50,35 +65,47 @@ export function StoreSearch({
   searchResults = [],
   loading = false,
   storeId,
-  initialProducts = []
+  initialProducts = [],
+  accentColor = '#3B82F6',
+  secondaryColor = '#1F2937',
+  primaryColor = '#FFFFFF',
+  fontFamily = 'ui-sans-serif, system-ui, sans-serif'
 }: StoreSearchProps) {
-  // Estados e refs
+  // States
   const [filters, setFilters] = useState<SearchFilters>(getSavedFilters());
   const [activeFiltersCount, setActiveFiltersCount] = useState(0);
-  const [showFilterDropdown, setShowFilterDropdown] = useState(false);
-  const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
-  const [showTagsDropdown, setShowTagsDropdown] = useState(false);
-  const [showBrandsDropdown, setShowBrandsDropdown] = useState(false);
+  const [dropdowns, setDropdowns] = useState<DropdownState>({
+    filter: false,
+    categories: false,
+    tags: false,
+    brands: false
+  });
   const [isSearching, setIsSearching] = useState(false);
+  
+  // Refs
   const filterRef = useRef<HTMLDivElement>(null);
   const searchTimeoutRef = useRef<NodeJS.Timeout>();
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
-  // Função para recuperar filtros salvos
+  // Get saved filters
   function getSavedFilters(): SearchFilters {
     try {
       const saved = localStorage.getItem(`${STORE_FILTERS_KEY}-${storeId}`);
-      return saved ? JSON.parse(saved) : initialFilters;
+      return saved ? JSON.parse(saved) : INITIAL_FILTERS;
     } catch {
-      return initialFilters;
+      return INITIAL_FILTERS;
     }
   }
 
-  // Persiste filtros no localStorage
+  // Persist filters
   useEffect(() => {
-    localStorage.setItem(`${STORE_FILTERS_KEY}-${storeId}`, JSON.stringify(filters));
+    localStorage.setItem(
+      `${STORE_FILTERS_KEY}-${storeId}`, 
+      JSON.stringify(filters)
+    );
   }, [filters, storeId]);
 
-  // Calcula filtros ativos
+  // Calculate active filters
   useEffect(() => {
     let count = 0;
     if (filters.search) count++;
@@ -90,14 +117,16 @@ export function StoreSearch({
     setActiveFiltersCount(count);
   }, [filters]);
 
-  // Fecha dropdowns ao clicar fora
+  // Close dropdowns on outside click
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (filterRef.current && !filterRef.current.contains(event.target as Node)) {
-        setShowFilterDropdown(false);
-        setShowCategoryDropdown(false);
-        setShowTagsDropdown(false);
-        setShowBrandsDropdown(false);
+        setDropdowns({
+          filter: false,
+          categories: false,
+          tags: false,
+          brands: false
+        });
       }
     };
 
@@ -105,7 +134,7 @@ export function StoreSearch({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Cleanup timeout no unmount
+  // Cleanup on unmount
   useEffect(() => {
     return () => {
       if (searchTimeoutRef.current) {
@@ -114,43 +143,45 @@ export function StoreSearch({
     };
   }, []);
 
-  // Função de busca com debounce
+  // Debounced search
   const debouncedSearch = useCallback(
     debounce((newFilters: SearchFilters) => {
       setIsSearching(true);
       
-      // Aplica os filtros localmente primeiro
+      // Local filtering
       const filteredProducts = initialProducts.filter(product => {
-        // Filtro de texto
-        if (newFilters.search && !product.title.toLowerCase().includes(newFilters.search.toLowerCase())) {
+        // Text search
+        if (newFilters.search && 
+            !product.title.toLowerCase().includes(newFilters.search.toLowerCase())) {
           return false;
         }
 
-        // Filtro de categoria
+        // Category filter
         if (newFilters.categoryId && product.category_id !== newFilters.categoryId) {
           return false;
         }
 
-        // Filtro de marca
+        // Brand filter
         if (newFilters.brand && product.brand !== newFilters.brand) {
           return false;
         }
 
-        // Filtro de tags
+        // Tags filter
         if (newFilters.selectedTags.length > 0 && 
             !newFilters.selectedTags.every(tag => product.tags.includes(tag))) {
           return false;
         }
 
-        // Filtro de preço
-        if (newFilters.minPrice && product.price < newFilters.minPrice) {
+        // Price range
+        const price = product.promotional_price || product.price;
+        if (newFilters.minPrice && price < newFilters.minPrice) {
           return false;
         }
-        if (newFilters.maxPrice && product.price > newFilters.maxPrice) {
+        if (newFilters.maxPrice && price > newFilters.maxPrice) {
           return false;
         }
 
-        // Filtro de promoção
+        // Promotion filter
         if (newFilters.hasPromotion && !product.promotional_price) {
           return false;
         }
@@ -158,10 +189,8 @@ export function StoreSearch({
         return true;
       });
 
-      // Chama o callback com os resultados filtrados
       onSearch(newFilters);
       
-      // Remove loading após um curto delay
       searchTimeoutRef.current = setTimeout(() => {
         setIsSearching(false);
       }, 300);
@@ -169,7 +198,7 @@ export function StoreSearch({
     [onSearch, initialProducts]
   );
 
-  // Atualiza filtros
+  // Update filters
   const updateFilters = useCallback((updates: Partial<SearchFilters>) => {
     setFilters(prev => {
       const newFilters = { ...prev, ...updates };
@@ -178,18 +207,31 @@ export function StoreSearch({
     });
   }, [debouncedSearch]);
 
-  // Limpa filtros
+  // Clear filters
   const clearFilters = useCallback((e?: React.MouseEvent) => {
     if (e) {
       e.preventDefault();
       e.stopPropagation();
     }
 
-    setFilters(initialFilters);
-    debouncedSearch(initialFilters);
-    setShowFilterDropdown(false);
+    setFilters(INITIAL_FILTERS);
+    debouncedSearch(INITIAL_FILTERS);
+    setDropdowns(prev => ({ ...prev, filter: false }));
     localStorage.removeItem(`${STORE_FILTERS_KEY}-${storeId}`);
+    
+    // Focus search input
+    searchInputRef.current?.focus();
   }, [debouncedSearch, storeId]);
+
+  // Toggle dropdown
+  const toggleDropdown = useCallback((dropdown: keyof DropdownState) => {
+    setDropdowns(prev => ({
+      filter: dropdown === 'filter' ? !prev.filter : false,
+      categories: dropdown === 'categories' ? !prev.categories : false,
+      tags: dropdown === 'tags' ? !prev.tags : false,
+      brands: dropdown === 'brands' ? !prev.brands : false
+    }));
+  }, []);
 
   // Toggle tag
   const toggleTag = useCallback((tag: string, e?: React.MouseEvent) => {
@@ -209,331 +251,407 @@ export function StoreSearch({
     });
   }, [debouncedSearch]);
 
-  // Previne submit do form
-  const handleSubmit = useCallback((e: React.FormEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-  }, []);
-
-  // Gerencia dropdowns
-  const handleDropdownToggle = useCallback((dropdown: string) => {
-    setShowFilterDropdown(prev => dropdown === 'filter' ? !prev : false);
-    setShowCategoryDropdown(prev => dropdown === 'category' ? !prev : false);
-    setShowTagsDropdown(prev => dropdown === 'tags' ? !prev : false);
-    setShowBrandsDropdown(prev => dropdown === 'brands' ? !prev : false);
-  }, []);
+  // Styles
+  const styles = useMemo(() => ({
+    input: {
+      backgroundColor: primaryColor,
+      color: secondaryColor,
+      borderColor: `${secondaryColor}20`
+    },
+    button: {
+      backgroundColor: `${secondaryColor}10`,
+      color: secondaryColor,
+      hoverBackgroundColor: `${secondaryColor}20`
+    },
+    activeButton: {
+      backgroundColor: `${accentColor}20`,
+      color: accentColor
+    },
+    tag: {
+      backgroundColor: `${secondaryColor}10`,
+      color: secondaryColor
+    },
+    activeTag: {
+      backgroundColor: `${accentColor}20`,
+      color: accentColor
+    }
+  }), [accentColor, secondaryColor, primaryColor]);
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4" ref={filterRef}>
-      {/* Barra de Busca e Filtros Rápidos */}
+    <form 
+      onSubmit={(e) => e.preventDefault()} 
+      className="space-y-4" 
+      ref={filterRef}
+      style={{ fontFamily }}
+    >
+      {/* Search Bar and Quick Filters */}
       <div className="flex flex-col lg:flex-row gap-4">
-        {/* Input de Busca */}
+        {/* Search Input */}
         <div className="relative flex-1">
           <input
+            ref={searchInputRef}
             type="text"
             value={filters.search}
             onChange={(e) => updateFilters({ search: e.target.value })}
             placeholder="Buscar produtos..."
-            className="w-full pl-12 pr-4 py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+            className="w-full pl-12 pr-4 py-3 rounded-lg shadow-sm focus:ring-2 
+              focus:ring-opacity-50 transition-all duration-200"
+            style={{
+              ...styles.input,
+              focusRing: accentColor
+            }}
           />
-          <Search className="absolute left-4 top-3.5 w-5 h-5 text-gray-400" aria-hidden="true" />
+          <Search 
+            className="absolute left-4 top-3.5 w-5 h-5" 
+            style={{ color: `${secondaryColor}60` }}
+            aria-hidden="true"
+          />
           {filters.search && (
             <button
               type="button"
-              onClick={(e) => {
-                e.preventDefault();
-                updateFilters({ search: '' });
-              }}
-              className="absolute right-4 top-3.5 text-gray-400 hover:text-gray-600 transition-colors"
+              onClick={() => updateFilters({ search: '' })}
+              className="absolute right-4 top-3.5 hover:opacity-70 transition-opacity"
+              style={{ color: `${secondaryColor}60` }}
+              aria-label="Limpar busca"
             >
               <X className="w-5 h-5" />
             </button>
           )}
         </div>
 
-        {/* Botões de Filtro Rápido */}
-        <div className="flex gap-2 items-center">
-          {/* Categorias */}
-          <div className="relative">
-            <button
-              type="button"
-              onClick={() => handleDropdownToggle('category')}
-              className={`
-                flex items-center gap-2 px-4 py-3 rounded-lg border transition-colors
-                ${filters.categoryId ? 'bg-blue-50 border-blue-200 text-blue-600 dark:bg-blue-900/20 dark:border-blue-800' : 
-                'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700'}
-              `}
-            >
-              <Package className="w-5 h-5" />
-              <span>{filters.categoryId ? categories.find(c => c.id === filters.categoryId)?.name : 'Categorias'}</span>
-              <ChevronDown className="w-4 h-4" />
-            </button>
+        {/* Quick Filter Buttons */}
+        <div className="flex gap-2 items-center overflow-x-auto pb-2 lg:pb-0">
+          {/* Categories */}
+          <button
+            type="button"
+            onClick={() => toggleDropdown('categories')}
+            className="flex items-center gap-2 px-4 py-3 rounded-lg transition-all duration-200"
+            style={filters.categoryId ? styles.activeButton : styles.button}
+            aria-expanded={dropdowns.categories}
+            aria-haspopup="true"
+          >
+            <Package className="w-5 h-5" />
+            <span>{filters.categoryId 
+              ? categories.find(c => c.id === filters.categoryId)?.name 
+              : 'Categorias'}</span>
+            {dropdowns.categories ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+          </button>
 
-            {showCategoryDropdown && (
-              <div className="absolute top-full mt-2 w-64 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50 max-h-96 overflow-y-auto">
-                <div className="p-2">
-                  {categories.map(category => (
-                    <button
-                      key={category.id}
-                      type="button"
-                      onClick={() => {
-                        updateFilters({ categoryId: category.id });
-                        handleDropdownToggle('');
-                      }}
-                      className={`w-full text-left px-3 py-2 rounded-lg transition-colors ${
-                        filters.categoryId === category.id
-                          ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-300'
-                          : 'hover:bg-gray-50 dark:hover:bg-gray-700'
-                      }`}
-                    >
-                      {category.name}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Marcas */}
-          <div className="relative">
-            <button
-              type="button"
-              onClick={() => handleDropdownToggle('brands')}
-              className={`
-                flex items-center gap-2 px-4 py-3 rounded-lg border transition-colors
-                ${filters.brand ? 'bg-blue-50 border-blue-200 text-blue-600 dark:bg-blue-900/20 dark:border-blue-800' : 
-                'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700'}
-              `}
-            >
-              <Star className="w-5 h-5" />
-              <span>{filters.brand || 'Marcas'}</span>
-              <ChevronDown className="w-4 h-4" />
-            </button>
-
-            {showBrandsDropdown && (
-              <div className="absolute top-full mt-2 w-64 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50 max-h-96 overflow-y-auto">
-                <div className="p-2">
-                  {brands.map(brand => (
-                    <button
-                      key={brand}
-                      type="button"
-                      onClick={() => {
-                        updateFilters({ brand });
-                        handleDropdownToggle('');
-                      }}
-                      className={`w-full text-left px-3 py-2 rounded-lg transition-colors ${
-                        filters.brand === brand
-                          ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-300'
-                          : 'hover:bg-gray-50 dark:hover:bg-gray-700'
-                      }`}
-                    >
-                      {brand}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
+          {/* Brands */}
+          <button
+            type="button"
+            onClick={() => toggleDropdown('brands')}
+            className="flex items-center gap-2 px-4 py-3 rounded-lg transition-all duration-200"
+            style={filters.brand ? styles.activeButton : styles.button}
+            aria-expanded={dropdowns.brands}
+            aria-haspopup="true"
+          >
+            <Star className="w-5 h-5" />
+            <span>{filters.brand || 'Marcas'}</span>
+            {dropdowns.brands ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+          </button>
 
           {/* Tags */}
-          <div className="relative">
-            <button
-              type="button"
-              onClick={() => handleDropdownToggle('tags')}
-              className={`
-                flex items-center gap-2 px-4 py-3 rounded-lg border transition-colors
-                ${filters.selectedTags.length > 0 ? 'bg-blue-50 border-blue-200 text-blue-600 dark:bg-blue-900/20 dark:border-blue-800' : 
-                'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700'}
-              `}
-            >
-              <Tag className="w-5 h-5" />
-              <span>Tags {filters.selectedTags.length > 0 && `(${filters.selectedTags.length})`}</span>
-              <ChevronDown className="w-4 h-4" />
-            </button>
+          <button
+            type="button"
+            onClick={() => toggleDropdown('tags')}
+            className="flex items-center gap-2 px-4 py-3 rounded-lg transition-all duration-200"
+            style={filters.selectedTags.length > 0 ? styles.activeButton : styles.button}
+            aria-expanded={dropdowns.tags}
+            aria-haspopup="true"
+          >
+            <Tag className="w-5 h-5" />
+            <span>Tags {filters.selectedTags.length > 0 && `(${filters.selectedTags.length})`}</span>
+            {dropdowns.tags ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+          </button>
 
-            {showTagsDropdown && (
-              <div className="absolute top-full mt-2 w-64 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50 max-h-96 overflow-y-auto">
-                <div className="p-3 flex flex-wrap gap-2">
-                  {tags.map(tag => (
-                    <button
-                      key={tag}
-                      type="button"
-                      onClick={(e) => toggleTag(tag, e)}
-                      className={`px-3 py-1 rounded-full text-sm transition-colors ${
-                        filters.selectedTags.includes(tag)
-                          ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300'
-                          : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300 hover:bg-blue-50 dark:hover:bg-blue-900/20'
-                      }`}
-                    >
-                      {tag}
-                    </button>
-                  ))}
-                </div>
-              </div>
+          {/* More Filters */}
+          <button
+            type="button"
+            onClick={() => toggleDropdown('filter')}
+            className="flex items-center gap-2 px-4 py-3 rounded-lg transition-all duration-200 relative"
+            style={activeFiltersCount > 0 ? styles.activeButton : styles.button}
+            aria-expanded={dropdowns.filter}
+            aria-haspopup="true"
+          >
+            <Filter className="w-5 h-5" />
+            <span>Filtros</span>
+            {activeFiltersCount > 0 && (
+              <span 
+                className="absolute -top-2 -right-2 w-5 h-5 rounded-full flex items-center justify-center text-xs"
+                style={{ backgroundColor: accentColor, color: primaryColor }}
+              >
+                {activeFiltersCount}
+              </span>
             )}
-          </div>
-
-          {/* Outros Filtros */}
-          <div className="relative">
-            <button
-              type="button"
-              onClick={() => handleDropdownToggle('filter')}
-              className={`
-                flex items-center gap-2 px-4 py-3 rounded-lg border transition-colors relative
-                ${showFilterDropdown ? 'bg-blue-50 border-blue-200 text-blue-600 dark:bg-blue-900/20 dark:border-blue-800' : 
-                'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700'}
-              `}
-            >
-              <Filter className="w-5 h-5" />
-              <span>Filtros</span>
-              {activeFiltersCount > 0 && (
-                <span className="absolute -top-2 -right-2 bg-blue-600 text-white w-5 h-5 rounded-full flex items-center justify-center text-xs">
-                  {activeFiltersCount}
-                </span>
-              )}
-            </button>
-
-            {showFilterDropdown && (
-              <div className="absolute top-full right-0 mt-2 w-72 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50">
-                <div className="p-4 space-y-4">
-                  {/* Filtro de Preço */}
-                  <div>
-                    <h3 className="font-medium mb-2 flex items-center gap-2">
-                      <DollarSign className="w-5 h-5 text-green-500" />
-                      Preço
-                    </h3>
-                    <div className="space-y-4">
-                      <div className="flex items-center gap-2">
-                        <div className="relative flex-1">
-                          <span className="absolute left-3 top-2 text-gray-500">R$</span>
-                          <input
-                            type="number"
-                            value={filters.minPrice ?? ''}
-                            onChange={(e) => {
-                              const value = e.target.value === '' ? null : Number(e.target.value);
-                              updateFilters({ minPrice: value });
-                            }}
-                            placeholder="Mínimo"
-                            className="w-full pl-10 p-2 border rounded dark:bg-gray-700 dark:border-gray-600"
-                            min="0"
-                            step="0.01"
-                          />
-                        </div>
-                        <span className="text-gray-500">até</span>
-                        <div className="relative flex-1">
-                          <span className="absolute left-3 top-2 text-gray-500">R$</span>
-                          <input
-                            type="number"
-                            value={filters.maxPrice ?? ''}
-                            onChange={(e) => {
-                              const value = e.target.value === '' ? null : Number(e.target.value);
-                              updateFilters({ maxPrice: value });
-                            }}
-                            placeholder="Máximo"
-                            className="w-full pl-10 p-2 border rounded dark:bg-gray-700 dark:border-gray-600"
-                            min="0"
-                            step="0.01"
-                          />
-                        </div>
-                      </div>
-
-                      {/* Checkbox Promoção */}
-                      <label className="flex items-center gap-2 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={filters.hasPromotion === true}
-                          onChange={(e) => {
-                            updateFilters({ hasPromotion: e.target.checked ? true : null });
-                          }}
-                          className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                        />
-                        <span>Somente produtos em promoção</span>
-                      </label>
-                    </div>
-                  </div>
-
-                  {/* Botões de Ação */}
-                  <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
-                    <div className="flex justify-between items-center">
-                      <button
-                        type="button"
-                        onClick={clearFilters}
-                        className="text-sm text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
-                      >
-                        Limpar filtros
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleDropdownToggle('')}
-                        className="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
-                      >
-                        Fechar
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
+          </button>
         </div>
       </div>
 
-      {/* Filtros Ativos */}
+      {/* Category Dropdown */}
+      {dropdowns.categories && (
+        <div className="absolute mt-2 w-64 rounded-lg shadow-lg z-50 overflow-hidden"
+          style={{ 
+            backgroundColor: primaryColor,
+            border: `1px solid ${secondaryColor}20`
+          }}
+        >
+          <div className="p-2 max-h-80 overflow-y-auto custom-scrollbar">
+            {categories.map(category => (
+              <button
+                key={category.id}
+                type="button"
+                onClick={() => {
+                  updateFilters({ categoryId: category.id });
+                  toggleDropdown('categories');
+                }}
+                className="w-full text-left px-3 py-2 rounded-lg transition-all duration-200"
+                style={
+                  filters.categoryId === category.id
+                    ? styles.activeButton
+                    : {
+                        ...styles.button,
+                        ':hover': { backgroundColor: styles.button.hoverBackgroundColor }
+                      }
+                }
+              >
+                {category.name}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Brands Dropdown */}
+      {dropdowns.brands && (
+        <div className="absolute mt-2 w-64 rounded-lg shadow-lg z-50 overflow-hidden"
+          style={{ 
+            backgroundColor: primaryColor,
+            border: `1px solid ${secondaryColor}20`
+          }}
+        >
+          <div className="p-2 max-h-80 overflow-y-auto custom-scrollbar">
+            {brands.map(brand => (
+              <button
+                key={brand}
+                type="button"
+                onClick={() => {
+                  updateFilters({ brand });
+                  toggleDropdown('brands');
+                }}
+                className="w-full text-left px-3 py-2 rounded-lg transition-all duration-200"
+                style={
+                  filters.brand === brand
+                    ? styles.activeButton
+                    : {
+                        ...styles.button,
+                        ':hover': { backgroundColor: styles.button.hoverBackgroundColor }
+                      }
+                }
+              >
+                {brand}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Tags Dropdown */}
+      {dropdowns.tags && (
+        <div className="absolute mt-2 w-80 rounded-lg shadow-lg z-50 overflow-hidden"
+          style={{ 
+            backgroundColor: primaryColor,
+            border: `1px solid ${secondaryColor}20`
+          }}
+        >
+          <div className="p-3 max-h-80 overflow-y-auto custom-scrollbar">
+            <div className="flex flex-wrap gap-2">
+              {tags.map(tag => (
+                <button
+                  key={tag}
+                  type="button"
+                  onClick={() => toggleTag(tag)}
+                  className="px-3 py-1 rounded-full text-sm transition-all duration-200"
+                  style={
+                    filters.selectedTags.includes(tag)
+                      ? styles.activeButton
+                      : styles.button
+                  }
+                >
+                  {tag}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Advanced Filters Dropdown */}
+      {dropdowns.filter && (
+        <div className="absolute mt-2 w-72 rounded-lg shadow-lg z-50 overflow-hidden"
+          style={{ 
+            backgroundColor: primaryColor,
+            border: `1px solid ${secondaryColor}20`
+          }}
+        >
+          <div className="p-4 space-y-4">
+            {/* Price Range */}
+            <div>
+              <h3 className="font-medium mb-2 flex items-center gap-2">
+                <DollarSign className="w-5 h-5" style={{ color: accentColor }} />
+                <span>Preço</span>
+              </h3>
+              <div className="space-y-4">
+                <div className="flex items-center gap-2">
+                  <div className="relative flex-1">
+                    <span className="absolute left-3 top-2" style={{ color: `${secondaryColor}60` }}>
+                      R$
+                    </span>
+                    <input
+                      type="number"
+                      value={filters.minPrice ?? ''}
+                      onChange={(e) => {
+                        const value = e.target.value === '' ? null : Number(e.target.value);
+                        updateFilters({ minPrice: value });
+                      }}
+                      placeholder="Mínimo"
+                      className="w-full pl-10 p-2 rounded transition-all duration-200"
+                      style={styles.input}
+                      min="0"
+                      step="0.01"
+                    />
+                  </div>
+                  <span style={{ color: `${secondaryColor}60` }}>até</span>
+                  <div className="relative flex-1">
+                    <span className="absolute left-3 top-2" style={{ color: `${secondaryColor}60` }}>
+                      R$
+                    </span>
+                    <input
+                      type="number"
+                      value={filters.maxPrice ?? ''}
+                      onChange={(e) => {
+                        const value = e.target.value === '' ? null : Number(e.target.value);
+                        updateFilters({ maxPrice: value });
+                      }}
+                      placeholder="Máximo"
+                      className="w-full pl-10 p-2 rounded transition-all duration-200"
+                      style={styles.input}
+                      min="0"
+                      step="0.01"
+                    />
+                  </div>
+                </div>
+
+                {/* Promotion Checkbox */}
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={filters.hasPromotion === true}
+                    onChange={(e) => {
+                      updateFilters({ hasPromotion: e.target.checked ? true : null });
+                    }}
+                    className="rounded transition-colors"
+                    style={{ 
+                      accentColor: accentColor,
+                      borderColor: `${secondaryColor}40`
+                    }}
+                  />
+                  <span style={{ color: secondaryColor }}>
+                    Somente produtos em promoção
+                  </span>
+                </label>
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="pt-4 border-t flex justify-between items-center"
+              style={{ borderColor: `${secondaryColor}20` }}
+            >
+              <button
+                type="button"
+                onClick={clearFilters}
+                className="text-sm transition-colors"
+                style={{ color: `${accentColor}` }}
+              >
+                Limpar filtros
+              </button>
+              <button
+                type="button"
+                onClick={() => toggleDropdown('filter')}
+                className="text-sm transition-colors"
+                style={{ color: accentColor }}
+              >
+                Fechar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Active Filters */}
       {activeFiltersCount > 0 && (
         <div className="flex flex-wrap gap-2 items-center py-2">
+          {/* Category Filter Tag */}
           {filters.categoryId && (
-            <span className="inline-flex items-center gap-1 px-3 py-1 bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300 rounded-full text-sm">
+            <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm"
+              style={styles.activeButton}
+            >
               <Package className="w-4 h-4" />
               {categories.find(c => c.id === filters.categoryId)?.name}
               <button
                 type="button"
-                onClick={(e) => {
-                  e.preventDefault();
-                  updateFilters({ categoryId: null });
-                }}
-                className="ml-1 hover:text-blue-800 dark:hover:text-blue-200"
+                onClick={() => updateFilters({ categoryId: null })}
+                className="ml-1 hover:opacity-70 transition-opacity"
+                aria-label="Remover filtro de categoria"
               >
                 <X className="w-4 h-4" />
               </button>
             </span>
           )}
 
+          {/* Brand Filter Tag */}
           {filters.brand && (
-            <span className="inline-flex items-center gap-1 px-3 py-1 bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300 rounded-full text-sm">
+            <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm"
+              style={styles.activeButton}
+            >
               <Star className="w-4 h-4" />
               {filters.brand}
               <button
                 type="button"
-                onClick={(e) => {
-                  e.preventDefault();
-                  updateFilters({ brand: null });
-                }}
-                className="ml-1 hover:text-green-800 dark:hover:text-green-200"
+                onClick={() => updateFilters({ brand: null })}
+                className="ml-1 hover:opacity-70 transition-opacity"
+                aria-label="Remover filtro de marca"
               >
                 <X className="w-4 h-4" />
               </button>
             </span>
           )}
 
+          {/* Tags Filter Tags */}
           {filters.selectedTags.map(tag => (
             <span
               key={tag}
-              className="inline-flex items-center gap-1 px-3 py-1 bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300 rounded-full text-sm"
+              className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm"
+              style={styles.activeButton}
             >
               <Tag className="w-4 h-4" />
               {tag}
               <button
                 type="button"
-                onClick={(e) => toggleTag(tag, e)}
-                className="ml-1 hover:text-purple-800 dark:hover:text-purple-200"
+                onClick={() => toggleTag(tag)}
+                className="ml-1 hover:opacity-70 transition-opacity"
+                aria-label={`Remover tag ${tag}`}
               >
                 <X className="w-4 h-4" />
               </button>
             </span>
           ))}
 
+          {/* Price Filter Tag */}
           {(filters.minPrice || filters.maxPrice) && (
-            <span className="inline-flex items-center gap-1 px-3 py-1 bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300 rounded-full text-sm">
+            <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm"
+              style={styles.activeButton}
+            >
               <DollarSign className="w-4 h-4" />
               {filters.minPrice && filters.maxPrice
                 ? `R$ ${filters.minPrice} - R$ ${filters.maxPrice}`
@@ -543,62 +661,66 @@ export function StoreSearch({
               }
               <button
                 type="button"
-                onClick={(e) => {
-                  e.preventDefault();
-                  updateFilters({ minPrice: null, maxPrice: null });
-                }}
-                className="ml-1 hover:text-yellow-800 dark:hover:text-yellow-200"
+                onClick={() => updateFilters({ minPrice: null, maxPrice: null })}
+                className="ml-1 hover:opacity-70 transition-opacity"
+                aria-label="Remover filtro de preço"
               >
                 <X className="w-4 h-4" />
               </button>
             </span>
           )}
 
+          {/* Promotion Filter Tag */}
           {filters.hasPromotion && (
-            <span className="inline-flex items-center gap-1 px-3 py-1 bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300 rounded-full text-sm">
+            <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm"
+              style={styles.activeButton}
+            >
               <DollarSign className="w-4 h-4" />
               Em promoção
               <button
                 type="button"
-                onClick={(e) => {
-                  e.preventDefault();
-                  updateFilters({ hasPromotion: null });
-                }}
-                className="ml-1 hover:text-red-800 dark:hover:text-red-200"
+                onClick={() => updateFilters({ hasPromotion: null })}
+                className="ml-1 hover:opacity-70 transition-opacity"
+                aria-label="Remover filtro de promoção"
               >
                 <X className="w-4 h-4" />
               </button>
             </span>
           )}
 
+          {/* Clear All Button */}
           <button
             type="button"
             onClick={clearFilters}
-            className="text-sm text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+            className="text-sm hover:opacity-70 transition-opacity"
+            style={{ color: `${secondaryColor}80` }}
           >
             Limpar todos
           </button>
         </div>
       )}
 
-      {/* Estado de Loading */}
+      {/* Loading State */}
       {isSearching && (
         <div className="flex justify-center py-4">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+          <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2"
+            style={{ borderColor: accentColor }}
+          />
         </div>
       )}
 
-      {/* Sem Resultados */}
+      {/* No Results Message */}
       {!isSearching && searchResults.length === 0 && activeFiltersCount > 0 && (
         <div className="text-center py-8">
-          <Package className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-          <p className="text-gray-600 dark:text-gray-400">
+          <Package className="w-16 h-16 mx-auto mb-4" style={{ color: `${secondaryColor}40` }} />
+          <p className="mb-4" style={{ color: `${secondaryColor}80` }}>
             Nenhum produto encontrado com os filtros selecionados
           </p>
           <button
             type="button"
             onClick={clearFilters}
-            className="mt-4 text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+            className="transition-colors"
+            style={{ color: accentColor }}
           >
             Limpar filtros e tentar novamente
           </button>
