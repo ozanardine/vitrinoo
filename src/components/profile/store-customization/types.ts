@@ -30,23 +30,24 @@ export interface StoreFormData {
   logoSize: string;
   titleSize: string;
   descriptionSize: string;
-  titleFont: string;
-  bodyFont: string;
+  titleFont: 'sans' | 'serif' | 'mono' | 'display';
+  bodyFont: 'sans' | 'serif' | 'mono';
 
   // Layout Settings
   productCardStyle: 'default' | 'compact' | 'minimal';
-  gridColumns: string;
+  gridColumns: '2' | '3' | '4' | '5';
   gridGap: string;
-  containerWidth: string;
+  containerWidth: 'max-w-5xl' | 'max-w-6xl' | 'max-w-7xl' | 'max-w-full';
 
   // Social & Contact
   socialLinks: Array<{
     type: string;
     url: string;
+    countryCode?: string;
   }>;
 
   // Social Settings
-  socialSettings: {
+  socialSettings?: {
     contactsPosition: 'above' | 'below';
     displayFormat: 'username' | 'network';
   };
@@ -67,7 +68,7 @@ export interface StoreCustomizationContextType {
 export interface Section {
   id: string;
   title: string;
-  icon: any;
+  icon: React.FC<{ className?: string }>;
 }
 
 export interface StoreCustomizationProps {

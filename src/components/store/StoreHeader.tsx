@@ -23,7 +23,38 @@ const THEME_COLORS = {
   }
 } as const;
 
-// Interfaces
+// Constantes
+const SOCIAL_ICONS = {
+  phone: Phone,
+  whatsapp: MessageCircle,
+  telegram: MessageCircle,
+  email: Mail,
+  instagram: Instagram,
+  facebook: Facebook,
+  youtube: Youtube,
+  tiktok: TikTok,
+  twitter: Twitter,
+  website: Link2
+} as const;
+
+const SOCIAL_NAMES = {
+  phone: 'Telefone',
+  whatsapp: 'WhatsApp',
+  telegram: 'Telegram',
+  email: 'Email',
+  instagram: 'Instagram',
+  facebook: 'Facebook',
+  youtube: 'YouTube',
+  tiktok: 'TikTok',
+  twitter: 'Twitter',
+  website: 'Website'
+} as const;
+
+const DEFAULT_SOCIAL_SETTINGS = {
+  contactsPosition: 'above' as const,
+  displayFormat: 'username' as const
+};
+
 interface StoreHeaderProps {
   name: string;
   description: string | null;
@@ -54,39 +85,12 @@ interface StoreHeaderProps {
     descriptionSize: string;
     titleFont: string;
     bodyFont: string;
-    socialSettings: {
+    socialSettings?: {
       contactsPosition: 'above' | 'below';
       displayFormat: 'username' | 'network';
     };
   };
 }
-
-// Constantes
-const SOCIAL_ICONS = {
-  phone: Phone,
-  whatsapp: MessageCircle,
-  telegram: MessageCircle,
-  email: Mail,
-  instagram: Instagram,
-  facebook: Facebook,
-  youtube: Youtube,
-  tiktok: TikTok,
-  twitter: Twitter,
-  website: Link2
-} as const;
-
-const SOCIAL_NAMES = {
-  phone: 'Telefone',
-  whatsapp: 'WhatsApp',
-  telegram: 'Telegram',
-  email: 'Email',
-  instagram: 'Instagram',
-  facebook: 'Facebook',
-  youtube: 'YouTube',
-  tiktok: 'TikTok',
-  twitter: 'Twitter',
-  website: 'Website'
-} as const;
 
 export function StoreHeader({
   name,
@@ -222,12 +226,14 @@ export function StoreHeader({
   const renderSocialLinks = () => {
     if (!socialMediaLinks.length) return null;
 
+    const settings = customization.socialSettings || DEFAULT_SOCIAL_SETTINGS;
+
     return (
       <div className="flex flex-wrap justify-center gap-4">
         {socialMediaLinks.map((link, index) => {
           const Icon = SOCIAL_ICONS[link.type as keyof typeof SOCIAL_ICONS] || Link2;
           const url = generateSocialUrl(link.type, link.url, link.countryCode);
-          const displayText = customization.socialSettings.displayFormat === 'network' 
+          const displayText = settings.displayFormat === 'network' 
             ? SOCIAL_NAMES[link.type as keyof typeof SOCIAL_NAMES]
             : link.url;
           
@@ -330,7 +336,7 @@ export function StoreHeader({
         {/* Links Sociais e Contatos */}
         {customization.headerVisibility.socialLinks && (
           <div className="flex flex-col items-center gap-4 transition-all duration-300">
-            {customization.socialSettings.contactsPosition === 'above' ? (
+            {(customization.socialSettings?.contactsPosition || DEFAULT_SOCIAL_SETTINGS.contactsPosition) === 'above' ? (
               <>
                 {renderContactInfo()}
                 {renderSocialLinks()}

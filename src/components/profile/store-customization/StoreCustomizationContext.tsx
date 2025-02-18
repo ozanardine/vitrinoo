@@ -1,42 +1,29 @@
 import React, { createContext, useContext, useState } from 'react';
 import { StoreFormData, StoreCustomizationContextType } from './types';
+import { Store } from '../../../lib/types';
 import { supabase } from '../../../lib/supabase';
 
 const StoreCustomizationContext = createContext<StoreCustomizationContextType | null>(null);
 
 interface ProviderProps {
   children: (context: StoreCustomizationContextType) => React.ReactNode;
-  store: {
-    id: string;
-    name: string;
-    slug: string;
-    description: string | null;
-    logo_url: string | null;
-    primary_color: string;
-    secondary_color: string;
-    accent_color: string;
-    header_style: string;
-    header_height: string;
-    header_image: string | null;
-    header_gradient: string;
-    header_overlay_opacity: string;
-    header_alignment: string;
-    logo_size: string;
-    title_size: string;
-    description_size: string;
-    title_font: string;
-    body_font: string;
-    product_card_style: string;
-    grid_columns: string;
-    grid_gap: string;
-    container_width: string;
-    social_links: Array<{
-      type: string;
-      url: string;
-    }>;
-  };
+  store: Store;
   onUpdate: () => void;
 }
+
+const DEFAULT_VALUES = {
+  titleFont: 'sans' as const,
+  bodyFont: 'sans' as const,
+  gridColumns: '4' as const,
+  containerWidth: 'max-w-7xl' as const,
+  productCardStyle: 'default' as const,
+  headerStyle: 'solid' as const,
+  headerAlignment: 'center' as const,
+  socialSettings: {
+    contactsPosition: 'above' as const,
+    displayFormat: 'username' as const
+  }
+};
 
 export function StoreCustomizationProvider({ children, store, onUpdate }: ProviderProps) {
   const [formData, setFormData] = useState<StoreFormData>({
@@ -47,13 +34,13 @@ export function StoreCustomizationProvider({ children, store, onUpdate }: Provid
     primaryColor: store.primary_color || '#000000',
     secondaryColor: store.secondary_color || '#ffffff',
     accentColor: store.accent_color || '#0066FF',
-    headerStyle: store.header_style as any || 'solid',
+    headerStyle: (store.header_style as StoreFormData['headerStyle']) || DEFAULT_VALUES.headerStyle,
     headerHeight: store.header_height?.replace('px', '') || '400',
     headerImage: store.header_image || '',
     headerGradient: store.header_gradient || 'to bottom',
     headerOverlayOpacity: store.header_overlay_opacity || '50',
-    headerAlignment: store.header_alignment as any || 'center',
-    headerVisibility: {
+    headerAlignment: (store.header_alignment as StoreFormData['headerAlignment']) || DEFAULT_VALUES.headerAlignment,
+    headerVisibility: store.header_visibility || {
       logo: true,
       title: true,
       description: true,
@@ -62,17 +49,14 @@ export function StoreCustomizationProvider({ children, store, onUpdate }: Provid
     logoSize: store.logo_size?.replace('px', '') || '160',
     titleSize: store.title_size?.replace('px', '') || '48',
     descriptionSize: store.description_size?.replace('px', '') || '18',
-    titleFont: store.title_font || 'sans',
-    bodyFont: store.body_font || 'sans',
-    productCardStyle: store.product_card_style as any || 'default',
-    gridColumns: store.grid_columns || '4',
+    titleFont: (store.title_font as StoreFormData['titleFont']) || DEFAULT_VALUES.titleFont,
+    bodyFont: (store.body_font as StoreFormData['bodyFont']) || DEFAULT_VALUES.bodyFont,
+    productCardStyle: (store.product_card_style as StoreFormData['productCardStyle']) || DEFAULT_VALUES.productCardStyle,
+    gridColumns: (store.grid_columns as StoreFormData['gridColumns']) || DEFAULT_VALUES.gridColumns,
     gridGap: store.grid_gap || '24',
-    containerWidth: store.container_width || 'max-w-7xl',
+    containerWidth: (store.container_width as StoreFormData['containerWidth']) || DEFAULT_VALUES.containerWidth,
     socialLinks: store.social_links || [],
-    socialSettings: {
-      contactsPosition: store.social_settings?.contacts_position || 'above',
-      displayFormat: store.social_settings?.display_format || 'username'
-    }
+    socialSettings: store.social_settings || DEFAULT_VALUES.socialSettings
   });
 
   const [loading, setLoading] = useState(false);
@@ -117,6 +101,7 @@ export function StoreCustomizationProvider({ children, store, onUpdate }: Provid
           header_gradient: formData.headerGradient,
           header_overlay_opacity: formData.headerOverlayOpacity,
           header_alignment: formData.headerAlignment,
+          header_visibility: formData.headerVisibility,
           logo_size: `${formData.logoSize}px`,
           title_size: `${formData.titleSize}px`,
           description_size: `${formData.descriptionSize}px`,
@@ -127,10 +112,7 @@ export function StoreCustomizationProvider({ children, store, onUpdate }: Provid
           grid_gap: formData.gridGap,
           container_width: formData.containerWidth,
           social_links: formData.socialLinks,
-          social_settings: {
-            contacts_position: formData.socialSettings.contactsPosition,
-            display_format: formData.socialSettings.displayFormat
-          },
+          social_settings: formData.socialSettings,
           updated_at: new Date().toISOString()
         })
         .eq('id', store.id);

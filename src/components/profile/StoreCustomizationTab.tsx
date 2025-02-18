@@ -102,6 +102,7 @@ export function StoreCustomizationTab({ store, onUpdate }: StoreCustomizationTab
                       logoUrl={context.formData.logoUrl}
                       primaryColor={context.formData.primaryColor}
                       secondaryColor={context.formData.secondaryColor}
+                      accentColor={context.formData.accentColor}
                       socialLinks={context.formData.socialLinks}
                       customization={{
                         headerStyle: context.formData.headerStyle,
