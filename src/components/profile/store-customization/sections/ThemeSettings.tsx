@@ -105,7 +105,21 @@ export function ThemeSettings() {
   const { formData, updateFormData } = useStoreCustomization();
   const { theme: siteTheme } = useStore();
   const { theme: storeTheme } = useStoreTheme();
-  const [selectedPreset, setSelectedPreset] = useState<string | null>(null);
+  const [selectedPreset, setSelectedPreset] = useState<string | null>(() => {
+    // Verificar se as cores atuais correspondem a algum tema predefinido
+    const currentColors = {
+      primary: formData.primaryColor,
+      secondary: formData.secondaryColor,
+      accent: formData.accentColor,
+      background: formData.headerBackground
+    };
+
+    return Object.entries(COLOR_THEMES).find(([_, theme]) => 
+      Object.entries(theme.colors).every(([key, value]) => 
+        value.toLowerCase() === currentColors[key as keyof typeof currentColors].toLowerCase()
+      )
+    )?.[0] || null;
+  });
 
   // Preview styles based on current colors
   const previewStyles = useMemo(() => {
@@ -133,6 +147,8 @@ export function ThemeSettings() {
   const applyThemePreset = (presetKey: keyof typeof COLOR_THEMES) => {
     const preset = COLOR_THEMES[presetKey];
     setSelectedPreset(presetKey);
+    
+    // Apenas atualiza o estado local, não salva no banco
     updateFormData({
       primaryColor: preset.colors.primary,
       secondaryColor: preset.colors.secondary,
@@ -150,35 +166,53 @@ export function ThemeSettings() {
           Temas Predefinidos
         </h3>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {Object.entries(COLOR_THEMES).map(([key, theme]) => (
-            <button
-              key={key}
-              onClick={() => applyThemePreset(key as keyof typeof COLOR_THEMES)}
-              className={`p-4 rounded-lg border-2 transition-all hover:scale-[1.02] ${
-                selectedPreset === key ? 'border-blue-500' : 'border-gray-200 dark:border-gray-700'
-              }`}
-              style={{
-                backgroundColor: theme.colors.primary,
-                color: theme.colors.secondary
-              }}
-            >
-              <div className="flex justify-between items-center mb-3">
-                <span className="font-medium">{theme.name}</span>
-                {selectedPreset === key && (
-                  <Check className="w-5 h-5 text-blue-500" />
+          {Object.entries(COLOR_THEMES).map(([key, theme]) => {
+            const isSelected = selectedPreset === key;
+            const textColor = calculateTextColor(theme.colors.primary);
+            
+            return (
+              <button
+                key={key}
+                onClick={() => applyThemePreset(key as keyof typeof COLOR_THEMES)}
+                className={`p-6 rounded-lg border-2 transition-all hover:scale-[1.02] relative overflow-hidden ${
+                  isSelected ? 'border-blue-500 shadow-lg' : 'border-gray-200 dark:border-gray-700'
+                }`}
+                style={{
+                  backgroundColor: theme.colors.primary,
+                  color: theme.colors.secondary
+                }}
+              >
+                {isSelected && (
+                  <div className="absolute top-0 right-0 bg-blue-500 text-white px-3 py-1 rounded-bl">
+                    <Check className="w-4 h-4" />
+                  </div>
                 )}
-              </div>
-              <div className="flex gap-2">
-                {Object.values(theme.colors).map((color, index) => (
-                  <div
-                    key={index}
-                    className="w-6 h-6 rounded-full border border-gray-200"
-                    style={{ backgroundColor: color }}
-                  />
-                ))}
-              </div>
-            </button>
-          ))}
+                
+                <div className="mb-4">
+                  <h4 className="text-lg font-semibold mb-2">{theme.name}</h4>
+                  <div className="flex gap-2">
+                    {Object.entries(theme.colors).map(([colorKey, color]) => (
+                      <div
+                        key={colorKey}
+                        className="w-8 h-8 rounded-full border border-gray-200 dark:border-gray-700 shadow-sm"
+                        style={{ backgroundColor: color }}
+                        title={`${colorKey.charAt(0).toUpperCase() + colorKey.slice(1)}: ${color}`}
+                      />
+                    ))}
+                  </div>
+                </div>
+
+                <div 
+                  className="p-3 rounded-lg transition-colors"
+                  style={{ backgroundColor: theme.colors.accent }}
+                >
+                  <span style={{ color: textColor === 'light' ? '#ffffff' : '#000000' }}>
+                    Prévia do Botão
+                  </span>
+                </div>
+              </button>
+            );
+          })}
         </div>
       </div>
 
@@ -190,7 +224,10 @@ export function ThemeSettings() {
           <ColorPicker
             label="Cor Principal"
             value={formData.primaryColor}
-            onChange={(color) => updateFormData({ primaryColor: color })}
+            onChange={(color) => {
+              updateFormData({ primaryColor: color });
+              setSelectedPreset(null);
+            }}
             description="Cor de fundo principal e elementos primários"
             presets={COLOR_PRESETS.primary}
           />
@@ -198,7 +235,10 @@ export function ThemeSettings() {
           <ColorPicker
             label="Cor do Texto"
             value={formData.secondaryColor}
-            onChange={(color) => updateFormData({ secondaryColor: color })}
+            onChange={(color) => {
+              updateFormData({ secondaryColor: color });
+              setSelectedPreset(null);
+            }}
             description="Cor dos textos e elementos secundários"
             presets={COLOR_PRESETS.secondary}
           />
@@ -206,7 +246,10 @@ export function ThemeSettings() {
           <ColorPicker
             label="Cor de Destaque"
             value={formData.accentColor}
-            onChange={(color) => updateFormData({ accentColor: color })}
+            onChange={(color) => {
+              updateFormData({ accentColor: color });
+              setSelectedPreset(null);
+            }}
             description="Cor para botões e elementos interativos"
             presets={COLOR_PRESETS.accent}
           />
@@ -214,7 +257,10 @@ export function ThemeSettings() {
           <ColorPicker
             label="Cor de Fundo"
             value={formData.headerBackground}
-            onChange={(color) => updateFormData({ headerBackground: color })}
+            onChange={(color) => {
+              updateFormData({ headerBackground: color });
+              setSelectedPreset(null);
+            }}
             description="Cor de fundo do cabeçalho quando estilo sólido"
             presets={COLOR_PRESETS.background}
           />
