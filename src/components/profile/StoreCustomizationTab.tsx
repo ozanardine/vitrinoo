@@ -92,36 +92,40 @@ export function StoreCustomizationTab({ store, onUpdate }: StoreCustomizationTab
               }} className="space-y-8">
                 {renderSection(context)}
 
-                {/* Preview */}
-                <div>
-                  <h3 className="text-lg font-semibold mb-4">Prévia</h3>
-                  <div className="rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700">
-                    <StoreHeader
-                      name={context.formData.name}
-                      description={context.formData.description}
-                      logoUrl={context.formData.logoUrl}
-                      primaryColor={context.formData.primaryColor}
-                      secondaryColor={context.formData.secondaryColor}
-                      accentColor={context.formData.accentColor}
-                      socialLinks={context.formData.socialLinks}
-                      customization={{
-                        headerStyle: context.formData.headerStyle,
-                        headerHeight: `${context.formData.headerHeight}px`,
-                        headerImage: context.formData.headerImage,
-                        headerGradient: context.formData.headerGradient,
-                        headerAlignment: context.formData.headerAlignment,
-                        headerOverlayOpacity: context.formData.headerOverlayOpacity,
-                        headerVisibility: context.formData.headerVisibility,
-                        logoSize: `${context.formData.logoSize}px`,
-                        titleSize: `${context.formData.titleSize}px`,
-                        descriptionSize: `${context.formData.descriptionSize}px`,
-                        titleFont: context.formData.titleFont,
-                        bodyFont: context.formData.bodyFont,
-                        socialSettings: context.formData.socialSettings
-                      }}
-                    />
+                {/* Preview - Hidden for Layout section */}
+                {activeSection !== 'layout' && (
+                  <div>
+                    <h3 className="text-lg font-semibold mb-4">Prévia</h3>
+                    <div className="rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700">
+                      <StoreHeader
+                        name={context.formData.name}
+                        description={context.formData.description}
+                        logoUrl={context.formData.logoUrl}
+                        primaryColor={context.formData.primaryColor}
+                        secondaryColor={context.formData.secondaryColor}
+                        accentColor={context.formData.accentColor}
+                        socialLinks={context.formData.socialLinks}
+                        customization={{
+                          headerStyle: context.formData.headerStyle,
+                          headerHeight: `${context.formData.headerHeight}px`,
+                          headerImage: context.formData.headerImage,
+                          headerGradient: context.formData.headerGradient,
+                          headerAlignment: context.formData.headerAlignment,
+                          headerOverlayOpacity: context.formData.headerOverlayOpacity,
+                          headerVisibility: context.formData.headerVisibility,
+                          logoSize: `${context.formData.logoSize}px`,
+                          titleSize: `${context.formData.titleSize}px`,
+                          descriptionSize: `${context.formData.descriptionSize}px`,
+                          titleFont: context.formData.titleFont,
+                          bodyFont: context.formData.bodyFont,
+                          socialSettings: context.formData.socialSettings,
+                          allowThemeToggle: context.formData.allowThemeToggle,
+                          preview: true
+                        }}
+                      />
+                    </div>
                   </div>
-                </div>
+                )}
 
                 <div className="flex justify-end space-x-4">
                   <button

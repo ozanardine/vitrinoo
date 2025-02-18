@@ -11,6 +11,8 @@ export interface StoreFormData {
   primaryColor: string;
   secondaryColor: string;
   accentColor: string;
+  headerBackground: string;
+  allowThemeToggle: boolean;
 
   // Header Settings
   headerStyle: 'solid' | 'gradient' | 'image';
@@ -74,4 +76,12 @@ export interface Section {
 export interface StoreCustomizationProps {
   store: Store;
   onUpdate: () => void;
+}
+
+export interface ColorPickerProps {
+  label: string;
+  value: string;
+  onChange: (color: string) => void;
+  description?: string;
+  presets?: string[];
 }

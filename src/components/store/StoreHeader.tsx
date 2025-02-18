@@ -5,25 +5,31 @@ import {
 } from 'lucide-react';
 import { generateHeaderStyles } from '../../lib/colors';
 import { generateSocialUrl } from '../../lib/constants';
-import { useStore } from '../../lib/store';
+import { useStoreTheme } from '../../lib/store-theme';
+import { StoreThemeToggle } from './StoreThemeToggle';
 
 // Cores padrão por tema
-const THEME_COLORS = {
+const THEME_PRESETS = {
   light: {
     background: '#ffffff',
-    text: '#1f2937',
-    muted: '#6b7280',
-    border: '#e5e7eb'
+    surface: '#f8fafc',
+    text: {
+      primary: '#1f2937',
+      secondary: '#4b5563',
+      muted: '#6b7280'
+    }
   },
   dark: {
     background: '#111827',
-    text: '#f9fafb',
-    muted: '#9ca3af',
-    border: '#374151'
+    surface: '#1f2937',
+    text: {
+      primary: '#f9fafb',
+      secondary: '#e5e7eb',
+      muted: '#9ca3af'
+    }
   }
 } as const;
 
-// Constantes
 const SOCIAL_ICONS = {
   phone: Phone,
   whatsapp: MessageCircle,
@@ -89,7 +95,9 @@ interface StoreHeaderProps {
       contactsPosition: 'above' | 'below';
       displayFormat: 'username' | 'network';
     };
+    allowThemeToggle?: boolean;
   };
+  preview?: boolean;
 }
 
 export function StoreHeader({
@@ -100,19 +108,20 @@ export function StoreHeader({
   secondaryColor,
   accentColor,
   socialLinks,
-  customization
+  customization,
+  preview = false
 }: StoreHeaderProps) {
-  const { theme } = useStore();
+  const { theme } = useStoreTheme();
   
   // Calcular cores baseadas no tema atual
   const themeColors = useMemo(() => {
-    const baseColors = THEME_COLORS[theme];
+    const baseColors = THEME_PRESETS[theme];
     return {
       background: customization.headerStyle === 'solid' ? primaryColor : baseColors.background,
-      text: secondaryColor || baseColors.text,
+      text: secondaryColor || baseColors.text.primary,
       accent: accentColor,
-      muted: baseColors.muted,
-      border: baseColors.border
+      muted: baseColors.text.muted,
+      border: theme === 'light' ? '#e5e7eb' : '#374151'
     };
   }, [theme, primaryColor, secondaryColor, accentColor, customization.headerStyle]);
 
@@ -268,6 +277,16 @@ export function StoreHeader({
       style={headerStyles}
       role="banner"
     >
+      {/* Theme Toggle */}
+      {customization.allowThemeToggle && (
+        <div className="absolute top-4 right-4 z-50">
+          <StoreThemeToggle 
+            accentColor={themeColors.accent}
+            preview={true}
+          />
+        </div>
+      )}
+
       {/* Overlay para background com imagem */}
       {customization.headerStyle === 'image' && (
         <div 

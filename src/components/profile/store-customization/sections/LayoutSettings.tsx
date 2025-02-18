@@ -9,11 +9,11 @@ export function LayoutSettings() {
   const [previewProducts] = useState(() => Array(12).fill(null).map((_, i) => ({
     id: `preview-${i}`,
     title: `Produto ${i + 1}`,
-    description: 'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.',
+    description: 'Lorem ipsum dolor sit amet',
     price: 99.99,
     brand: 'Marca Exemplo',
     tags: ['Tag 1', 'Tag 2'],
-    images: [`https://picsum.photos/seed/${i}/400/400`],
+    images: [],
     type: 'simple',
     store_id: '',
     created_at: new Date().toISOString()
@@ -54,7 +54,7 @@ export function LayoutSettings() {
     
     return (
       <div 
-        className="grid gap-4 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700"
+        className="grid p-4 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700"
         style={{ 
           gridTemplateColumns: `repeat(${columns}, 1fr)`,
           gap: `${gap}px`
@@ -67,37 +67,43 @@ export function LayoutSettings() {
               rounded-lg bg-white dark:bg-gray-700 shadow-sm overflow-hidden
               ${formData.productCardStyle === 'minimal' ? '' : 'p-4'}
               ${formData.productCardStyle === 'compact' ? 'flex gap-3' : ''}
+              transition-all duration-200 hover:shadow-md
             `}
           >
             {formData.productCardStyle === 'compact' ? (
               <>
-                <div className="w-24 h-24 bg-gray-100 dark:bg-gray-600 rounded flex-shrink-0 flex items-center justify-center">
-                  <Package className="w-8 h-8 text-gray-400" />
+                <div className="w-24 h-24 bg-gray-200 dark:bg-gray-600 rounded flex-shrink-0 flex items-center justify-center">
+                  <Package className="w-8 h-8 text-gray-400 dark:text-gray-500" />
                 </div>
-                <div className="flex-1 py-2">
-                  <div className="h-4 bg-gray-100 dark:bg-gray-600 rounded w-3/4 mb-2" />
-                  <div className="h-3 bg-gray-100 dark:bg-gray-600 rounded w-1/2 mb-3" />
-                  <div className="flex gap-1">
-                    <div className="h-5 bg-gray-100 dark:bg-gray-600 rounded-full w-12" />
-                    <div className="h-5 bg-gray-100 dark:bg-gray-600 rounded-full w-12" />
+                <div className="flex-1 py-2 space-y-2">
+                  <div className="h-4 bg-gray-200 dark:bg-gray-600 rounded w-3/4" />
+                  <div className="h-3 bg-gray-200 dark:bg-gray-600 rounded w-1/2" />
+                  <div className="flex gap-2">
+                    <div className="h-6 bg-gray-200 dark:bg-gray-600 rounded px-3 text-sm flex items-center justify-center text-gray-600 dark:text-gray-400">R$ 99,90</div>
+                    <div className="h-6 bg-blue-100 dark:bg-blue-900/30 rounded px-3 text-sm flex items-center justify-center text-blue-600 dark:text-blue-400">-20%</div>
                   </div>
                 </div>
               </>
             ) : (
               <>
                 <div className={`
-                  aspect-square bg-gray-100 dark:bg-gray-600 rounded 
-                  flex items-center justify-center
+                  aspect-square bg-gray-200 dark:bg-gray-600 rounded-lg
+                  flex items-center justify-center relative overflow-hidden group
                   ${formData.productCardStyle === 'minimal' ? 'mb-3' : 'mb-4'}
                 `}>
-                  <Package className="w-8 h-8 text-gray-400" />
+                  <Package className="w-12 h-12 text-gray-300 dark:text-gray-500 transition-transform group-hover:scale-110" />
+                  {index % 3 === 0 && (
+                    <div className="absolute top-2 right-2 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 text-xs font-medium px-2 py-1 rounded">-20%</div>
+                  )}
                 </div>
                 <div className={formData.productCardStyle === 'minimal' ? 'text-center px-3 pb-3' : ''}>
-                  <div className="h-4 bg-gray-100 dark:bg-gray-600 rounded w-3/4 mb-2" />
-                  <div className="h-3 bg-gray-100 dark:bg-gray-600 rounded w-1/2 mb-3" />
-                  <div className="flex gap-1">
-                    <div className="h-5 bg-gray-100 dark:bg-gray-600 rounded-full w-12" />
-                    <div className="h-5 bg-gray-100 dark:bg-gray-600 rounded-full w-12" />
+                  <div className="h-4 bg-gray-200 dark:bg-gray-600 rounded w-3/4 mb-2" />
+                  <div className="h-3 bg-gray-200 dark:bg-gray-600 rounded w-1/2 mb-3" />
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <div className="h-6 bg-gray-200 dark:bg-gray-600 rounded px-3 text-sm flex items-center justify-center text-gray-600 dark:text-gray-400">R$ 99,90</div>
+                    {index % 2 === 0 && (
+                      <div className="h-6 bg-green-100 dark:bg-green-900/30 rounded px-3 text-sm flex items-center justify-center text-green-600 dark:text-green-400">Em estoque</div>
+                    )}
                   </div>
                 </div>
               </>
