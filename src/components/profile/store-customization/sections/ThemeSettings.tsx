@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Moon, Sun, Palette, AlertCircle, Check } from 'lucide-react';
 import { useStoreCustomization } from '../StoreCustomizationContext';
 import { ColorPicker } from '../forms/ColorPicker';
@@ -68,45 +68,78 @@ const COLOR_THEMES = {
 // Color presets for individual color pickers
 const COLOR_PRESETS = {
   primary: [
-    '#ffffff', // White
-    '#f8fafc', // Slate 50
-    '#f0f9ff', // Sky 50
-    '#faf5ff', // Purple 50
-    '#fff1f2', // Rose 50
-    '#f7fee7'  // Lime 50
+    '#ffffff',
+    '#f8fafc',
+    '#f0f9ff',
+    '#faf5ff',
+    '#fff1f2',
+    '#f7fee7'
   ],
   secondary: [
-    '#1f2937', // Gray 800
-    '#1e3a8a', // Blue 900
-    '#365314', // Lime 900
-    '#3b0764', // Purple 950
-    '#881337', // Rose 900
-    '#422006'  // Orange 950
+    '#1f2937',
+    '#1e3a8a',
+    '#365314',
+    '#3b0764',
+    '#881337',
+    '#422006'
   ],
   accent: [
-    '#3b82f6', // Blue 500
-    '#22c55e', // Green 500
-    '#f59e0b', // Amber 500
-    '#ec4899', // Pink 500
-    '#8b5cf6', // Violet 500
-    '#f43f5e'  // Rose 500
+    '#3b82f6',
+    '#22c55e',
+    '#f59e0b',
+    '#ec4899',
+    '#8b5cf6',
+    '#f43f5e'
   ],
   background: [
-    '#ffffff', // White
-    '#f8fafc', // Slate 50
-    '#f1f5f9', // Slate 100
-    '#f9fafb', // Gray 50
-    '#f5f3ff', // Violet 50
-    '#fef2f2'  // Red 50
+    '#ffffff',
+    '#f8fafc',
+    '#f1f5f9',
+    '#f9fafb',
+    '#f5f3ff',
+    '#fef2f2'
   ]
 };
 
-export function ThemeSettings() {
-  const { formData, updateFormData } = useStoreCustomization();
+interface ThemeData {
+  primaryColor: string;
+  secondaryColor: string;
+  accentColor: string;
+  headerBackground: string;
+  allowThemeToggle: boolean;
+}
+
+interface ThemeSettingsProps {
+  onLocalChange?: (localData: ThemeData) => void;
+  selectedPreset: string | null;
+  onPresetChange: (preset: string | null) => void;
+}
+
+export function ThemeSettings({ onLocalChange, selectedPreset, onPresetChange }: ThemeSettingsProps) {
+  const { formData } = useStoreCustomization();
   const { theme: siteTheme } = useStore();
   const { theme: storeTheme } = useStoreTheme();
-  const [selectedPreset, setSelectedPreset] = useState<string | null>(() => {
-    // Verificar se as cores atuais correspondem a algum tema predefinido
+
+  // Estado local para armazenar alterações temporárias
+  const [localThemeData, setLocalThemeData] = useState<ThemeData>({
+    primaryColor: formData.primaryColor,
+    secondaryColor: formData.secondaryColor,
+    accentColor: formData.accentColor,
+    headerBackground: formData.headerBackground,
+    allowThemeToggle: formData.allowThemeToggle
+  });
+
+  // Sincronizar com formData quando ele mudar
+  useEffect(() => {
+    setLocalThemeData({
+      primaryColor: formData.primaryColor,
+      secondaryColor: formData.secondaryColor,
+      accentColor: formData.accentColor,
+      headerBackground: formData.headerBackground,
+      allowThemeToggle: formData.allowThemeToggle
+    });
+
+    // Verificar se as cores atuais correspondem a algum preset
     const currentColors = {
       primary: formData.primaryColor,
       secondary: formData.secondaryColor,
@@ -114,47 +147,63 @@ export function ThemeSettings() {
       background: formData.headerBackground
     };
 
-    return Object.entries(COLOR_THEMES).find(([_, theme]) => 
+    const matchingPreset = Object.entries(COLOR_THEMES).find(([_, theme]) => 
       Object.entries(theme.colors).every(([key, value]) => 
         value.toLowerCase() === currentColors[key as keyof typeof currentColors].toLowerCase()
       )
     )?.[0] || null;
-  });
 
-  // Preview styles based on current colors
+    onPresetChange(matchingPreset);
+  }, [formData, onPresetChange]);
+
+  // Notificar mudanças no estado local
+  useEffect(() => {
+    onLocalChange?.(localThemeData);
+  }, [localThemeData, onLocalChange]);
+
+  // Preview styles baseado no estado local
   const previewStyles = useMemo(() => {
-    const textColor = calculateTextColor(formData.primaryColor);
+    const textColor = calculateTextColor(localThemeData.primaryColor);
     
     return {
       container: {
-        backgroundColor: formData.primaryColor,
-        color: formData.secondaryColor,
-        border: `1px solid ${formData.secondaryColor}20`
+        backgroundColor: localThemeData.primaryColor,
+        color: localThemeData.secondaryColor,
+        border: `1px solid ${localThemeData.secondaryColor}20`
       },
       button: {
-        backgroundColor: formData.accentColor,
+        backgroundColor: localThemeData.accentColor,
         color: textColor === 'light' ? '#ffffff' : '#000000'
       },
       card: {
-        backgroundColor: formData.primaryColor,
-        color: formData.secondaryColor,
-        border: `1px solid ${formData.secondaryColor}20`
+        backgroundColor: localThemeData.primaryColor,
+        color: localThemeData.secondaryColor,
+        border: `1px solid ${localThemeData.secondaryColor}20`
       }
     };
-  }, [formData.primaryColor, formData.secondaryColor, formData.accentColor]);
+  }, [localThemeData]);
 
-  // Apply theme preset
+  // Função para aplicar tema predefinido
   const applyThemePreset = (presetKey: keyof typeof COLOR_THEMES) => {
     const preset = COLOR_THEMES[presetKey];
-    setSelectedPreset(presetKey);
+    onPresetChange(presetKey);
     
-    // Apenas atualiza o estado local, não salva no banco
-    updateFormData({
+    setLocalThemeData(prev => ({
+      ...prev,
       primaryColor: preset.colors.primary,
       secondaryColor: preset.colors.secondary,
       accentColor: preset.colors.accent,
       headerBackground: preset.colors.primary
-    });
+    }));
+  };
+
+  // Função para atualizar uma cor específica
+  const updateLocalColor = (colorKey: keyof Omit<ThemeData, 'allowThemeToggle'>, value: string) => {
+    setLocalThemeData(prev => ({
+      ...prev,
+      [colorKey]: value
+    }));
+    onPresetChange(null);
   };
 
   return (
@@ -173,6 +222,7 @@ export function ThemeSettings() {
             return (
               <button
                 key={key}
+                type="button"
                 onClick={() => applyThemePreset(key as keyof typeof COLOR_THEMES)}
                 className={`p-6 rounded-lg border-2 transition-all hover:scale-[1.02] relative overflow-hidden ${
                   isSelected ? 'border-blue-500 shadow-lg' : 'border-gray-200 dark:border-gray-700'
@@ -223,44 +273,32 @@ export function ThemeSettings() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <ColorPicker
             label="Cor Principal"
-            value={formData.primaryColor}
-            onChange={(color) => {
-              updateFormData({ primaryColor: color });
-              setSelectedPreset(null);
-            }}
+            value={localThemeData.primaryColor}
+            onChange={(color) => updateLocalColor('primaryColor', color)}
             description="Cor de fundo principal e elementos primários"
             presets={COLOR_PRESETS.primary}
           />
 
           <ColorPicker
             label="Cor do Texto"
-            value={formData.secondaryColor}
-            onChange={(color) => {
-              updateFormData({ secondaryColor: color });
-              setSelectedPreset(null);
-            }}
+            value={localThemeData.secondaryColor}
+            onChange={(color) => updateLocalColor('secondaryColor', color)}
             description="Cor dos textos e elementos secundários"
             presets={COLOR_PRESETS.secondary}
           />
 
           <ColorPicker
             label="Cor de Destaque"
-            value={formData.accentColor}
-            onChange={(color) => {
-              updateFormData({ accentColor: color });
-              setSelectedPreset(null);
-            }}
+            value={localThemeData.accentColor}
+            onChange={(color) => updateLocalColor('accentColor', color)}
             description="Cor para botões e elementos interativos"
             presets={COLOR_PRESETS.accent}
           />
 
           <ColorPicker
             label="Cor de Fundo"
-            value={formData.headerBackground}
-            onChange={(color) => {
-              updateFormData({ headerBackground: color });
-              setSelectedPreset(null);
-            }}
+            value={localThemeData.headerBackground}
+            onChange={(color) => updateLocalColor('headerBackground', color)}
             description="Cor de fundo do cabeçalho quando estilo sólido"
             presets={COLOR_PRESETS.background}
           />
@@ -280,13 +318,16 @@ export function ThemeSettings() {
             <StoreThemeToggle
               preview={true}
               allowPreviewToggle={true}
-              accentColor={formData.accentColor}
+              accentColor={localThemeData.accentColor}
             />
             <label className="relative inline-flex items-center cursor-pointer">
               <input
                 type="checkbox"
-                checked={formData.allowThemeToggle}
-                onChange={(e) => updateFormData({ allowThemeToggle: e.target.checked })}
+                checked={localThemeData.allowThemeToggle}
+                onChange={(e) => setLocalThemeData(prev => ({
+                  ...prev,
+                  allowThemeToggle: e.target.checked
+                }))}
                 className="sr-only peer"
               />
               <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600" />

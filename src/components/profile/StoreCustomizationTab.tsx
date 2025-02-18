@@ -9,6 +9,7 @@ import { TypographySettings } from './store-customization/sections/TypographySet
 import { LayoutSettings } from './store-customization/sections/LayoutSettings';
 import { ContactsAndSocialNetworks } from './store-customization/sections/ContactsAndSocialNetworks';
 import { StoreHeader } from '../store/StoreHeader';
+import { StoreFormData } from './store-customization/types';
 
 interface StoreCustomizationTabProps {
   store: StoreType;
@@ -17,6 +18,8 @@ interface StoreCustomizationTabProps {
 
 export function StoreCustomizationTab({ store, onUpdate }: StoreCustomizationTabProps) {
   const [activeSection, setActiveSection] = useState<string>('general');
+  const [localThemeData, setLocalThemeData] = useState<Partial<StoreFormData>>({});
+  const [selectedThemePreset, setSelectedThemePreset] = useState<string | null>(null);
 
   const sections = [
     { id: 'general', title: 'Informações Gerais', icon: Store },
@@ -27,12 +30,22 @@ export function StoreCustomizationTab({ store, onUpdate }: StoreCustomizationTab
     { id: 'contacts', title: 'Contatos e Redes', icon: Phone }
   ];
 
+  const handleSectionChange = (sectionId: string) => {
+    setActiveSection(sectionId);
+  };
+
   const renderSection = (context: any) => {
     switch (activeSection) {
       case 'general':
         return <GeneralSettings />;
       case 'theme':
-        return <ThemeSettings />;
+        return (
+          <ThemeSettings 
+            onLocalChange={(data) => setLocalThemeData(data)}
+            selectedPreset={selectedThemePreset}
+            onPresetChange={setSelectedThemePreset}
+          />
+        );
       case 'header':
         return <HeaderSettings />;
       case 'typography':
@@ -70,7 +83,7 @@ export function StoreCustomizationTab({ store, onUpdate }: StoreCustomizationTab
                 return (
                   <button
                     key={section.id}
-                    onClick={() => setActiveSection(section.id)}
+                    onClick={() => handleSectionChange(section.id)}
                     className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg transition-colors ${
                       activeSection === section.id
                         ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400'
@@ -88,6 +101,13 @@ export function StoreCustomizationTab({ store, onUpdate }: StoreCustomizationTab
             <div className="flex-1">
               <form onSubmit={(e) => {
                 e.preventDefault();
+                
+                // Se estivermos na seção de tema e houver alterações locais,
+                // atualizar o formData antes de salvar
+                if (activeSection === 'theme' && Object.keys(localThemeData).length > 0) {
+                  context.updateFormData(localThemeData);
+                }
+                
                 context.onSave();
               }} className="space-y-8">
                 {renderSection(context)}
@@ -101,9 +121,9 @@ export function StoreCustomizationTab({ store, onUpdate }: StoreCustomizationTab
                         name={context.formData.name}
                         description={context.formData.description}
                         logoUrl={context.formData.logoUrl}
-                        primaryColor={context.formData.primaryColor}
-                        secondaryColor={context.formData.secondaryColor}
-                        accentColor={context.formData.accentColor}
+                        primaryColor={activeSection === 'theme' ? localThemeData.primaryColor || context.formData.primaryColor : context.formData.primaryColor}
+                        secondaryColor={activeSection === 'theme' ? localThemeData.secondaryColor || context.formData.secondaryColor : context.formData.secondaryColor}
+                        accentColor={activeSection === 'theme' ? localThemeData.accentColor || context.formData.accentColor : context.formData.accentColor}
                         socialLinks={context.formData.socialLinks}
                         customization={{
                           headerStyle: context.formData.headerStyle,
@@ -119,7 +139,9 @@ export function StoreCustomizationTab({ store, onUpdate }: StoreCustomizationTab
                           titleFont: context.formData.titleFont,
                           bodyFont: context.formData.bodyFont,
                           socialSettings: context.formData.socialSettings,
-                          allowThemeToggle: context.formData.allowThemeToggle,
+                          allowThemeToggle: activeSection === 'theme' 
+                            ? localThemeData.allowThemeToggle ?? context.formData.allowThemeToggle 
+                            : context.formData.allowThemeToggle,
                           preview: true
                         }}
                       />
