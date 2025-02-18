@@ -5,31 +5,32 @@ import {
 } from 'lucide-react';
 import { generateHeaderStyles } from '../../lib/colors';
 import { generateSocialUrl } from '../../lib/constants';
+import { useStore } from '../../lib/store';
 
-interface HeaderVisibility {
-  logo: boolean;
-  title: boolean;
-  description: boolean;
-  socialLinks: boolean;
-}
+// Cores padrão por tema
+const THEME_COLORS = {
+  light: {
+    background: '#ffffff',
+    text: '#1f2937',
+    muted: '#6b7280',
+    border: '#e5e7eb'
+  },
+  dark: {
+    background: '#111827',
+    text: '#f9fafb',
+    muted: '#9ca3af',
+    border: '#374151'
+  }
+} as const;
 
-interface SocialSettings {
-  contactsPosition: 'above' | 'below';
-  displayFormat: 'username' | 'network';
-}
-
-interface CustomGradient {
-  colors: string[];
-  direction: string;
-}
-
+// Interfaces
 interface StoreHeaderProps {
   name: string;
   description: string | null;
   logoUrl: string | null;
   primaryColor: string;
   secondaryColor: string;
-  accentColor?: string;
+  accentColor: string;
   socialLinks: Array<{
     type: string;
     url: string;
@@ -39,19 +40,28 @@ interface StoreHeaderProps {
     headerStyle: 'solid' | 'gradient' | 'image';
     headerHeight: string;
     headerImage: string | null;
-    headerGradient?: CustomGradient;
+    headerGradient: string;
     headerAlignment: 'left' | 'center' | 'right';
     headerOverlayOpacity: string;
-    headerVisibility: HeaderVisibility;
+    headerVisibility: {
+      logo: boolean;
+      title: boolean;
+      description: boolean;
+      socialLinks: boolean;
+    };
     logoSize: string;
     titleSize: string;
     descriptionSize: string;
     titleFont: string;
     bodyFont: string;
-    socialSettings: SocialSettings;
+    socialSettings: {
+      contactsPosition: 'above' | 'below';
+      displayFormat: 'username' | 'network';
+    };
   };
 }
 
+// Constantes
 const SOCIAL_ICONS = {
   phone: Phone,
   whatsapp: MessageCircle,
@@ -84,116 +94,120 @@ export function StoreHeader({
   logoUrl,
   primaryColor,
   secondaryColor,
-  accentColor = '#3B82F6',
+  accentColor,
   socialLinks,
   customization
 }: StoreHeaderProps) {
-  // Memoize header styles
+  const { theme } = useStore();
+  
+  // Calcular cores baseadas no tema atual
+  const themeColors = useMemo(() => {
+    const baseColors = THEME_COLORS[theme];
+    return {
+      background: customization.headerStyle === 'solid' ? primaryColor : baseColors.background,
+      text: secondaryColor || baseColors.text,
+      accent: accentColor,
+      muted: baseColors.muted,
+      border: baseColors.border
+    };
+  }, [theme, primaryColor, secondaryColor, accentColor, customization.headerStyle]);
+
+  // Gerar estilos do header
   const headerStyles = useMemo(() => {
     const baseStyles = generateHeaderStyles(
-      primaryColor, 
-      secondaryColor, 
+      themeColors.background,
+      themeColors.text,
       customization.headerStyle,
-      customization.headerGradient?.direction || 'to bottom'
+      customization.headerGradient
     );
 
     return {
       ...baseStyles,
       minHeight: customization.headerHeight,
+      transition: 'all 0.3s ease-in-out',
       ...(customization.headerStyle === 'image' && {
-        backgroundImage: `url(${customization.headerImage})`,
+        backgroundImage: customization.headerImage ? `url(${customization.headerImage})` : 'none',
         backgroundSize: 'cover',
         backgroundPosition: 'center',
         position: 'relative' as const,
         backgroundRepeat: 'no-repeat'
       })
     };
-  }, [
-    primaryColor,
-    secondaryColor,
-    customization.headerStyle,
-    customization.headerGradient,
-    customization.headerHeight,
-    customization.headerImage
-  ]);
+  }, [customization, themeColors]);
 
-  // Memoize overlay styles
+  // Estilos do overlay para imagens
   const overlayStyles = useMemo(() => {
     if (customization.headerStyle !== 'image') return {};
 
     return {
       position: 'absolute' as const,
       inset: 0,
-      backgroundColor: 'black',
+      backgroundColor: theme === 'dark' ? '#000000' : '#000000',
       opacity: Number(customization.headerOverlayOpacity) / 100,
       zIndex: 1,
       transition: 'opacity 0.3s ease-in-out'
     };
-  }, [customization.headerStyle, customization.headerOverlayOpacity]);
+  }, [customization.headerStyle, customization.headerOverlayOpacity, theme]);
 
-  // Memoize content styles
-  const contentStyles = useMemo(() => {
-    const alignmentMap = {
+  // Estilos do container de conteúdo
+  const contentStyles = useMemo(() => ({
+    textAlign: customization.headerAlignment as 'left' | 'center' | 'right',
+    alignItems: {
       left: 'flex-start',
       center: 'center',
       right: 'flex-end'
-    };
+    }[customization.headerAlignment],
+    position: 'relative' as const,
+    zIndex: 2,
+    color: themeColors.text,
+    transition: 'all 0.3s ease-in-out'
+  }), [customization.headerAlignment, themeColors.text]);
 
-    return {
-      textAlign: customization.headerAlignment as any,
-      alignItems: alignmentMap[customization.headerAlignment],
-      position: 'relative' as const,
-      zIndex: 2,
-      transition: 'all 0.3s ease-in-out'
-    };
-  }, [customization.headerAlignment]);
+  // Separar links sociais e contatos
+  const { contactInfo, socialMediaLinks } = useMemo(() => ({
+    contactInfo: socialLinks.filter(link => ['phone', 'email'].includes(link.type)),
+    socialMediaLinks: socialLinks.filter(link => !['phone', 'email'].includes(link.type))
+  }), [socialLinks]);
 
-  // Filter and sort social links
-  const { contactInfo, socialMediaLinks } = useMemo(() => {
-    const contacts = socialLinks.filter(link => 
-      link.type === 'phone' || link.type === 'email'
-    );
-    const socials = socialLinks.filter(link => 
-      !['phone', 'email'].includes(link.type)
-    );
-
-    return {
-      contactInfo: contacts,
-      socialMediaLinks: socials
-    };
-  }, [socialLinks]);
-
-  // Handle image loading error
-  const handleLogoError = (e: React.SyntheticEvent<HTMLImageElement>) => {
-    e.currentTarget.src = '/api/placeholder/400/400';
-    e.currentTarget.alt = 'Logo não disponível';
+  // Tratamento de erro para imagens
+  const handleImageError = (e: React.SyntheticEvent<HTMLImageElement>) => {
+    const img = e.target as HTMLImageElement;
+    img.src = '/api/placeholder/400/400';
+    img.alt = 'Imagem indisponível';
   };
 
-  // Render contact information
+  // Função para obter fonte correta
+  const getFontFamily = (font: string) => ({
+    sans: 'ui-sans-serif, system-ui, sans-serif',
+    serif: 'ui-serif, Georgia, serif',
+    mono: 'ui-monospace, monospace'
+  }[font] || 'ui-sans-serif, system-ui, sans-serif');
+
+  // Renderizar informações de contato
   const renderContactInfo = () => {
     if (!contactInfo.length) return null;
 
     return (
-      <div className="text-center mb-2 transition-opacity duration-300">
+      <div className="text-center mb-2">
         {contactInfo.map((link, index) => (
           <React.Fragment key={`${link.type}-${index}`}>
             {link.type === 'email' ? (
               <a 
                 href={`mailto:${link.url}`}
                 className="hover:underline transition-colors duration-200"
-                style={{ color: secondaryColor }}
+                style={{ color: themeColors.text }}
               >
                 {link.url}
               </a>
             ) : (
-              <span style={{ color: secondaryColor }}>
+              <span style={{ color: themeColors.text }}>
                 {link.url}
               </span>
             )}
             {index < contactInfo.length - 1 && (
               <span 
                 className="mx-2"
-                style={{ color: `${secondaryColor}60` }}
+                style={{ color: themeColors.muted }}
               >
                 |
               </span>
@@ -204,7 +218,7 @@ export function StoreHeader({
     );
   };
 
-  // Render social media links
+  // Renderizar links de redes sociais
   const renderSocialLinks = () => {
     if (!socialMediaLinks.length) return null;
 
@@ -218,16 +232,17 @@ export function StoreHeader({
             : link.url;
           
           return (
-            <a
+            
               key={`${link.type}-${index}`}
               href={url}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center gap-2 px-4 py-2 rounded-full transition-all duration-300 
-                backdrop-blur-sm hover:scale-105"
+              className="flex items-center gap-2 px-4 py-2 rounded-full 
+                transition-all duration-300 backdrop-blur-sm hover:scale-105
+                hover:shadow-md"
               style={{
-                backgroundColor: `${secondaryColor}20`,
-                color: secondaryColor
+                backgroundColor: `${themeColors.text}15`,
+                color: themeColors.text
               }}
               aria-label={`Visite nosso ${SOCIAL_NAMES[link.type as keyof typeof SOCIAL_NAMES]}`}
             >
@@ -240,18 +255,23 @@ export function StoreHeader({
     );
   };
 
+  // Renderização do componente
   return (
     <header 
       className="relative transition-all duration-300"
       style={headerStyles}
       role="banner"
     >
-      {/* Overlay for image background */}
+      {/* Overlay para background com imagem */}
       {customization.headerStyle === 'image' && (
-        <div style={overlayStyles} aria-hidden="true" />
+        <div 
+          style={overlayStyles} 
+          aria-hidden="true"
+          className="transition-opacity duration-300" 
+        />
       )}
       
-      {/* Main content container */}
+      {/* Container principal */}
       <div 
         className="container mx-auto px-4 py-12 flex flex-col transition-all duration-300"
         style={contentStyles}
@@ -259,61 +279,55 @@ export function StoreHeader({
         {/* Logo */}
         {customization.headerVisibility.logo && logoUrl && (
           <div 
-            className="mb-8 rounded-lg overflow-hidden backdrop-blur-sm 
-              flex items-center justify-center transition-all duration-300"
+            className="mx-auto mb-8 rounded-lg overflow-hidden bg-white/10 
+              flex items-center justify-center backdrop-blur-sm 
+              transition-all duration-300"
             style={{ 
               width: customization.logoSize,
               height: customization.logoSize,
-              backgroundColor: `${secondaryColor}10`
+              backgroundColor: `${themeColors.text}10`
             }}
           >
             <img 
               src={logoUrl} 
               alt={`${name} logo`}
-              className="max-w-full max-h-full w-auto h-auto object-contain transition-opacity duration-300"
-              onError={handleLogoError}
+              className="max-w-full max-h-full w-auto h-auto object-contain 
+                transition-opacity duration-300"
+              onError={handleImageError}
               loading="eager"
             />
           </div>
         )}
         
-        {/* Store Title */}
+        {/* Título da Loja */}
         {customization.headerVisibility.title && (
           <h1 
             className="font-bold mb-4 transition-all duration-300"
             style={{ 
               fontSize: customization.titleSize,
-              fontFamily: customization.titleFont === 'sans' 
-                ? 'ui-sans-serif, system-ui, sans-serif'
-                : customization.titleFont === 'serif' 
-                ? 'ui-serif, Georgia, serif'
-                : 'ui-monospace, monospace',
-              color: secondaryColor
+              fontFamily: getFontFamily(customization.titleFont),
+              color: themeColors.text
             }}
           >
             {name}
           </h1>
         )}
         
-        {/* Store Description */}
+        {/* Descrição da Loja */}
         {customization.headerVisibility.description && description && (
           <p 
             className="max-w-2xl mx-auto mb-8 transition-all duration-300"
             style={{ 
               fontSize: customization.descriptionSize,
-              fontFamily: customization.bodyFont === 'sans'
-                ? 'ui-sans-serif, system-ui, sans-serif'
-                : customization.bodyFont === 'serif'
-                ? 'ui-serif, Georgia, serif'
-                : 'ui-monospace, monospace',
-              color: `${secondaryColor}90`
+              fontFamily: getFontFamily(customization.bodyFont),
+              color: themeColors.muted
             }}
           >
             {description}
           </p>
         )}
 
-        {/* Social Links */}
+        {/* Links Sociais e Contatos */}
         {customization.headerVisibility.socialLinks && (
           <div className="flex flex-col items-center gap-4 transition-all duration-300">
             {customization.socialSettings.contactsPosition === 'above' ? (
@@ -330,6 +344,19 @@ export function StoreHeader({
           </div>
         )}
       </div>
+
+      {/* Barra de destaque opcional no topo ou base */}
+      {customization.headerStyle === 'solid' && (
+        <div 
+          className="absolute left-0 right-0 h-1 transition-colors duration-300"
+          style={{ 
+            backgroundColor: themeColors.accent,
+            [customization.headerAlignment === 'top' ? 'top' : 'bottom']: 0 
+          }}
+        />
+      )}
     </header>
   );
 }
+
+export default React.memo(StoreHeader);
