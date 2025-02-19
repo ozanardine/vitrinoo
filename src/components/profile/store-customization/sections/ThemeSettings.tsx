@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Moon, Sun, Palette, AlertCircle, Check } from 'lucide-react';
 import { useStoreCustomization } from '../StoreCustomizationContext';
 import { ColorPicker } from '../forms/ColorPicker';
@@ -15,7 +15,8 @@ const COLOR_THEMES = {
       primary: '#ffffff',
       secondary: '#1f2937',
       accent: '#3b82f6',
-      background: '#f8fafc'
+      background: '#f8fafc',
+      headerBackground: 'linear-gradient(to bottom, #ffffff, #f8fafc)'
     }
   },
   nature: {
@@ -24,7 +25,8 @@ const COLOR_THEMES = {
       primary: '#f5f7f2',
       secondary: '#2d3b29',
       accent: '#4a7c59',
-      background: '#f0f4ed'
+      background: '#f0f4ed',
+      headerBackground: 'linear-gradient(to bottom, #4a7c59, #2d3b29)'
     }
   },
   elegant: {
@@ -33,7 +35,8 @@ const COLOR_THEMES = {
       primary: '#faf7f5',
       secondary: '#2c1810',
       accent: '#9c6644',
-      background: '#f8f3f1'
+      background: '#f8f3f1',
+      headerBackground: 'linear-gradient(to right, #9c6644, #2c1810)'
     }
   },
   minimal: {
@@ -42,7 +45,8 @@ const COLOR_THEMES = {
       primary: '#ffffff',
       secondary: '#18181b',
       accent: '#404040',
-      background: '#fafafa'
+      background: '#fafafa',
+      headerBackground: '#ffffff'
     }
   },
   ocean: {
@@ -51,7 +55,8 @@ const COLOR_THEMES = {
       primary: '#f0f9ff',
       secondary: '#0c4a6e',
       accent: '#0284c7',
-      background: '#ecfeff'
+      background: '#ecfeff',
+      headerBackground: 'linear-gradient(to bottom right, #0284c7, #0c4a6e)'
     }
   },
   dark: {
@@ -60,7 +65,8 @@ const COLOR_THEMES = {
       primary: '#1f2937',
       secondary: '#f9fafb',
       accent: '#60a5fa',
-      background: '#111827'
+      background: '#111827',
+      headerBackground: 'linear-gradient(to bottom, #1f2937, #111827)'
     }
   }
 };
@@ -98,8 +104,24 @@ const COLOR_PRESETS = {
     '#f9fafb',
     '#f5f3ff',
     '#fef2f2'
+  ],
+  headerBackground: [
+    'linear-gradient(to bottom, #3b82f6, #1e3a8a)',
+    'linear-gradient(to right, #22c55e, #365314)',
+    'linear-gradient(to bottom right, #f59e0b, #422006)',
+    'linear-gradient(to bottom, #ec4899, #881337)',
+    'linear-gradient(to right, #8b5cf6, #3b0764)',
+    'linear-gradient(to bottom right, #f43f5e, #881337)'
   ]
 };
+
+// Gradient directions
+const GRADIENT_DIRECTIONS = [
+  { value: 'to bottom', label: 'De cima para baixo' },
+  { value: 'to right', label: 'Da esquerda para direita' },
+  { value: 'to bottom right', label: 'Diagonal' },
+  { value: 'to top', label: 'De baixo para cima' }
+];
 
 interface ThemeData {
   primaryColor: string;
@@ -107,6 +129,7 @@ interface ThemeData {
   accentColor: string;
   headerBackground: string;
   allowThemeToggle: boolean;
+  background: string;
 }
 
 interface ThemeSettingsProps {
@@ -119,6 +142,10 @@ export function ThemeSettings({ onLocalChange, selectedPreset, onPresetChange }:
   const { formData } = useStoreCustomization();
   const { theme: siteTheme } = useStore();
   const { theme: storeTheme } = useStoreTheme();
+  const [gradientDirection, setGradientDirection] = useState('to bottom');
+  const [gradientStart, setGradientStart] = useState('#ffffff');
+  const [gradientEnd, setGradientEnd] = useState('#f8fafc');
+  const [useGradient, setUseGradient] = useState(false);
 
   // Estado local para armazenar alterações temporárias
   const [localThemeData, setLocalThemeData] = useState<ThemeData>({
@@ -126,25 +153,41 @@ export function ThemeSettings({ onLocalChange, selectedPreset, onPresetChange }:
     secondaryColor: formData.secondaryColor,
     accentColor: formData.accentColor,
     headerBackground: formData.headerBackground,
-    allowThemeToggle: formData.allowThemeToggle
+    allowThemeToggle: formData.allowThemeToggle,
+    background: formData.background || '#ffffff'
   });
 
   // Sincronizar com formData quando ele mudar
-  useEffect(() => {
+  React.useEffect(() => {
     setLocalThemeData({
       primaryColor: formData.primaryColor,
       secondaryColor: formData.secondaryColor,
       accentColor: formData.accentColor,
       headerBackground: formData.headerBackground,
-      allowThemeToggle: formData.allowThemeToggle
+      allowThemeToggle: formData.allowThemeToggle,
+      background: formData.background || '#ffffff'
     });
+
+    // Parse gradient if present
+    if (formData.headerBackground.includes('gradient')) {
+      setUseGradient(true);
+      const match = formData.headerBackground.match(/linear-gradient\((.*?),(.*?),(.*?)\)/);
+      if (match) {
+        setGradientDirection(match[1].trim());
+        setGradientStart(match[2].trim());
+        setGradientEnd(match[3].trim());
+      }
+    } else {
+      setUseGradient(false);
+    }
 
     // Verificar se as cores atuais correspondem a algum preset
     const currentColors = {
       primary: formData.primaryColor,
       secondary: formData.secondaryColor,
       accent: formData.accentColor,
-      background: formData.headerBackground
+      background: formData.background || '#ffffff',
+      headerBackground: formData.headerBackground
     };
 
     const matchingPreset = Object.entries(COLOR_THEMES).find(([_, theme]) => 
@@ -157,7 +200,7 @@ export function ThemeSettings({ onLocalChange, selectedPreset, onPresetChange }:
   }, [formData, onPresetChange]);
 
   // Notificar mudanças no estado local
-  useEffect(() => {
+  React.useEffect(() => {
     onLocalChange?.(localThemeData);
   }, [localThemeData, onLocalChange]);
 
@@ -179,9 +222,14 @@ export function ThemeSettings({ onLocalChange, selectedPreset, onPresetChange }:
         backgroundColor: localThemeData.primaryColor,
         color: localThemeData.secondaryColor,
         border: `1px solid ${localThemeData.secondaryColor}20`
+      },
+      header: {
+        background: useGradient 
+          ? `linear-gradient(${gradientDirection}, ${gradientStart}, ${gradientEnd})`
+          : localThemeData.headerBackground
       }
     };
-  }, [localThemeData]);
+  }, [localThemeData, useGradient, gradientDirection, gradientStart, gradientEnd]);
 
   // Função para aplicar tema predefinido
   const applyThemePreset = (presetKey: keyof typeof COLOR_THEMES) => {
@@ -193,8 +241,22 @@ export function ThemeSettings({ onLocalChange, selectedPreset, onPresetChange }:
       primaryColor: preset.colors.primary,
       secondaryColor: preset.colors.secondary,
       accentColor: preset.colors.accent,
-      headerBackground: preset.colors.primary
+      background: preset.colors.background,
+      headerBackground: preset.colors.headerBackground
     }));
+
+    // Parse gradient if present
+    if (preset.colors.headerBackground.includes('gradient')) {
+      setUseGradient(true);
+      const match = preset.colors.headerBackground.match(/linear-gradient\((.*?),(.*?),(.*?)\)/);
+      if (match) {
+        setGradientDirection(match[1].trim());
+        setGradientStart(match[2].trim());
+        setGradientEnd(match[3].trim());
+      }
+    } else {
+      setUseGradient(false);
+    }
   };
 
   // Função para atualizar uma cor específica
@@ -204,6 +266,12 @@ export function ThemeSettings({ onLocalChange, selectedPreset, onPresetChange }:
       [colorKey]: value
     }));
     onPresetChange(null);
+  };
+
+  // Função para atualizar o gradiente
+  const updateGradient = () => {
+    const gradientValue = `linear-gradient(${gradientDirection}, ${gradientStart}, ${gradientEnd})`;
+    updateLocalColor('headerBackground', gradientValue);
   };
 
   return (
@@ -245,7 +313,10 @@ export function ThemeSettings({ onLocalChange, selectedPreset, onPresetChange }:
                       <div
                         key={colorKey}
                         className="w-8 h-8 rounded-full border border-gray-200 dark:border-gray-700 shadow-sm"
-                        style={{ backgroundColor: color }}
+                        style={{ 
+                          background: color.includes('gradient') ? color : color,
+                          borderColor: `${theme.colors.secondary}20`
+                        }}
                         title={`${colorKey.charAt(0).toUpperCase() + colorKey.slice(1)}: ${color}`}
                       />
                     ))}
@@ -297,11 +368,90 @@ export function ThemeSettings({ onLocalChange, selectedPreset, onPresetChange }:
 
           <ColorPicker
             label="Cor de Fundo"
-            value={localThemeData.headerBackground}
-            onChange={(color) => updateLocalColor('headerBackground', color)}
-            description="Cor de fundo do cabeçalho quando estilo sólido"
+            value={localThemeData.background}
+            onChange={(color) => updateLocalColor('background', color)}
+            description="Cor de fundo da página"
             presets={COLOR_PRESETS.background}
           />
+        </div>
+
+        {/* Header Background Settings */}
+        <div className="space-y-4">
+          <h4 className="font-medium">Fundo do Cabeçalho</h4>
+          
+          <div className="flex items-center space-x-4">
+            <label className="flex items-center space-x-2">
+              <input
+                type="radio"
+                checked={!useGradient}
+                onChange={() => setUseGradient(false)}
+                className="text-blue-600"
+              />
+              <span>Cor Sólida</span>
+            </label>
+            
+            <label className="flex items-center space-x-2">
+              <input
+                type="radio"
+                checked={useGradient}
+                onChange={() => setUseGradient(true)}
+                className="text-blue-600"
+              />
+              <span>Gradiente</span>
+            </label>
+          </div>
+
+          {useGradient ? (
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <ColorPicker
+                  label="Cor Inicial"
+                  value={gradientStart}
+                  onChange={(color) => {
+                    setGradientStart(color);
+                    updateGradient();
+                  }}
+                  presets={COLOR_PRESETS.accent}
+                />
+                
+                <ColorPicker
+                  label="Cor Final"
+                  value={gradientEnd}
+                  onChange={(color) => {
+                    setGradientEnd(color);
+                    updateGradient();
+                  }}
+                  presets={COLOR_PRESETS.accent}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2">Direção do Gradiente</label>
+                <select
+                  value={gradientDirection}
+                  onChange={(e) => {
+                    setGradientDirection(e.target.value);
+                    updateGradient();
+                  }}
+                  className="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600"
+                >
+                  {GRADIENT_DIRECTIONS.map(direction => (
+                    <option key={direction.value} value={direction.value}>
+                      {direction.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          ) : (
+            <ColorPicker
+              label="Cor do Cabeçalho"
+              value={localThemeData.headerBackground}
+              onChange={(color) => updateLocalColor('headerBackground', color)}
+              description="Cor de fundo do cabeçalho quando estilo sólido"
+              presets={COLOR_PRESETS.background}
+            />
+          )}
         </div>
       </div>
 
@@ -312,12 +462,16 @@ export function ThemeSettings({ onLocalChange, selectedPreset, onPresetChange }:
           className="p-6 rounded-lg transition-all duration-300"
           style={previewStyles.container}
         >
-          <div className="mb-4">
-            <h4 className="text-xl font-semibold mb-2">Exemplo de Título</h4>
-            <p className="text-sm opacity-80">
+          <div 
+            className="mb-4 p-6 rounded-lg transition-all duration-300"
+            style={previewStyles.header}
+          >
+            <h4 className="text-xl font-semibold mb-2">Prévia do Cabeçalho</h4>
+            <p className="opacity-80">
               Exemplo de como seu conteúdo aparecerá com as cores selecionadas
             </p>
           </div>
+          
           <div className="space-y-3">
             <button
               className="w-full px-4 py-2 rounded-lg transition-all duration-300"
