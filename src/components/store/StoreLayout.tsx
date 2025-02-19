@@ -2,7 +2,6 @@ import React from 'react';
 import { StoreHeader } from './StoreHeader';
 import { StoreFooter } from './StoreFooter';
 import { Store } from '../../lib/types';
-import { useStoreTheme } from '../../lib/store-theme';
 
 interface StoreLayoutProps {
   store: Store;
@@ -10,20 +9,12 @@ interface StoreLayoutProps {
 }
 
 export function StoreLayout({ store, children }: StoreLayoutProps) {
-  const { theme } = useStoreTheme();
-
-  // Theme-aware styles
-  const themeStyles = {
-    background: theme === 'dark' ? '#111827' : `${store?.primary_color}10`,
-    text: theme === 'dark' ? '#ffffff' : store?.secondary_color,
-  };
-
   return (
     <div 
       className="min-h-screen transition-colors duration-200"
       style={{
-        backgroundColor: themeStyles.background,
-        color: themeStyles.text
+        backgroundColor: store.background || store.primary_color,
+        color: store.secondary_color
       }}
     >
       {/* Store Header */}
@@ -48,7 +39,8 @@ export function StoreLayout({ store, children }: StoreLayoutProps) {
           descriptionSize: store.description_size,
           titleFont: store.title_font,
           bodyFont: store.body_font,
-          socialSettings: store.social_settings
+          socialSettings: store.social_settings,
+          headerBackground: store.header_background
         }}
       />
 
@@ -65,7 +57,7 @@ export function StoreLayout({ store, children }: StoreLayoutProps) {
       {/* Store Footer */}
       <StoreFooter
         store={store}
-        theme={theme}
+        theme="light"
       />
     </div>
   );

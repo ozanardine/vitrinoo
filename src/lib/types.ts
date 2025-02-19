@@ -50,6 +50,7 @@ export interface Store {
   secondary_color: string;
   accent_color: string;
   header_background: string;
+  background: string;
   
   // Configurações do cabeçalho
   header_style: 'solid' | 'gradient' | 'image';

@@ -107,44 +107,34 @@ export function StoreHeader({
   accentColor,
   socialLinks,
   customization,
-  preview = false
 }: StoreHeaderProps) {
-  const { theme } = useStoreTheme();
-  
-  // Calcular cores baseadas no tema atual
-  const themeColors = useMemo(() => {
-    const baseColors = THEME_PRESETS[theme];
-    return {
-      background: customization.headerStyle === 'solid' ? primaryColor : baseColors.background,
-      text: secondaryColor || baseColors.text.primary,
-      accent: accentColor,
-      muted: baseColors.text.muted,
-      border: theme === 'light' ? '#e5e7eb' : '#374151'
-    };
-  }, [theme, primaryColor, secondaryColor, accentColor, customization.headerStyle]);
-
   // Gerar estilos do header
   const headerStyles = useMemo(() => {
-    const baseStyles = generateHeaderStyles(
-      themeColors.background,
-      themeColors.text,
-      customization.headerStyle,
-      customization.headerGradient
-    );
+    let background;
+    
+    switch (customization.headerStyle) {
+      case 'gradient':
+        background = `linear-gradient(${customization.headerGradient}, ${customization.headerBackground || primaryColor}, ${adjustColorBrightness(customization.headerBackground || primaryColor, -30)})`;
+        break;
+      case 'image':
+        background = customization.headerImage 
+          ? `url(${customization.headerImage})`
+          : primaryColor;
+        break;
+      default: // solid
+        background = customization.headerBackground || primaryColor;
+    }
 
     return {
-      ...baseStyles,
       minHeight: customization.headerHeight,
-      transition: 'all 0.3s ease-in-out',
-      ...(customization.headerStyle === 'image' && {
-        backgroundImage: customization.headerImage ? `url(${customization.headerImage})` : 'none',
-        backgroundSize: 'cover',
-        backgroundPosition: 'center',
-        position: 'relative' as const,
-        backgroundRepeat: 'no-repeat'
-      })
-    };
-  }, [customization, themeColors]);
+      background,
+      backgroundSize: customization.headerStyle === 'image' ? 'cover' : undefined,
+      backgroundPosition: customization.headerStyle === 'image' ? 'center' : undefined,
+      backgroundRepeat: customization.headerStyle === 'image' ? 'no-repeat' : undefined,
+      position: customization.headerStyle === 'image' ? 'relative' : 'static',
+      transition: 'all 0.3s ease-in-out'
+    } as const;
+  }, [customization, primaryColor]);
 
   // Estilos do overlay para imagens
   const overlayStyles = useMemo(() => {
