@@ -1,10 +1,9 @@
 import React, { useState, useMemo } from 'react';
-import { Moon, Sun, Palette, AlertCircle, Check } from 'lucide-react';
+import { Palette, Check } from 'lucide-react';
 import { useStoreCustomization } from '../StoreCustomizationContext';
 import { ColorPicker } from '../forms/ColorPicker';
 import { useStore } from '../../../../lib/store';
 import { useStoreTheme } from '../../../../lib/store-theme';
-import { StoreThemeToggle } from '../../../store/StoreThemeToggle';
 import { calculateTextColor } from '../../../../lib/colors';
 
 // Color theme presets
@@ -125,8 +124,11 @@ const COLOR_PRESETS = {
 const GRADIENT_DIRECTIONS = [
   { value: 'to bottom', label: 'De cima para baixo' },
   { value: 'to right', label: 'Da esquerda para direita' },
-  { value: 'to bottom right', label: 'Diagonal' },
-  { value: 'to top', label: 'De baixo para cima' }
+  { value: 'to bottom right', label: 'Diagonal ↘' },
+  { value: 'to bottom left', label: 'Diagonal ↙' },
+  { value: 'to top', label: 'De baixo para cima' },
+  { value: 'to top right', label: 'Diagonal ↗' },
+  { value: 'to top left', label: 'Diagonal ↖' }
 ];
 
 interface ThemeData {
@@ -155,7 +157,7 @@ export function ThemeSettings({
   const [gradientDirection, setGradientDirection] = useState('to bottom');
   const [gradientStart, setGradientStart] = useState('#ffffff');
   const [gradientEnd, setGradientEnd] = useState('#f8fafc');
-  const [useGradient, setUseGradient] = useState(false);
+  const [useGradient, setUseGradient] = useState(formData.headerBackground.includes('gradient'));
 
   // Estado local para armazenar alterações temporárias
   const [localThemeData, setLocalThemeData] = useState<ThemeData>({
@@ -404,79 +406,96 @@ export function ThemeSettings({
         <div className="space-y-4">
           <h4 className="font-medium">Fundo do Cabeçalho</h4>
           
-          <div className="flex items-center space-x-4">
-            <label className="flex items-center space-x-2">
-              <input
-                type="radio"
-                checked={!useGradient}
-                onChange={() => setUseGradient(false)}
-                className="text-blue-600"
-              />
-              <span>Cor Sólida</span>
-            </label>
-            
-            <label className="flex items-center space-x-2">
-              <input
-                type="radio"
-                checked={useGradient}
-                onChange={() => setUseGradient(true)}
-                className="text-blue-600"
-              />
-              <span>Gradiente</span>
-            </label>
-          </div>
-
-          {useGradient ? (
-            <div className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <ColorPicker
-                  label="Cor Inicial"
-                  value={gradientStart}
-                  onChange={(color) => {
-                    setGradientStart(color);
-                    updateGradient();
-                  }}
-                  presets={COLOR_PRESETS.accent}
+          <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+            <div className="flex items-center space-x-4 mb-6">
+              <label className="flex items-center space-x-2 cursor-pointer">
+                <input
+                  type="radio"
+                  checked={!useGradient}
+                  onChange={() => setUseGradient(false)}
+                  className="text-blue-600 focus:ring-blue-500"
                 />
-                
-                <ColorPicker
-                  label="Cor Final"
-                  value={gradientEnd}
-                  onChange={(color) => {
-                    setGradientEnd(color);
-                    updateGradient();
-                  }}
-                  presets={COLOR_PRESETS.accent}
+                <span>Cor Sólida</span>
+              </label>
+              
+              <label className="flex items-center space-x-2 cursor-pointer">
+                <input
+                  type="radio"
+                  checked={useGradient}
+                  onChange={() => setUseGradient(true)}
+                  className="text-blue-600 focus:ring-blue-500"
                 />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-2">Direção do Gradiente</label>
-                <select
-                  value={gradientDirection}
-                  onChange={(e) => {
-                    setGradientDirection(e.target.value);
-                    updateGradient();
-                  }}
-                  className="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600"
-                >
-                  {GRADIENT_DIRECTIONS.map(direction => (
-                    <option key={direction.value} value={direction.value}>
-                      {direction.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
+                <span>Gradiente</span>
+              </label>
             </div>
-          ) : (
-            <ColorPicker
-              label="Cor do Cabeçalho"
-              value={localThemeData.headerBackground}
-              onChange={(color) => updateLocalColor('headerBackground', color)}
-              description="Cor de fundo do cabeçalho quando estilo sólido"
-              presets={COLOR_PRESETS.background}
-            />
-          )}
+
+            {useGradient ? (
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <ColorPicker
+                    label="Cor Inicial"
+                    value={gradientStart}
+                    onChange={(color) => {
+                      setGradientStart(color);
+                      updateGradient();
+                    }}
+                    presets={COLOR_PRESETS.accent}
+                  />
+                  
+                  <ColorPicker
+                    label="Cor Final"
+                    value={gradientEnd}
+                    onChange={(color) => {
+                      setGradientEnd(color);
+                      updateGradient();
+                    }}
+                    presets={COLOR_PRESETS.accent}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-2">Direção do Gradiente</label>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    {GRADIENT_DIRECTIONS.map(direction => (
+                      <button
+                        key={direction.value}
+                        type="button"
+                        onClick={() => {
+                          setGradientDirection(direction.value);
+                          updateGradient();
+                        }}
+                        className={`
+                          p-2 rounded-lg border-2 transition-colors text-sm
+                          ${gradientDirection === direction.value
+                            ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
+                            : 'border-gray-200 dark:border-gray-700 hover:border-blue-200 dark:hover:border-blue-800'
+                          }
+                        `}
+                      >
+                        {direction.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="mt-4">
+                  <div className="h-20 rounded-lg overflow-hidden shadow-inner"
+                    style={{
+                      background: `linear-gradient(${gradientDirection}, ${gradientStart}, ${gradientEnd})`
+                    }}
+                  />
+                </div>
+              </div>
+            ) : (
+              <ColorPicker
+                label="Cor do Cabeçalho"
+                value={localThemeData.headerBackground}
+                onChange={(color) => updateLocalColor('headerBackground', color)}
+                description="Cor de fundo do cabeçalho quando estilo sólido"
+                presets={COLOR_PRESETS.background}
+              />
+            )}
+          </div>
         </div>
       </div>
 

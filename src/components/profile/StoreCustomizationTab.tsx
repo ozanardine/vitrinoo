@@ -145,7 +145,7 @@ export function StoreCustomizationTab({ store, onUpdate }: StoreCustomizationTab
                           titleFont: activeSection === 'typography' ? localTypographyData.titleFont || context.formData.titleFont : context.formData.titleFont,
                           bodyFont: activeSection === 'typography' ? localTypographyData.bodyFont || context.formData.bodyFont : context.formData.bodyFont,
                           socialSettings: context.formData.socialSettings,
-                          headerBackground: context.formData.headerBackground,
+                          headerBackground: activeSection === 'theme' ? localThemeData.headerBackground || context.formData.headerBackground : context.formData.headerBackground,
                           preview: true
                         }}
                       />
