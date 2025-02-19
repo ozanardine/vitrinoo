@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { User, Package, Grid, Link, Palette, Store, CreditCard, ExternalLink, Copy, Share2 } from 'lucide-react';
+import { User, Package, Grid, Link, Palette, Store, CreditCard, ExternalLink, Copy, Share2, Check } from 'lucide-react';
 import { useStore } from '../lib/store';
 import { supabase } from '../lib/supabase';
 import { Store as StoreType } from '../lib/types';
@@ -50,6 +50,16 @@ export function Profile() {
   const [showStoreModal, setShowStoreModal] = useState(false);
   const [plans, setPlans] = useState([]);
   const [copySuccess, setCopySuccess] = useState(false);
+  const [canShare, setCanShare] = useState(false);
+
+  useEffect(() => {
+    // Check if Web Share API is supported
+    setCanShare(
+      typeof navigator !== 'undefined' && 
+      !!navigator.share && 
+      !!navigator.canShare
+    );
+  }, []);
 
   useEffect(() => {
     if (!user) {
@@ -155,23 +165,28 @@ export function Profile() {
 
   const handleShare = async () => {
     const url = `${window.location.origin}/${store?.slug}`;
-    const title = `Confira o catálogo da ${store?.name}`;
+    const shareData = {
+      title: `Catálogo da ${store?.name}`,
+      text: `Confira o catálogo digital da ${store?.name}`,
+      url
+    };
     
-    if (navigator.share) {
-      try {
-        await navigator.share({
-          title,
-          url
-        });
-      } catch (err) {
-        console.error('Erro ao compartilhar:', err);
+    try {
+      // First check if we can share this data
+      if (canShare && navigator.canShare(shareData)) {
+        await navigator.share(shareData);
+      } else {
+        // Fallback to copy if sharing is not available
+        handleCopyLink();
       }
-    } else {
-      handleCopyLink();
+    } catch (err) {
+      // If sharing fails for any reason, fallback to copy
+      if (err instanceof Error && err.name !== 'AbortError') {
+        handleCopyLink();
+      }
     }
   };
 
-  // Função para renderizar mensagem de trial
   const renderTrialMessage = () => {
     if (!store?.subscription.trial_ends_at) return null;
 
@@ -326,7 +341,7 @@ export function Profile() {
                   <span className="hidden sm:inline">Copiar</span>
                 </button>
 
-                {navigator.share && (
+                {canShare && (
                   <button
                     onClick={handleShare}
                     className="inline-flex items-center gap-2 px-4 py-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg transition-colors"
