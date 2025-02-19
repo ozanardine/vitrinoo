@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Palette, Check } from 'lucide-react';
 import { useStoreCustomization } from '../StoreCustomizationContext';
 import { ColorPicker } from '../forms/ColorPicker';
@@ -170,7 +170,7 @@ export function ThemeSettings({
   });
 
   // Sincronizar com formData quando ele mudar
-  React.useEffect(() => {
+  useEffect(() => {
     setLocalThemeData({
       primaryColor: formData.primaryColor,
       secondaryColor: formData.secondaryColor,
@@ -208,11 +208,13 @@ export function ThemeSettings({
       )
     )?.[0] || null;
 
-    onPresetChange(matchingPreset);
-  }, [formData, onPresetChange]);
+    if (matchingPreset !== selectedPreset) {
+      onPresetChange(matchingPreset);
+    }
+  }, [formData, onPresetChange, selectedPreset]);
 
   // Notificar mudanças no estado local
-  React.useEffect(() => {
+  useEffect(() => {
     onLocalChange?.(localThemeData);
   }, [localThemeData, onLocalChange]);
 
@@ -248,14 +250,16 @@ export function ThemeSettings({
     const preset = COLOR_THEMES[presetKey];
     onPresetChange(presetKey);
     
-    setLocalThemeData(prev => ({
-      ...prev,
+    const newThemeData = {
+      ...localThemeData,
       primaryColor: preset.colors.primary,
       secondaryColor: preset.colors.secondary,
       accentColor: preset.colors.accent,
       background: preset.colors.background,
       headerBackground: preset.colors.headerBackground
-    }));
+    };
+
+    setLocalThemeData(newThemeData);
 
     // Parse gradient if present
     if (preset.colors.headerBackground.includes('gradient')) {
