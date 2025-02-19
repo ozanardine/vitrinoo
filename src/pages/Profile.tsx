@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { User, Package, Grid, Link, Palette, Store, CreditCard } from 'lucide-react';
+import { User, Package, Grid, Link, Palette, Store, CreditCard, ExternalLink, Copy, Share2 } from 'lucide-react';
 import { useStore } from '../lib/store';
 import { supabase } from '../lib/supabase';
 import { Store as StoreType } from '../lib/types';
@@ -49,6 +49,7 @@ export function Profile() {
   );
   const [showStoreModal, setShowStoreModal] = useState(false);
   const [plans, setPlans] = useState([]);
+  const [copySuccess, setCopySuccess] = useState(false);
 
   useEffect(() => {
     if (!user) {
@@ -141,9 +142,38 @@ export function Profile() {
     }
   };
 
+  const handleCopyLink = async () => {
+    const url = `${window.location.origin}/${store?.slug}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopySuccess(true);
+      setTimeout(() => setCopySuccess(false), 2000);
+    } catch (err) {
+      console.error('Erro ao copiar:', err);
+    }
+  };
+
+  const handleShare = async () => {
+    const url = `${window.location.origin}/${store?.slug}`;
+    const title = `Confira o catálogo da ${store?.name}`;
+    
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title,
+          url
+        });
+      } catch (err) {
+        console.error('Erro ao compartilhar:', err);
+      }
+    } else {
+      handleCopyLink();
+    }
+  };
+
   // Função para renderizar mensagem de trial
   const renderTrialMessage = () => {
-    if (!store.subscription.trial_ends_at) return null;
+    if (!store?.subscription.trial_ends_at) return null;
 
     const trialEnd = new Date(store.subscription.trial_ends_at);
     const now = new Date();
@@ -252,15 +282,63 @@ export function Profile() {
 
   const planType = store.subscription.plan_type as keyof typeof PLAN_LIMITS;
   const planLimits = PLAN_LIMITS[planType];
+  const catalogUrl = `${window.location.origin}/${store.slug}`;
 
   return (
     <div className="container mx-auto px-4 py-8">
-      <div className="flex justify-between items-center mb-8">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
         <div>
-          <h1 className="text-3xl font-bold mb-2">{store.name}</h1>
-          <p className="text-gray-600 dark:text-gray-400">
-          URL catálogo: <a href={`/${store.slug}`} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline" > {window.location.origin}/{store.slug} </a>
-          </p>
+          <h1 className="text-3xl font-bold mb-4">{store.name}</h1>
+          
+          {/* Catalog URL Card */}
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+              <div className="flex-1 min-w-0">
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">URL do seu catálogo:</p>
+                <div className="flex items-center gap-2 bg-gray-50 dark:bg-gray-900 p-2 rounded">
+                  <span className="truncate text-gray-900 dark:text-gray-100 font-medium">
+                    {catalogUrl}
+                  </span>
+                </div>
+              </div>
+              
+              <div className="flex gap-2 shrink-0">
+                <a
+                  href={`/${store.slug}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+                >
+                  <ExternalLink className="w-4 h-4" />
+                  <span className="hidden sm:inline">Acessar</span>
+                </a>
+                
+                <button
+                  onClick={handleCopyLink}
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg transition-colors"
+                  title="Copiar link"
+                >
+                  {copySuccess ? (
+                    <Check className="w-4 h-4 text-green-500" />
+                  ) : (
+                    <Copy className="w-4 h-4" />
+                  )}
+                  <span className="hidden sm:inline">Copiar</span>
+                </button>
+
+                {navigator.share && (
+                  <button
+                    onClick={handleShare}
+                    className="inline-flex items-center gap-2 px-4 py-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg transition-colors"
+                    title="Compartilhar"
+                  >
+                    <Share2 className="w-4 h-4" />
+                    <span className="hidden sm:inline">Compartilhar</span>
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
