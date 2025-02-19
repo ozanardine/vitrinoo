@@ -16,6 +16,15 @@ export interface Product {
   parent_id?: string;
   attributes?: Record<string, any>;
   variation_attributes?: string[];
+  children?: Product[];
+  components?: Array<{
+    id: string;
+    title: string;
+    sku?: string;
+    quantity: number;
+    unit: string;
+    notes?: string;
+  }>;
   // Campos específicos para serviços
   duration?: string;
   availability?: {
