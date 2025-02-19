@@ -3,6 +3,7 @@ import { X, ChevronLeft, ChevronRight, Package, Tag, Clock, MapPin, Check } from
 import { Product } from '../../lib/types';
 import ReactMarkdown from 'react-markdown';
 import { Modal } from '../Modal';
+import { calculateTextColor } from '../../lib/colors';
 
 interface ProductModalProps {
   product: Product;
@@ -32,6 +33,12 @@ export function ProductModal({
   useEffect(() => {
     setImageLoaded(false);
   }, [currentImageIndex]);
+
+  // Calculate text colors for better contrast
+  const textColor = calculateTextColor(primaryColor) === 'light' ? '#FFFFFF' : secondaryColor;
+  const mutedTextColor = calculateTextColor(primaryColor) === 'light' 
+    ? 'rgba(255, 255, 255, 0.7)' 
+    : `${secondaryColor}80`;
 
   // Calculate discount percentage
   const discountPercentage = product.promotional_price
@@ -115,8 +122,9 @@ export function ProductModal({
       <div 
         className="flex flex-col lg:flex-row gap-8"
         style={{ 
-          color: secondaryColor,
-          fontFamily
+          color: textColor,
+          fontFamily,
+          backgroundColor: primaryColor
         }}
         onKeyDown={handleKeyNavigation}
         tabIndex={0}
@@ -226,9 +234,9 @@ export function ProductModal({
           <div>
             <h2 className="text-2xl font-bold mb-2">{product.title}</h2>
             <div className="flex items-center justify-between">
-              <p style={{ color: `${secondaryColor}80` }}>{product.brand}</p>
+              <p style={{ color: mutedTextColor }}>{product.brand}</p>
               {product.sku && (
-                <p className="text-sm" style={{ color: `${secondaryColor}60` }}>
+                <p className="text-sm" style={{ color: mutedTextColor }}>
                   SKU: {product.sku}
                 </p>
               )}
@@ -240,7 +248,7 @@ export function ProductModal({
             {getCurrentPrice().promotional ? (
               <div className="space-y-1">
                 <div className="flex items-center gap-2">
-                  <p className="line-through" style={{ color: `${secondaryColor}60` }}>
+                  <p className="line-through" style={{ color: mutedTextColor }}>
                     R$ {getCurrentPrice().regular.toFixed(2)}
                   </p>
                   <span className="text-sm px-2 py-0.5 rounded-full"
@@ -282,7 +290,7 @@ export function ProductModal({
                           `}
                           style={{ 
                             backgroundColor: isSelected ? accentColor : `${secondaryColor}10`,
-                            color: isSelected ? primaryColor : secondaryColor,
+                            color: isSelected ? primaryColor : textColor,
                             transform: isSelected ? 'scale(1.05)' : 'scale(1)'
                           }}
                         >
@@ -297,7 +305,10 @@ export function ProductModal({
           )}
 
           {/* Description */}
-          <div className="prose prose-sm max-w-none" style={{ color: `${secondaryColor}90` }}>
+          <div 
+            className="prose prose-sm max-w-none max-h-60 overflow-y-auto custom-scrollbar pr-4" 
+            style={{ color: mutedTextColor }}
+          >
             <ReactMarkdown>{product.description}</ReactMarkdown>
           </div>
 
@@ -306,14 +317,14 @@ export function ProductModal({
             <div className="space-y-4">
               {product.duration && (
                 <div className="flex items-center gap-2">
-                  <Clock className="w-5 h-5" style={{ color: `${secondaryColor}60` }} />
+                  <Clock className="w-5 h-5" style={{ color: mutedTextColor }} />
                   <span>Duração: {formatDuration(product.duration)}</span>
                 </div>
               )}
 
               {product.service_location && (
                 <div className="flex items-center gap-2">
-                  <MapPin className="w-5 h-5" style={{ color: `${secondaryColor}60` }} />
+                  <MapPin className="w-5 h-5" style={{ color: mutedTextColor }} />
                   <span>{product.service_location}</span>
                 </div>
               )}
@@ -366,7 +377,7 @@ export function ProductModal({
                     className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm"
                     style={{ 
                       backgroundColor: `${secondaryColor}10`,
-                      color: secondaryColor
+                      color: textColor
                     }}
                   >
                     <Tag className="w-4 h-4" />
