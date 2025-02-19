@@ -3,32 +3,10 @@ import {
   Phone, Mail, MessageCircle, Instagram, Facebook, 
   Youtube, Store as TikTok, Twitter, Link2 
 } from 'lucide-react';
-import { generateHeaderStyles, adjustColorBrightness } from '../../lib/colors';
+import { adjustColorBrightness } from '../../lib/colors';
 import { generateSocialUrl } from '../../lib/constants';
 import { useStoreTheme } from '../../lib/store-theme';
 import { StoreHeaderCustomization } from '../../lib/types';
-
-// Cores padrão por tema
-const THEME_PRESETS = {
-  light: {
-    background: '#ffffff',
-    surface: '#f8fafc',
-    text: {
-      primary: '#1f2937',
-      secondary: '#4b5563',
-      muted: '#6b7280'
-    }
-  },
-  dark: {
-    background: '#111827',
-    surface: '#1f2937',
-    text: {
-      primary: '#f9fafb',
-      secondary: '#e5e7eb',
-      muted: '#9ca3af'
-    }
-  }
-} as const;
 
 const SOCIAL_ICONS = {
   phone: Phone,
@@ -354,4 +332,4 @@ export function StoreHeader({
   );
 }
 
-export default React.memo(StoreHeader);
+export default StoreHeader;

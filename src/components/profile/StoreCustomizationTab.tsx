@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Store, Palette, Layout, Type, Grid, Phone } from 'lucide-react';
 import { Store as StoreType } from '../../lib/types';
 import { StoreCustomizationProvider } from './store-customization/StoreCustomizationContext';
@@ -145,6 +145,7 @@ export function StoreCustomizationTab({ store, onUpdate }: StoreCustomizationTab
                           titleFont: activeSection === 'typography' ? localTypographyData.titleFont || context.formData.titleFont : context.formData.titleFont,
                           bodyFont: activeSection === 'typography' ? localTypographyData.bodyFont || context.formData.bodyFont : context.formData.bodyFont,
                           socialSettings: context.formData.socialSettings,
+                          headerBackground: context.formData.headerBackground,
                           preview: true
                         }}
                       />
