@@ -43,7 +43,7 @@ export const Header = () => {
           <div className="flex justify-between items-center">
             <Link to="/" className="flex items-center space-x-2">
               <Store className="w-8 h-8 text-blue-600" />
-              <h1 className="text-2xl font-bold">Catálogo Digital</h1>
+              <h1 className="text-2xl font-bold">Vitryno Digital</h1>
             </Link>
             <div className="flex items-center space-x-6">
               <nav className="hidden md:flex space-x-6">

@@ -259,7 +259,7 @@ export function Profile() {
         <div>
           <h1 className="text-3xl font-bold mb-2">{store.name}</h1>
           <p className="text-gray-600 dark:text-gray-400">
-            URL catálogo: <a href={`/${store.slug}`} className="text-blue-600 hover:underline">{window.location.origin}/{store.slug}</a>
+          URL catálogo: <a href={`/${store.slug}`} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline" > {window.location.origin}/{store.slug} </a>
           </p>
         </div>
       </div>

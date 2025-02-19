@@ -9,7 +9,7 @@ export const Footer = () => {
           <div className="space-y-4">
             <div className="flex items-center space-x-2">
               <Store className="w-6 h-6 text-blue-600" />
-              <span className="text-xl font-bold">Catálogo Digital</span>
+              <span className="text-xl font-bold">Vitryno Digital</span>
             </div>
             <p className="text-gray-600 dark:text-gray-400">
               Crie e compartilhe seu catálogo de produtos com facilidade
@@ -56,7 +56,7 @@ export const Footer = () => {
         
         <div className="mt-12 pt-8 border-t border-gray-200 dark:border-gray-700">
           <p className="text-center text-gray-600 dark:text-gray-400">
-            © {new Date().getFullYear()} Catálogo Digital. Todos os direitos reservados.
+            © {new Date().getFullYear()} Vitryno Digital. Todos os direitos reservados.
           </p>
         </div>
       </div>

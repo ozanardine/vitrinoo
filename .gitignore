@@ -12,6 +12,8 @@ dist
 dist-ssr
 *.local
 
+deno.lock
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
@@ -22,3 +24,8 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+.vite
+.tmp.driveupload
+.tmp.drivedownload
+.vscode
+package-lock.json

@@ -7,6 +7,11 @@ export interface Plan {
   id: string;
   name: string;
   description: string;
+  metadata: {
+    is_trial: boolean;
+    plan_type: 'free' | 'basic' | 'plus';
+    trial_days?: number;
+  };
   features: {
     products: number;
     categories: number;
@@ -32,8 +37,7 @@ export async function getPlans(): Promise<Plan[]> {
       stripe_prices!inner(*)
     `)
     .eq('active', true)
-    .eq('stripe_prices.active', true)
-    .order('name');
+    .eq('stripe_prices.active', true);
 
   if (productsError) throw productsError;
   
@@ -47,6 +51,7 @@ export async function getPlans(): Promise<Plan[]> {
       id: price?.price_id,
       name: product.name,
       description: product.description,
+      metadata: product.metadata,
       features: product.features,
       price: price ? {
         id: price.price_id,
@@ -76,7 +81,6 @@ export async function createCheckoutSession(priceId: string, storeId: string) {
       throw new Error('Erro ao inicializar Stripe');
     }
 
-    // Log da chave pública (parcial)
     console.log('Using Stripe public key:', 
       `${import.meta.env.VITE_STRIPE_PUBLIC_KEY.slice(0, 8)}...`
     );
@@ -98,7 +102,6 @@ export async function createCheckoutSession(priceId: string, storeId: string) {
     }
 
     if ('id' in data) {
-      // Adicionar delay antes do redirect
       await new Promise(resolve => setTimeout(resolve, 500));
       
       const { error: checkoutError } = await stripe.redirectToCheckout({
@@ -145,7 +148,6 @@ export async function createPortalSession() {
 
     console.log('Portal session created:', data);
 
-    // Redirecionar para o portal
     window.location.href = data.url;
     return data;
   } catch (error: any) {
