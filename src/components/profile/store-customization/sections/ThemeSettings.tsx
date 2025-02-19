@@ -156,7 +156,7 @@ export function ThemeSettings({
   const [gradientDirection, setGradientDirection] = useState('to bottom');
   const [gradientStart, setGradientStart] = useState('#ffffff');
   const [gradientEnd, setGradientEnd] = useState('#f8fafc');
-  const [useGradient, setUseGradient] = useState(formData.headerBackground.includes('gradient'));
+  const [useGradient, setUseGradient] = useState(formData.headerStyle === 'gradient');
 
   // Estado local para armazenar alterações temporárias
   const [localThemeData, setLocalThemeData] = useState<ThemeData>({
@@ -180,7 +180,7 @@ export function ThemeSettings({
     });
 
     // Parse gradient if present
-    if (formData.headerBackground.includes('gradient')) {
+    if (formData.headerBackground?.includes('gradient')) {
       setUseGradient(true);
       const match = formData.headerBackground.match(/linear-gradient\((.*?),(.*?),(.*?)\)/);
       if (match) {
@@ -202,9 +202,10 @@ export function ThemeSettings({
     };
 
     const matchingPreset = Object.entries(COLOR_THEMES).find(([_, theme]) => 
-      Object.entries(theme.colors).every(([key, value]) => 
-        value.toLowerCase() === currentColors[key as keyof typeof currentColors].toLowerCase()
-      )
+      Object.entries(theme.colors).every(([key, value]) => {
+        const currentValue = currentColors[key as keyof typeof currentColors];
+        return currentValue && value.toLowerCase() === currentValue.toLowerCase();
+      })
     )?.[0] || null;
 
     if (matchingPreset !== selectedPreset) {
@@ -279,7 +280,8 @@ export function ThemeSettings({
       secondaryColor: preset.colors.secondary,
       accentColor: preset.colors.accent,
       background: preset.colors.background,
-      headerBackground: preset.colors.headerBackground
+      headerBackground: preset.colors.headerBackground,
+      headerStyle: preset.colors.headerBackground.includes('gradient') ? 'gradient' : 'solid'
     });
   };
 
@@ -293,7 +295,10 @@ export function ThemeSettings({
 
     // Atualizar formData imediatamente para refletir no preview
     updateFormData({
-      [colorKey]: value
+      [colorKey]: value,
+      ...(colorKey === 'headerBackground' && {
+        headerStyle: useGradient ? 'gradient' : 'solid'
+      })
     });
   };
 
@@ -301,6 +306,24 @@ export function ThemeSettings({
   const updateGradient = () => {
     const gradientValue = `linear-gradient(${gradientDirection}, ${gradientStart}, ${gradientEnd})`;
     updateLocalColor('headerBackground', gradientValue);
+    updateFormData({
+      headerBackground: gradientValue,
+      headerStyle: 'gradient'
+    });
+  };
+
+  // Função para alternar entre cor sólida e gradiente
+  const toggleHeaderStyle = (useGrad: boolean) => {
+    setUseGradient(useGrad);
+    if (useGrad) {
+      updateGradient();
+    } else {
+      updateLocalColor('headerBackground', localThemeData.primaryColor);
+      updateFormData({
+        headerBackground: localThemeData.primaryColor,
+        headerStyle: 'solid'
+      });
+    }
   };
 
   return (
@@ -321,7 +344,7 @@ export function ThemeSettings({
                 key={key}
                 type="button"
                 onClick={() => applyThemePreset(key as keyof typeof COLOR_THEMES)}
-                className={`p-6 rounded-lg border-2 transition-all hover:scale-[1.02] relative overflow-hidden ${
+                className={`p-6 rounded-lg border-2 text-left transition-all hover:scale-[1.02] relative overflow-hidden ${
                   isSelected ? 'border-blue-500 shadow-lg' : 'border-gray-200 dark:border-gray-700'
                 }`}
                 style={{
@@ -336,7 +359,7 @@ export function ThemeSettings({
                 )}
                 
                 <div className="mb-4">
-                  <h4 className="text-lg font-semibold mb-2">{theme.name}</h4>
+                  <h3 className="text-lg font-semibold mb-2">{theme.name}</h3>
                   <p className="text-sm opacity-80 mb-4">{theme.description}</p>
                   <div className="flex gap-2">
                     {Object.entries(theme.colors).map(([colorKey, color]) => (
@@ -415,7 +438,7 @@ export function ThemeSettings({
                 <input
                   type="radio"
                   checked={!useGradient}
-                  onChange={() => setUseGradient(false)}
+                  onChange={() => toggleHeaderStyle(false)}
                   className="text-blue-600 focus:ring-blue-500"
                 />
                 <span>Cor Sólida</span>
@@ -425,7 +448,7 @@ export function ThemeSettings({
                 <input
                   type="radio"
                   checked={useGradient}
-                  onChange={() => setUseGradient(true)}
+                  onChange={() => toggleHeaderStyle(true)}
                   className="text-blue-600 focus:ring-blue-500"
                 />
                 <span>Gradiente</span>
