@@ -35,7 +35,7 @@ export function StoreFooter({ store, theme }: StoreFooterProps) {
             className="mb-4"
             style={{ color: themeStyles.footerText }}
           >
-            Catálogo criado com Catálogo Digital
+            Catálogo criado com Vitryno Digital
           </p>
           <a
             href="/"
