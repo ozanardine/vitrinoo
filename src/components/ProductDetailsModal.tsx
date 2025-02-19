@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { X, Edit2, Trash2, Tag, Package, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Product } from '../lib/types';
 import ReactMarkdown from 'react-markdown';
@@ -109,7 +109,7 @@ export function ProductDetailsModal({
           </div>
 
           {/* Detalhes do Produto */}
-          <div className="w-full md:w-1/2 p-6 overflow-y-auto">
+          <div className="w-full md:w-1/2 p-6 overflow-y-auto custom-scrollbar">
             <div className="flex justify-between items-start mb-6">
               <div>
                 <h2 className="text-2xl font-bold mb-2">{product.title}</h2>
@@ -144,15 +144,8 @@ export function ProductDetailsModal({
             </div>
 
             <div className="space-y-6">
-              <div>
-                <h3 className="text-lg font-semibold mb-2">Descrição</h3>
-                <div className="prose dark:prose-invert max-w-none">
-                  <ReactMarkdown>{product.description}</ReactMarkdown>
-                </div>
-              </div>
-
-              <div>
-                <h3 className="text-lg font-semibold mb-2">Preço</h3>
+              {/* Preço */}
+              <div className="p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
                 {product.promotional_price ? (
                   <div className="space-y-1">
                     <p className="text-gray-500 line-through">
@@ -172,8 +165,16 @@ export function ProductDetailsModal({
                 )}
               </div>
 
-              {/* Variações do Produto */}
-              {product.type === 'variable' && product.variation_attributes && product.variation_attributes.length > 0 && (
+              {/* Descrição */}
+              <div className="max-h-60 overflow-y-auto custom-scrollbar">
+                <h3 className="text-lg font-semibold mb-2">Descrição</h3>
+                <div className="prose dark:prose-invert max-w-none">
+                  <ReactMarkdown>{product.description}</ReactMarkdown>
+                </div>
+              </div>
+
+              {/* Variações */}
+              {product.type === 'variable' && product.variation_attributes && (
                 <div>
                   <h3 className="text-lg font-semibold mb-2">Variações</h3>
                   <div className="space-y-2">
@@ -187,10 +188,10 @@ export function ProductDetailsModal({
                               .filter(Boolean)
                           )).map((value) => (
                             <span
-                              key={value}
+                              key={String(value)}
                               className="px-3 py-1 bg-gray-100 dark:bg-gray-700 rounded-full text-sm"
                             >
-                              {value}
+                              {String(value)}
                             </span>
                           ))}
                         </div>
@@ -232,6 +233,7 @@ export function ProductDetailsModal({
                 </div>
               )}
 
+              {/* Tags */}
               {product.tags.length > 0 && (
                 <div>
                   <h3 className="text-lg font-semibold mb-2">Tags</h3>
