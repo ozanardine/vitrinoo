@@ -1,9 +1,8 @@
-import React from 'react';
 import { Store as StoreIcon, ThumbsUp } from 'lucide-react';
-import { StoreData } from '../../lib/types';
+import { Store } from '../../lib/types';
 
 interface StoreFooterProps {
-  store: StoreData;
+  store: Store;
   theme: 'light' | 'dark';
 }
 

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, ChevronLeft, ChevronRight, Package, Tag, Clock, MapPin, Check } from 'lucide-react';
+import {ChevronLeft, ChevronRight, Package, Tag, Clock, MapPin } from 'lucide-react';
 import { Product } from '../../lib/types';
 import ReactMarkdown from 'react-markdown';
 import { Modal } from '../Modal';
@@ -22,7 +22,6 @@ export function ProductModal({
   secondaryColor = '#1F2937',
   primaryColor = '#FFFFFF',
   fontFamily = 'ui-sans-serif, system-ui, sans-serif',
-  style = 'default'
 }: ProductModalProps) {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [selectedVariation, setSelectedVariation] = useState<any>(null);
