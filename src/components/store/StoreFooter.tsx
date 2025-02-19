@@ -3,22 +3,15 @@ import { Store } from '../../lib/types';
 
 interface StoreFooterProps {
   store: Store;
-  theme: 'light' | 'dark';
 }
 
-export function StoreFooter({ store, theme }: StoreFooterProps) {
-  const themeStyles = {
-    footerBg: theme === 'dark' ? '#1f2937' : store.primary_color,
-    footerBorder: theme === 'dark' ? 'rgba(255, 255, 255, 0.1)' : `${store.secondary_color}20`,
-    footerText: theme === 'dark' ? 'rgba(255, 255, 255, 0.8)' : `${store.secondary_color}80`
-  };
-
+export function StoreFooter({ store }: StoreFooterProps) {
   return (
     <footer 
       className="border-t py-8 mt-12 transition-colors duration-200"
       style={{
-        backgroundColor: themeStyles.footerBg,
-        borderColor: themeStyles.footerBorder
+        backgroundColor: store.primary_color,
+        borderColor: `${store.secondary_color}20`
       }}
     >
       <div className={store.container_width === 'max-w-full' 
@@ -32,7 +25,7 @@ export function StoreFooter({ store, theme }: StoreFooterProps) {
           />
           <p 
             className="mb-4"
-            style={{ color: themeStyles.footerText }}
+            style={{ color: `${store.secondary_color}80` }}
           >
             Catálogo criado com Vitryno Digital
           </p>

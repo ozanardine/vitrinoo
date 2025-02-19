@@ -57,7 +57,6 @@ export function StoreLayout({ store, children }: StoreLayoutProps) {
       {/* Store Footer */}
       <StoreFooter
         store={store}
-        theme="light"
       />
     </div>
   );

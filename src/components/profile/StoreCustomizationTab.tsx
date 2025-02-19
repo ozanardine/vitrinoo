@@ -42,7 +42,10 @@ export function StoreCustomizationTab({ store, onUpdate }: StoreCustomizationTab
       case 'theme':
         return (
           <ThemeSettings 
-            onLocalChange={(data) => setLocalThemeData(data)}
+            onLocalChange={(data) => {
+              setLocalThemeData(data);
+              context.updateFormData(data);
+            }}
             selectedPreset={selectedThemePreset}
             onPresetChange={setSelectedThemePreset}
           />

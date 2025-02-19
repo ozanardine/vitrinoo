@@ -1,4 +1,3 @@
-import React from 'react';
 import { Grid, List } from 'lucide-react';
 import { SortType } from '../../lib/hooks/useProductSort';
 
