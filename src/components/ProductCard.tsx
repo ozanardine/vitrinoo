@@ -67,11 +67,6 @@ export function ProductCard({ product, onEdit, onDelete, onClick }: ProductCardP
             {Math.round(((product.price - product.promotional_price) / product.price) * 100)}% OFF
           </div>
         )}
-        <div className="absolute bottom-2 left-2">
-          <span className="px-2 py-1 bg-blue-500 text-white text-xs rounded-full">
-            {getTypeLabel(product.type)}
-          </span>
-        </div>
       </div>
       <div className="p-4">
         <div className="mb-2">

@@ -1,3 +1,4 @@
+// ProductAttributes.tsx
 import React, { useState, useEffect } from 'react';
 import { Plus, X, Check, AlertCircle } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
@@ -15,7 +16,7 @@ interface ProductAttributesProps {
   onAttributesChange: (attributes: string[]) => void;
   disabled?: boolean;
   existingAttributes?: Record<string, string[]>;
-  onAttributeOptionsChange?: (name: string, options: string[]) => void;
+  onAttributeOptionsChange?: (newOptions: Record<string, string[]>) => void;
 }
 
 export function ProductAttributes({
@@ -36,9 +37,43 @@ export function ProductAttributes({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Carregar atributos e opções ao iniciar
   useEffect(() => {
     loadAttributes();
   }, [storeId]);
+
+  // Carregar opções quando atributos são selecionados
+  useEffect(() => {
+    const loadAttributeOptions = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('product_attributes')
+          .select('*')
+          .eq('store_id', storeId)
+          .in('name', selectedAttributes);
+
+        if (error) throw error;
+        
+        // Atualizar opções existentes
+        const newOptions: Record<string, string[]> = {};
+        data?.forEach(attr => {
+          newOptions[attr.name] = attr.options || [];
+        });
+
+        // Notificar componente pai sobre novas opções
+        if (onAttributeOptionsChange) {
+          onAttributeOptionsChange(newOptions);
+        }
+      } catch (err) {
+        console.error('Erro ao carregar opções:', err);
+        setError('Erro ao carregar opções dos atributos');
+      }
+    };
+
+    if (selectedAttributes.length > 0) {
+      loadAttributeOptions();
+    }
+  }, [selectedAttributes, storeId]);
 
   const loadAttributes = async () => {
     try {
@@ -49,23 +84,20 @@ export function ProductAttributes({
         .order('name');
 
       if (error) throw error;
-      
-      // Atualizar as opções dos atributos existentes
-      if (data) {
-        const newExistingAttributes: Record<string, string[]> = {};
+      setAttributes(data || []);
+
+      // Carregar opções para atributos já selecionados
+      if (data && selectedAttributes.length > 0) {
+        const newOptions: Record<string, string[]> = {};
         data.forEach(attr => {
-          newExistingAttributes[attr.name] = attr.options || [];
+          if (selectedAttributes.includes(attr.name)) {
+            newOptions[attr.name] = attr.options || [];
+          }
         });
         if (onAttributeOptionsChange) {
-          selectedAttributes.forEach(attr => {
-            if (newExistingAttributes[attr]) {
-              onAttributeOptionsChange(attr, newExistingAttributes[attr]);
-            }
-          });
+          onAttributeOptionsChange(newOptions);
         }
       }
-
-      setAttributes(data || []);
     } catch (err) {
       console.error('Erro ao carregar atributos:', err);
       setError('Erro ao carregar atributos. Por favor, tente novamente.');
@@ -110,6 +142,7 @@ export function ProductAttributes({
         throw new Error('Adicione pelo menos uma opção');
       }
 
+      // Verificar se já existe
       const { data: existingAttr } = await supabase
         .from('product_attributes')
         .select('id')
@@ -121,20 +154,34 @@ export function ProductAttributes({
         throw new Error('Já existe um atributo com este nome');
       }
 
-      const { error: saveError } = await supabase
+      // Salvar novo atributo
+      const { error: saveError, data: newAttr } = await supabase
         .from('product_attributes')
         .insert({
           store_id: storeId,
           name: newAttribute.name,
           description: newAttribute.description || null,
           options: validOptions
-        });
+        })
+        .select()
+        .single();
 
       if (saveError) throw saveError;
 
+      // Atualizar lista local
+      setAttributes([...attributes, newAttr]);
+      
+      // Limpar formulário
       setNewAttribute({ name: '', description: '', options: [''] });
       setShowNewAttribute(false);
-      await loadAttributes();
+
+      // Notificar sobre novas opções se o atributo for selecionado
+      if (selectedAttributes.includes(newAttr.name) && onAttributeOptionsChange) {
+        onAttributeOptionsChange({
+          ...existingAttributes,
+          [newAttr.name]: validOptions
+        });
+      }
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -144,18 +191,36 @@ export function ProductAttributes({
 
   const toggleAttribute = async (attributeName: string) => {
     const attribute = attributes.find(attr => attr.name === attributeName);
-    if (!attribute) return;
-
+    if (!attribute) {
+      console.error('Atributo não encontrado:', attributeName);
+      return;
+    }
+  
     const newAttributes = selectedAttributes.includes(attributeName)
       ? selectedAttributes.filter(attr => attr !== attributeName)
       : [...selectedAttributes, attributeName];
     
-    onAttributesChange(newAttributes);
-
-    // Atualizar opções disponíveis
+    // Primeiro atualizar as opções, depois os atributos
     if (onAttributeOptionsChange) {
-      onAttributeOptionsChange(attributeName, attribute.options);
+      const newOptions = { ...existingAttributes };
+      
+      if (newAttributes.includes(attributeName)) {
+        // Garantir que as opções são um array
+        if (Array.isArray(attribute.options) && attribute.options.length > 0) {
+          newOptions[attributeName] = attribute.options;
+        } else {
+          console.error('Opções inválidas para o atributo:', attributeName, attribute.options);
+          return;
+        }
+      } else {
+        delete newOptions[attributeName];
+      }
+  
+      onAttributeOptionsChange(newOptions);
     }
+  
+    // Depois atualizar os atributos selecionados
+    onAttributesChange(newAttributes);
   };
 
   return (

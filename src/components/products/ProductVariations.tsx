@@ -32,34 +32,32 @@ export function ProductVariations({
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
 
-  // Efeito para validar atributos quando eles mudam
+  // Validar atributos quando mudarem
   useEffect(() => {
-    validateAttributes();
+    if (attributes.length > 0) {
+      const missingOptions = attributes.filter(attr => {
+        const options = existingAttributes[attr];
+        return !options || options.length === 0;
+      });
+  
+      if (missingOptions.length > 0) {
+        setError(`Atributo "${missingOptions[0]}" não tem opções definidas. Adicione opções ao atributo antes de gerar variações.`);
+      } else {
+        setError(null);
+      }
+    }
   }, [attributes, existingAttributes]);
 
-  const validateAttributes = () => {
-    if (attributes.length === 0) return;
-
-    const missingOptions = attributes.filter(attr => {
-      const options = existingAttributes[attr];
-      return !options || options.length === 0;
-    });
-
-    if (missingOptions.length > 0) {
-      setError(`Atributo "${missingOptions[0]}" não tem opções definidas. Adicione opções ao atributo antes de gerar variações.`);
-    } else {
-      setError(null);
-    }
-  };
-
   const toggleExpand = (id: string) => {
-    const newExpanded = new Set(expanded);
-    if (newExpanded.has(id)) {
-      newExpanded.delete(id);
-    } else {
-      newExpanded.add(id);
-    }
-    setExpanded(newExpanded);
+    setExpanded(prev => {
+      const newExpanded = new Set(prev);
+      if (newExpanded.has(id)) {
+        newExpanded.delete(id);
+      } else {
+        newExpanded.add(id);
+      }
+      return newExpanded;
+    });
   };
 
   const generateAttributeCombinations = (
@@ -72,17 +70,14 @@ export function ProductVariations({
       return [];
     }
 
-    // Inicializa com um objeto vazio
     let combinations: Record<string, string>[] = [{}];
     
-    // Para cada atributo
+    // Gerar todas as combinações possíveis
     for (const attr of attrs) {
       const attrOptions = options[attr] || [];
       const newCombinations: Record<string, string>[] = [];
       
-      // Para cada combinação existente
       for (const combo of combinations) {
-        // Para cada opção do atributo atual
         for (const option of attrOptions) {
           newCombinations.push({
             ...combo,
@@ -105,19 +100,19 @@ export function ProductVariations({
       setError('Selecione pelo menos um atributo de variação');
       return;
     }
-
-    // Verificar se há opções disponíveis para todos os atributos
+  
+    // Validar se todos os atributos têm opções
     const missingOptions = attributes.filter(attr => {
       const options = existingAttributes[attr];
-      return !options || options.length === 0;
+      return !options || !Array.isArray(options) || options.length === 0;
     });
-
+  
     if (missingOptions.length > 0) {
       setError(`Atributo "${missingOptions[0]}" não tem opções definidas. Adicione opções ao atributo antes de gerar variações.`);
       return;
     }
 
-    // Primeiro salvar as variações existentes em um mapa
+    // Manter variações existentes em um mapa
     const existingVariationsMap = new Map<string, Variation>();
     variations.forEach(variation => {
       const key = Object.entries(variation.attributes)
@@ -135,7 +130,7 @@ export function ProductVariations({
       return;
     }
 
-    // Criar novas variações mantendo os dados das existentes
+    // Criar novas variações mantendo dados existentes
     const newVariations = combinations.map((combo, index) => {
       const key = Object.entries(combo)
         .sort(([a], [b]) => a.localeCompare(b))
@@ -148,7 +143,7 @@ export function ProductVariations({
         return existing;
       }
 
-      // Gerar SKU automático se o produto pai tiver SKU
+      // Gerar SKU automático se houver SKU pai
       const sku = parentSku 
         ? `${parentSku}-${(index + 1).toString().padStart(3, '0')}` 
         : '';
@@ -172,6 +167,12 @@ export function ProductVariations({
       ));
     });
     onExistingAttributesChange?.(newExistingAttributes);
+
+    // Expandir primeira variação
+    if (newVariations.length > 0) {
+      const firstId = newVariations[0].id || '0';
+      setExpanded(new Set([firstId]));
+    }
   };
 
   const updateVariation = (index: number, updates: Partial<Variation>) => {
@@ -192,6 +193,13 @@ export function ProductVariations({
       ));
     });
     onExistingAttributesChange?.(newExistingAttributes);
+
+    // Limpar expanded state para a variação removida
+    setExpanded(prev => {
+      const newExpanded = new Set(prev);
+      newExpanded.delete(variations[index].id || index.toString());
+      return newExpanded;
+    });
   };
 
   return (
@@ -222,70 +230,95 @@ export function ProductVariations({
         </div>
       ) : (
         <div className="space-y-2">
-          {variations.map((variation, index) => (
-            <div
-              key={variation.id || index}
-              className="border rounded-lg dark:border-gray-700"
-            >
+          {variations.map((variation, index) => {
+            const variationId = variation.id || index.toString();
+            const isExpanded = expanded.has(variationId);
+
+            return (
               <div
-                className="p-4 flex items-center justify-between cursor-pointer"
-                onClick={() => toggleExpand(variation.id || index.toString())}
+                key={variationId}
+                className="border rounded-lg dark:border-gray-700"
               >
-                <div className="flex-1">
-                  <div className="flex flex-wrap gap-2">
-                    {Object.entries(variation.attributes).map(([name, value]) => (
-                      <span
-                        key={name}
-                        className="px-2 py-1 bg-gray-100 dark:bg-gray-800 rounded text-sm"
-                      >
-                        {name}: {value}
-                      </span>
-                    ))}
+                <div
+                  className="p-4 flex items-center justify-between cursor-pointer"
+                  onClick={() => toggleExpand(variationId)}
+                >
+                  <div className="flex-1">
+                    <div className="flex flex-wrap gap-2">
+                      {Object.entries(variation.attributes).map(([name, value]) => (
+                        <span
+                          key={name}
+                          className="px-2 py-1 bg-gray-100 dark:bg-gray-800 rounded text-sm"
+                        >
+                          {name}: {value}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        removeVariation(index);
+                      }}
+                      className="p-1 text-gray-500 hover:text-red-500"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                    {isExpanded ? (
+                      <ChevronUp className="w-4 h-4" />
+                    ) : (
+                      <ChevronDown className="w-4 h-4" />
+                    )}
                   </div>
                 </div>
-                <div className="flex items-center space-x-2">
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      removeVariation(index);
-                    }}
-                    className="p-1 text-gray-500 hover:text-red-500"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                  {expanded.has(variation.id || index.toString()) ? (
-                    <ChevronUp className="w-4 h-4" />
-                  ) : (
-                    <ChevronDown className="w-4 h-4" />
-                  )}
-                </div>
-              </div>
 
-              {expanded.has(variation.id || index.toString()) && (
-                <div className="p-4 border-t dark:border-gray-700 space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium mb-1">SKU</label>
-                      <input
-                        type="text"
-                        value={variation.sku}
-                        onChange={(e) =>
-                          updateVariation(index, { sku: e.target.value })
-                        }
-                        className="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600"
-                        disabled={disabled}
-                      />
+                {isExpanded && (
+                  <div className="p-4 border-t dark:border-gray-700 space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium mb-1">SKU</label>
+                        <input
+                          type="text"
+                          value={variation.sku}
+                          onChange={(e) =>
+                            updateVariation(index, { sku: e.target.value })
+                          }
+                          className="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600"
+                          disabled={disabled}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium mb-1">Preço</label>
+                        <div className="relative">
+                          <span className="absolute left-3 top-2 text-gray-500">R$</span>
+                          <input
+                            type="number"
+                            value={variation.price || ''}
+                            onChange={(e) =>
+                              updateVariation(index, { price: parseFloat(e.target.value) })
+                            }
+                            className="w-full p-2 pl-10 border rounded dark:bg-gray-700 dark:border-gray-600"
+                            disabled={disabled}
+                            min="0"
+                            step="0.01"
+                          />
+                        </div>
+                      </div>
                     </div>
+
                     <div>
-                      <label className="block text-sm font-medium mb-1">Preço</label>
+                      <label className="block text-sm font-medium mb-1">Preço Promocional</label>
                       <div className="relative">
                         <span className="absolute left-3 top-2 text-gray-500">R$</span>
                         <input
                           type="number"
-                          value={variation.price || ''}
+                          value={variation.promotional_price || ''}
                           onChange={(e) =>
-                            updateVariation(index, { price: parseFloat(e.target.value) })
+                            updateVariation(index, {
+                              promotional_price: e.target.value ? parseFloat(e.target.value) : null
+                            })
                           }
                           className="w-full p-2 pl-10 border rounded dark:bg-gray-700 dark:border-gray-600"
                           disabled={disabled}
@@ -295,30 +328,10 @@ export function ProductVariations({
                       </div>
                     </div>
                   </div>
-
-                  <div>
-                    <label className="block text-sm font-medium mb-1">Preço Promocional</label>
-                    <div className="relative">
-                      <span className="absolute left-3 top-2 text-gray-500">R$</span>
-                      <input
-                        type="number"
-                        value={variation.promotional_price || ''}
-                        onChange={(e) =>
-                          updateVariation(index, {
-                            promotional_price: e.target.value ? parseFloat(e.target.value) : null
-                          })
-                        }
-                        className="w-full p-2 pl-10 border rounded dark:bg-gray-700 dark:border-gray-600"
-                        disabled={disabled}
-                        min="0"
-                        step="0.01"
-                      />
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-          ))}
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
     </div>

@@ -37,10 +37,12 @@ export function ProductModal({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [productType, setProductType] = useState<'simple' | 'variable' | 'kit' | 'manufactured' | 'service'>(product?.type || 'simple');
-  const [variationAttributes, setVariationAttributes] = useState<string[]>(product?.variation_attributes || []);
+  const [variationAttributes, setVariationAttributes] = useState<string[]>(
+    product?.variation_attributes || []
+  );
   const [variations, setVariations] = useState<any[]>([]);
   const [components, setComponents] = useState<any[]>([]);
-  const [existingAttributes, setExistingAttributes] = useState<Record<string, string[]>>({});
+  const [existingAttributeOptions, setExistingAttributeOptions] = useState<Record<string, string[]>>({});
   const [form, setForm] = useState({
     title: product?.title || '',
     description: product?.description || '',
@@ -53,7 +55,6 @@ export function ProductModal({
     tags: product?.tags || [],
     status: product?.status ?? true,
     attributes: product?.attributes || {},
-    // Service specific fields
     duration: product?.duration || '01:00',
     availability: product?.availability || { weekdays: [], hours: [] },
     service_location: product?.service_location || '',
@@ -73,6 +74,8 @@ export function ProductModal({
   }, [product]);
 
   const loadComponents = async () => {
+    if (!product?.id) return;
+
     try {
       const { data, error } = await supabase
         .from('product_components')
@@ -119,11 +122,16 @@ export function ProductModal({
         existingAttrs[key] = Array.from(values);
       });
 
-      setExistingAttributes(existingAttrs);
+      setExistingAttributeOptions(existingAttrs);
       setVariations(data || []);
     } catch (err) {
       console.error('Erro ao carregar variações:', err);
     }
+  };
+
+  // Handler para mudanças nas variações
+  const handleVariationsChange = (newVariations: any[]) => {
+    setVariations(newVariations);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -151,7 +159,6 @@ export function ProductModal({
         store_id: storeId,
         type: productType,
         duration,
-        // Only include service_modality if it's a service and has a value
         service_modality: productType === 'service' ? form.service_modality : null,
         variation_attributes: productType === 'variable' ? variationAttributes : [],
         updated_at: new Date().toISOString()
@@ -264,6 +271,16 @@ export function ProductModal({
     }
   };
 
+  // Manipulador de mudança de atributos
+  const handleAttributesChange = (attributes: string[]) => {
+    setVariationAttributes(attributes);
+  };
+
+  // Manipulador de mudança de opções
+  const handleAttributeOptionsChange = (options: Record<string, string[]>) => {
+    setExistingAttributeOptions(options);
+  };
+
   return (
     <Modal
       isOpen={true}
@@ -362,19 +379,18 @@ export function ProductModal({
               <ProductAttributes
                 storeId={storeId}
                 selectedAttributes={variationAttributes}
-                onAttributesChange={setVariationAttributes}
-                disabled={loading}
-                existingAttributes={existingAttributes}
+                onAttributesChange={handleAttributesChange}
+                existingAttributes={existingAttributeOptions}
+                onAttributeOptionsChange={handleAttributeOptionsChange}
               />
               {variationAttributes.length > 0 && (
                 <ProductVariations
                   attributes={variationAttributes}
                   variations={variations}
-                  onVariationsChange={setVariations}
-                  disabled={loading}
-                  existingAttributes={existingAttributes}
-                  onExistingAttributesChange={setExistingAttributes}
-                  parentSku={form.sku}
+                  onVariationsChange={handleVariationsChange}
+                  existingAttributes={existingAttributeOptions}
+                  onExistingAttributesChange={handleAttributeOptionsChange}
+                  parentSku={form.sku || undefined}
                 />
               )}
             </div>
@@ -435,7 +451,7 @@ export function ProductModal({
             setShowCategoryModal(false);
           }}
           onClose={() => setShowCategoryModal(false)}
-          initialSelectedId={form.category_id}
+          initialSelectedId={form.category_id || undefined}
           categoryLimit={categoryLimit}
           currentCategoryCount={currentCategoryCount}
         />

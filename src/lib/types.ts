@@ -3,7 +3,7 @@ export interface Product {
   title: string;
   description: string;
   brand: string;
-  category_id: string;
+  category_id: string | null;
   sku: string | null;
   tags: string[];
   images: string[];
@@ -11,6 +11,7 @@ export interface Product {
   promotional_price: number | null;
   store_id: string;
   created_at: string;
+  status: boolean;
   type: 'simple' | 'variable' | 'kit' | 'manufactured' | 'service';
   parent_id?: string;
   attributes?: Record<string, any>;

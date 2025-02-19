@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { User, Package, Grid, Link, Palette, Store, CreditCard, ExternalLink, Copy, Share2, Check } from 'lucide-react';
+import { User, Package, Grid, Link, Palette, Store, CreditCard, ExternalLink, Copy, Check } from 'lucide-react';
 import { useStore } from '../lib/store';
 import { supabase } from '../lib/supabase';
 import { Store as StoreType } from '../lib/types';
@@ -50,16 +50,6 @@ export function Profile() {
   const [showStoreModal, setShowStoreModal] = useState(false);
   const [plans, setPlans] = useState([]);
   const [copySuccess, setCopySuccess] = useState(false);
-  const [canShare, setCanShare] = useState(false);
-
-  useEffect(() => {
-    // Check if Web Share API is supported
-    setCanShare(
-      typeof navigator !== 'undefined' && 
-      !!navigator.share && 
-      !!navigator.canShare
-    );
-  }, []);
 
   useEffect(() => {
     if (!user) {
@@ -160,30 +150,6 @@ export function Profile() {
       setTimeout(() => setCopySuccess(false), 2000);
     } catch (err) {
       console.error('Erro ao copiar:', err);
-    }
-  };
-
-  const handleShare = async () => {
-    const url = `${window.location.origin}/${store?.slug}`;
-    const shareData = {
-      title: `Catálogo da ${store?.name}`,
-      text: `Confira o catálogo digital da ${store?.name}`,
-      url
-    };
-    
-    try {
-      // First check if we can share this data
-      if (canShare && navigator.canShare(shareData)) {
-        await navigator.share(shareData);
-      } else {
-        // Fallback to copy if sharing is not available
-        handleCopyLink();
-      }
-    } catch (err) {
-      // If sharing fails for any reason, fallback to copy
-      if (err instanceof Error && err.name !== 'AbortError') {
-        handleCopyLink();
-      }
     }
   };
 
@@ -340,17 +306,6 @@ export function Profile() {
                   )}
                   <span className="hidden sm:inline">Copiar</span>
                 </button>
-
-                {canShare && (
-                  <button
-                    onClick={handleShare}
-                    className="inline-flex items-center gap-2 px-4 py-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg transition-colors"
-                    title="Compartilhar"
-                  >
-                    <Share2 className="w-4 h-4" />
-                    <span className="hidden sm:inline">Compartilhar</span>
-                  </button>
-                )}
               </div>
             </div>
           </div>
