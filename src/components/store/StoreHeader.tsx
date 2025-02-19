@@ -3,9 +3,10 @@ import {
   Phone, Mail, MessageCircle, Instagram, Facebook, 
   Youtube, Store as TikTok, Twitter, Link2 
 } from 'lucide-react';
-import { generateHeaderStyles } from '../../lib/colors';
+import { generateHeaderStyles, adjustColorBrightness } from '../../lib/colors';
 import { generateSocialUrl } from '../../lib/constants';
 import { useStoreTheme } from '../../lib/store-theme';
+import { StoreHeaderCustomization } from '../../lib/types';
 
 // Cores padrão por tema
 const THEME_PRESETS = {
@@ -72,30 +73,7 @@ interface StoreHeaderProps {
     url: string;
     countryCode?: string;
   }>;
-  customization: {
-    headerStyle: 'solid' | 'gradient' | 'image';
-    headerHeight: string;
-    headerImage: string | null;
-    headerGradient: string;
-    headerAlignment: 'left' | 'center' | 'right';
-    headerOverlayOpacity: string;
-    headerVisibility: {
-      logo: boolean;
-      title: boolean;
-      description: boolean;
-      socialLinks: boolean;
-    };
-    logoSize: string;
-    titleSize: string;
-    descriptionSize: string;
-    titleFont: string;
-    bodyFont: string;
-    socialSettings?: {
-      contactsPosition: 'above' | 'below';
-      displayFormat: 'username' | 'network';
-    };
-  };
-  preview?: boolean;
+  customization: StoreHeaderCustomization;
 }
 
 export function StoreHeader({
@@ -108,6 +86,8 @@ export function StoreHeader({
   socialLinks,
   customization,
 }: StoreHeaderProps) {
+  const { theme } = useStoreTheme();
+
   // Gerar estilos do header
   const headerStyles = useMemo(() => {
     let background;
@@ -149,6 +129,13 @@ export function StoreHeader({
       transition: 'opacity 0.3s ease-in-out'
     };
   }, [customization.headerStyle, customization.headerOverlayOpacity, theme]);
+
+  // Cores do tema
+  const themeColors = useMemo(() => ({
+    text: secondaryColor,
+    muted: `${secondaryColor}80`,
+    accent: accentColor
+  }), [secondaryColor, accentColor]);
 
   // Estilos do container de conteúdo
   const contentStyles = useMemo(() => ({

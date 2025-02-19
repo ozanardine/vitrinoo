@@ -105,3 +105,29 @@ export interface Store {
   categories_count: number;
   category_limit: number;
 }
+
+export interface StoreHeaderCustomization {
+  headerStyle: 'solid' | 'gradient' | 'image';
+  headerHeight: string;
+  headerImage: string | null;
+  headerGradient: string;
+  headerAlignment: 'left' | 'center' | 'right';
+  headerOverlayOpacity: string;
+  headerVisibility: {
+    logo: boolean;
+    title: boolean;
+    description: boolean;
+    socialLinks: boolean;
+  };
+  logoSize: string;
+  titleSize: string;
+  descriptionSize: string;
+  titleFont: string;
+  bodyFont: string;
+  socialSettings?: {
+    contactsPosition: 'above' | 'below';
+    displayFormat: 'username' | 'network';
+  };
+  headerBackground: string;
+  preview?: boolean;
+}
