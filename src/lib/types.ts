@@ -1,3 +1,5 @@
+import { User } from '@supabase/supabase-js';
+
 export interface Product {
   id: string;
   title: string;

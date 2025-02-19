@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Palette, Check } from 'lucide-react';
 import { useStoreCustomization } from '../StoreCustomizationContext';
 import { ColorPicker } from '../forms/ColorPicker';
@@ -152,8 +152,7 @@ export function ThemeSettings({
   onPresetChange 
 }: ThemeSettingsProps) {
   const { formData, updateFormData } = useStoreCustomization();
-  const { theme: siteTheme } = useStore();
-  const { theme: storeTheme } = useStoreTheme();
+  const { theme } = useStore();
   const [gradientDirection, setGradientDirection] = useState('to bottom');
   const [gradientStart, setGradientStart] = useState('#ffffff');
   const [gradientEnd, setGradientEnd] = useState('#f8fafc');
@@ -166,7 +165,7 @@ export function ThemeSettings({
     accentColor: formData.accentColor,
     headerBackground: formData.headerBackground,
     allowThemeToggle: formData.allowThemeToggle,
-    background: formData.background || '#ffffff'
+    background: formData.background
   });
 
   // Sincronizar com formData quando ele mudar
@@ -177,7 +176,7 @@ export function ThemeSettings({
       accentColor: formData.accentColor,
       headerBackground: formData.headerBackground,
       allowThemeToggle: formData.allowThemeToggle,
-      background: formData.background || '#ffffff'
+      background: formData.background
     });
 
     // Parse gradient if present
@@ -198,7 +197,7 @@ export function ThemeSettings({
       primary: formData.primaryColor,
       secondary: formData.secondaryColor,
       accent: formData.accentColor,
-      background: formData.background || '#ffffff',
+      background: formData.background,
       headerBackground: formData.headerBackground
     };
 

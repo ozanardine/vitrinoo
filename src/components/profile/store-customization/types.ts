@@ -12,6 +12,7 @@ export interface StoreFormData {
   secondaryColor: string;
   accentColor: string;
   headerBackground: string;
+  background: string;
   allowThemeToggle: boolean;
 
   // Header Settings
