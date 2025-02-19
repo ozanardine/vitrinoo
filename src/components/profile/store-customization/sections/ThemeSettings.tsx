@@ -9,25 +9,27 @@ import { calculateTextColor } from '../../../../lib/colors';
 
 // Color theme presets
 const COLOR_THEMES = {
-  modern: {
-    name: 'Moderno',
+  minimal: {
+    name: 'Minimalista',
     colors: {
       primary: '#ffffff',
-      secondary: '#1f2937',
+      secondary: '#18181b',
       accent: '#3b82f6',
-      background: '#f8fafc',
-      headerBackground: 'linear-gradient(to bottom, #ffffff, #f8fafc)'
-    }
+      background: '#fafafa',
+      headerBackground: '#ffffff'
+    },
+    description: 'Design limpo e moderno com foco no conteúdo'
   },
   nature: {
-    name: 'Natureza',
+    name: 'Natural',
     colors: {
       primary: '#f5f7f2',
       secondary: '#2d3b29',
       accent: '#4a7c59',
       background: '#f0f4ed',
       headerBackground: 'linear-gradient(to bottom, #4a7c59, #2d3b29)'
-    }
+    },
+    description: 'Tons orgânicos e naturais para uma experiência acolhedora'
   },
   elegant: {
     name: 'Elegante',
@@ -37,17 +39,8 @@ const COLOR_THEMES = {
       accent: '#9c6644',
       background: '#f8f3f1',
       headerBackground: 'linear-gradient(to right, #9c6644, #2c1810)'
-    }
-  },
-  minimal: {
-    name: 'Minimalista',
-    colors: {
-      primary: '#ffffff',
-      secondary: '#18181b',
-      accent: '#404040',
-      background: '#fafafa',
-      headerBackground: '#ffffff'
-    }
+    },
+    description: 'Sofisticação e requinte com tons terrosos'
   },
   ocean: {
     name: 'Oceano',
@@ -57,7 +50,19 @@ const COLOR_THEMES = {
       accent: '#0284c7',
       background: '#ecfeff',
       headerBackground: 'linear-gradient(to bottom right, #0284c7, #0c4a6e)'
-    }
+    },
+    description: 'Inspirado nas cores do mar para uma atmosfera tranquila'
+  },
+  modern: {
+    name: 'Moderno',
+    colors: {
+      primary: '#ffffff',
+      secondary: '#1f2937',
+      accent: '#6366f1',
+      background: '#f8fafc',
+      headerBackground: 'linear-gradient(to bottom, #6366f1, #4f46e5)'
+    },
+    description: 'Visual contemporâneo com tons vibrantes'
   },
   dark: {
     name: 'Escuro',
@@ -67,51 +72,52 @@ const COLOR_THEMES = {
       accent: '#60a5fa',
       background: '#111827',
       headerBackground: 'linear-gradient(to bottom, #1f2937, #111827)'
-    }
+    },
+    description: 'Tema escuro para uma experiência noturna'
   }
 };
 
 // Color presets for individual color pickers
 const COLOR_PRESETS = {
   primary: [
-    '#ffffff',
-    '#f8fafc',
-    '#f0f9ff',
-    '#faf5ff',
-    '#fff1f2',
-    '#f7fee7'
+    '#ffffff', // Branco puro
+    '#f8fafc', // Cinza muito claro
+    '#f0f9ff', // Azul muito claro
+    '#faf5ff', // Roxo muito claro
+    '#fff1f2', // Rosa muito claro
+    '#f7fee7'  // Verde muito claro
   ],
   secondary: [
-    '#1f2937',
-    '#1e3a8a',
-    '#365314',
-    '#3b0764',
-    '#881337',
-    '#422006'
+    '#1f2937', // Cinza escuro
+    '#1e3a8a', // Azul escuro
+    '#365314', // Verde escuro
+    '#3b0764', // Roxo escuro
+    '#881337', // Rosa escuro
+    '#422006'  // Marrom escuro
   ],
   accent: [
-    '#3b82f6',
-    '#22c55e',
-    '#f59e0b',
-    '#ec4899',
-    '#8b5cf6',
-    '#f43f5e'
+    '#3b82f6', // Azul
+    '#6366f1', // Índigo
+    '#8b5cf6', // Violeta
+    '#ec4899', // Rosa
+    '#22c55e', // Verde
+    '#f59e0b'  // Laranja
   ],
   background: [
-    '#ffffff',
-    '#f8fafc',
-    '#f1f5f9',
-    '#f9fafb',
-    '#f5f3ff',
-    '#fef2f2'
+    '#ffffff', // Branco puro
+    '#f8fafc', // Cinza muito claro
+    '#f1f5f9', // Cinza azulado claro
+    '#f9fafb', // Cinza neutro claro
+    '#f5f3ff', // Roxo muito claro
+    '#fef2f2'  // Vermelho muito claro
   ],
   headerBackground: [
-    'linear-gradient(to bottom, #3b82f6, #1e3a8a)',
-    'linear-gradient(to right, #22c55e, #365314)',
-    'linear-gradient(to bottom right, #f59e0b, #422006)',
-    'linear-gradient(to bottom, #ec4899, #881337)',
-    'linear-gradient(to right, #8b5cf6, #3b0764)',
-    'linear-gradient(to bottom right, #f43f5e, #881337)'
+    'linear-gradient(to bottom, #3b82f6, #1e3a8a)',     // Azul
+    'linear-gradient(to right, #6366f1, #4f46e5)',      // Índigo
+    'linear-gradient(to bottom right, #8b5cf6, #6d28d9)', // Violeta
+    'linear-gradient(to bottom, #ec4899, #db2777)',      // Rosa
+    'linear-gradient(to right, #22c55e, #16a34a)',      // Verde
+    'linear-gradient(to bottom right, #f59e0b, #d97706)' // Laranja
   ]
 };
 
@@ -138,8 +144,12 @@ interface ThemeSettingsProps {
   onPresetChange: (preset: string | null) => void;
 }
 
-export function ThemeSettings({ onLocalChange, selectedPreset, onPresetChange }: ThemeSettingsProps) {
-  const { formData } = useStoreCustomization();
+export function ThemeSettings({ 
+  onLocalChange, 
+  selectedPreset, 
+  onPresetChange 
+}: ThemeSettingsProps) {
+  const { formData, updateFormData } = useStoreCustomization();
   const { theme: siteTheme } = useStore();
   const { theme: storeTheme } = useStoreTheme();
   const [gradientDirection, setGradientDirection] = useState('to bottom');
@@ -257,6 +267,15 @@ export function ThemeSettings({ onLocalChange, selectedPreset, onPresetChange }:
     } else {
       setUseGradient(false);
     }
+
+    // Atualizar formData imediatamente para refletir no preview
+    updateFormData({
+      primaryColor: preset.colors.primary,
+      secondaryColor: preset.colors.secondary,
+      accentColor: preset.colors.accent,
+      background: preset.colors.background,
+      headerBackground: preset.colors.headerBackground
+    });
   };
 
   // Função para atualizar uma cor específica
@@ -266,6 +285,11 @@ export function ThemeSettings({ onLocalChange, selectedPreset, onPresetChange }:
       [colorKey]: value
     }));
     onPresetChange(null);
+
+    // Atualizar formData imediatamente para refletir no preview
+    updateFormData({
+      [colorKey]: value
+    });
   };
 
   // Função para atualizar o gradiente
@@ -308,6 +332,7 @@ export function ThemeSettings({ onLocalChange, selectedPreset, onPresetChange }:
                 
                 <div className="mb-4">
                   <h4 className="text-lg font-semibold mb-2">{theme.name}</h4>
+                  <p className="text-sm opacity-80 mb-4">{theme.description}</p>
                   <div className="flex gap-2">
                     {Object.entries(theme.colors).map(([colorKey, color]) => (
                       <div
