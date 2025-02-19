@@ -6,7 +6,6 @@ import {
 import { generateHeaderStyles } from '../../lib/colors';
 import { generateSocialUrl } from '../../lib/constants';
 import { useStoreTheme } from '../../lib/store-theme';
-import { StoreThemeToggle } from './StoreThemeToggle';
 
 // Cores padrão por tema
 const THEME_PRESETS = {

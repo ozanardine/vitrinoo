@@ -1,11 +1,11 @@
 import React from 'react';
 import { StoreHeader } from './StoreHeader';
 import { StoreFooter } from './StoreFooter';
-import { StoreData } from '../../lib/types';
+import { Store } from '../../lib/types';
 import { useStoreTheme } from '../../lib/store-theme';
 
 interface StoreLayoutProps {
-  store: StoreData;
+  store: Store;
   children: React.ReactNode;
 }
 
