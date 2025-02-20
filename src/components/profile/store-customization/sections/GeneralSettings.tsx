@@ -57,11 +57,26 @@ export function GeneralSettings() {
     }, 'general');
   };
 
-  // Handler específico para imagem
-  const handleImageChange = (url: string) => {
+  // Handler específico para logo
+  const handleLogoChange = (url: string) => {
+    // Remove o erro se existir
+    setValidationErrors(prev => ({
+      ...prev,
+      logoUrl: undefined
+    }));
+
+    // Atualiza o preview
     updatePreview({
       logoUrl: url
     }, 'general');
+  };
+
+  // Handler para validação de imagem
+  const handleLogoError = (error: string) => {
+    setValidationErrors(prev => ({
+      ...prev,
+      logoUrl: error
+    }));
   };
 
   return (
@@ -174,14 +189,21 @@ export function GeneralSettings() {
           Logo
         </label>
         <ImageUploader
-          onImageUrl={(url) => console.log(url)}
-          currentUrl="https://example.com/image.jpg"
+          onImageUrl={handleLogoChange}
+          onError={handleLogoError}
+          currentUrl={formData.logoUrl}
           maxSizeMB={2}
           minWidth={200}
           minHeight={200}
           aspectRatio="1:1"
-          acceptedFormats={['image/jpeg', 'image/png']}
+          acceptedFormats={['image/jpeg', 'image/png', 'image/webp']}
         />
+        {validationErrors.logoUrl && (
+          <p className="mt-1 text-sm text-red-500 flex items-center gap-1">
+            <AlertCircle className="w-4 h-4" />
+            {validationErrors.logoUrl}
+          </p>
+        )}
         <p className="mt-1 text-sm text-gray-500">
           Recomendado: Imagem quadrada com pelo menos 200x200 pixels. 
           Formatos aceitos: JPG, PNG e WebP. Tamanho máximo: 2MB
