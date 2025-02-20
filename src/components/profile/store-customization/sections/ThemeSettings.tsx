@@ -141,9 +141,9 @@ export function ThemeSettings({ onLocalChange, selectedPreset, onPresetChange }:
             secondaryColor={themeState.secondaryColor}
             accentColor={themeState.accentColor}
             socialLinks={[
-              { type: 'instagram', url: 'loja' },
-              { type: 'whatsapp', url: '5511999999999' },
-              { type: 'email', url: 'contato@loja.com' }
+              { type: 'instagram', url: 'instagram' },
+              { type: 'whatsapp', url: '5541999999999' },
+              { type: 'email', url: 'contato@vitryno.com' }
             ]}
             customization={{
               headerStyle: formData.headerStyle,
