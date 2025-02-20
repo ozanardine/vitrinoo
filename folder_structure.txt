@@ -1,0 +1,171 @@
+Listagem de caminhos de pasta para o volume HD EXTERNO
+O número de série do volume é 90B9-789A
+F:\PROGRAMMING\ERPTOOLS - ESTRUTURA
+|   .env
+|   deno.lock
+|   eslint.config.js
+|   estrutura.bat
+|   exclude_list.txt
+|   folder_structure.txt
+|   index.html
+|   package-lock.json
+|   package.json
+|   postcss.config.js
+|   tailwind.config.js
+|   tsconfig.app.json
+|   tsconfig.json
+|   tsconfig.node.json
+|   
++---public
+|       favicon.svg
+|       _redirects
+|       
++---src
+|   |   App.tsx
+|   |   index.css
+|   |   main.tsx
+|   |   
+|   +---components
+|   |   |   AuthModal.tsx
+|   |   |   CategoryModal.tsx
+|   |   |   CategoryTreeModal.tsx
+|   |   |   Footer.tsx
+|   |   |   Header.tsx
+|   |   |   ImageGalleryUploader.tsx
+|   |   |   ImageUploader.tsx
+|   |   |   Layout.tsx
+|   |   |   Modal.tsx
+|   |   |   ProductCard.tsx
+|   |   |   ProductDescriptionGenerator.tsx
+|   |   |   ProductDetailsModal.tsx
+|   |   |   ProductModal.tsx
+|   |   |   StoreModal.tsx
+|   |   |   ThemeToggle.tsx
+|   |   |   
+|   |   +---products
+|   |   |   |   ProductAttributes.tsx
+|   |   |   |   ProductComponents.tsx
+|   |   |   |   ProductTypeSelector.tsx
+|   |   |   |   ProductVariations.tsx
+|   |   |   |   
+|   |   |   \---form
+|   |   |           BasicInfo.tsx
+|   |   |           Description.tsx
+|   |   |           Images.tsx
+|   |   |           ServiceInfo.tsx
+|   |   |           
+|   |   +---profile
+|   |   |   |   CategoriesTab.tsx
+|   |   |   |   IntegrationsTab.tsx
+|   |   |   |   PlansTab.tsx
+|   |   |   |   ProductsTab.tsx
+|   |   |   |   ProfileTab.tsx
+|   |   |   |   SocialNetworksForm.tsx
+|   |   |   |   StoreCustomizationTab.tsx
+|   |   |   |   TinyConfigForm.tsx
+|   |   |   |   
+|   |   |   \---store-customization
+|   |   |       |   StoreCustomizationContext.tsx
+|   |   |       |   types.ts
+|   |   |       |   
+|   |   |       +---forms
+|   |   |       |       ColorPicker.tsx
+|   |   |       |       RangeInput.tsx
+|   |   |       |       SectionHeader.tsx
+|   |   |       |       
+|   |   |       \---sections
+|   |   |           |   ContactsAndSocialNetworks.tsx
+|   |   |           |   GeneralSettings.tsx
+|   |   |           |   HeaderSettings.tsx
+|   |   |           |   LayoutSettings.tsx
+|   |   |           |   PhoneInput.tsx
+|   |   |           |   ThemeSettings.tsx
+|   |   |           |   TypographySettings.tsx
+|   |   |           |   
+|   |   |           +---contacts
+|   |   |           |       AddNetworkMenu.tsx
+|   |   |           |       DisplaySettings.tsx
+|   |   |           |       SocialLinkItem.tsx
+|   |   |           |       utils.ts
+|   |   |           |       
+|   |   |           \---theme
+|   |   |                   ColorPickerField.tsx
+|   |   |                   ThemePresetButton.tsx
+|   |   |                   
+|   |   \---store
+|   |           ProductCard.tsx
+|   |           ProductModal.tsx
+|   |           StoreFooter.tsx
+|   |           StoreHeader.tsx
+|   |           StoreLayout.tsx
+|   |           StoreSearch.tsx
+|   |           ViewControls.tsx
+|   |           
+|   +---constants
+|   |       theme.ts
+|   |       
+|   +---lib
+|   |   |   auth.ts
+|   |   |   colors.ts
+|   |   |   constants.ts
+|   |   |   countries.ts
+|   |   |   gemini.ts
+|   |   |   imgur.ts
+|   |   |   store-theme.ts
+|   |   |   store.ts
+|   |   |   stripe.ts
+|   |   |   supabase.ts
+|   |   |   test-utils.ts
+|   |   |   tiny.ts
+|   |   |   types.ts
+|   |   |   utils.ts
+|   |   |   
+|   |   \---hooks
+|   |           useProductSearch.ts
+|   |           useProductSort.ts
+|   |           useStoreData.ts
+|   |           
+|   +---pages
+|   |       Profile.tsx
+|   |       Store.tsx
+|   |       TinyCallback.tsx
+|   |       
+|   \---stores
+|           useThemeStore.ts
+|           
+\---supabase
+    |   config.toml
+    |   
+    +---.branches
+    |       _current_branch
+    |       
+    +---.temp
+    |       cli-latest
+    |       
+    +---functions
+    |   +---create-checkout-session
+    |   |       .env
+    |   |       index.ts
+    |   |       
+    |   +---create-portal-session
+    |   |       .env
+    |   |       index.ts
+    |   |       
+    |   +---stripe-webhook
+    |   |       .env
+    |   |       index.ts
+    |   |       
+    |   +---tiny-api
+    |   |       index.ts
+    |   |       
+    |   +---tiny-token-exchange
+    |   |       index.ts
+    |   |       rateLimit.ts
+    |   |       
+    |   \---_shared
+    |           cors.ts
+    |           
+    \---migrations
+            20250218_add_theme_fields.sql
+            stores_rows.sql
+            
