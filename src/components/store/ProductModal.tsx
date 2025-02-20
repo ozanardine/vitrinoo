@@ -3,27 +3,26 @@ import { ChevronLeft, ChevronRight, Package, Tag, Clock, MapPin } from 'lucide-r
 import { Product } from '../../lib/types';
 import ReactMarkdown from 'react-markdown';
 import { Modal } from '../Modal';
-import { calculateTextColor } from '../../lib/colors';
 
 // Styles para o scrollbar customizado
 const getScrollbarStyles = (accentColor: string, secondaryColor: string) => `
-  .custom-scrollbar::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
+  .product-modal-scrollbar::-webkit-scrollbar {
+    width: 2px;
+    height: 2px;
   }
 
-  .custom-scrollbar::-webkit-scrollbar-track {
+  .product-modal-scrollbar::-webkit-scrollbar-track {
     background: ${secondaryColor}10;
-    border-radius: 3px;
+    border-radius: 5px;
   }
 
-  .custom-scrollbar::-webkit-scrollbar-thumb {
+  .product-modal-scrollbar::-webkit-scrollbar-thumb {
     background-color: ${accentColor}40;
-    border-radius: 3px;
+    border-radius: 5px;
     transition: all 0.3s ease;
   }
 
-  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  .product-modal-scrollbar::-webkit-scrollbar-thumb:hover {
     background-color: ${accentColor}60;
   }
 `;
@@ -56,6 +55,24 @@ export function ProductModal({
     setImageLoaded(false);
   }, [currentImageIndex]);
 
+  // Inject scrollbar styles
+  useEffect(() => {
+    const styleId = 'product-modal-scrollbar-styles';
+    if (!document.getElementById(styleId)) {
+      const style = document.createElement('style');
+      style.id = styleId;
+      style.innerHTML = getScrollbarStyles(accentColor, secondaryColor);
+      document.head.appendChild(style);
+    }
+
+    return () => {
+      const styleElement = document.getElementById(styleId);
+      if (styleElement) {
+        styleElement.remove();
+      }
+    };
+  }, [accentColor, secondaryColor]);
+
   // Calculate text colors for better contrast
   const textColor = calculateTextColor(primaryColor) === 'light' ? '#FFFFFF' : secondaryColor;
   const mutedTextColor = calculateTextColor(primaryColor) === 'light' 
@@ -69,6 +86,7 @@ export function ProductModal({
 
   // Format duration for services
   const formatDuration = (duration: string) => {
+    if (!duration) return '';
     const [hours, minutes] = duration.split(':');
     return `${hours}h${minutes ? ` ${minutes}min` : ''}`;
   };
@@ -133,24 +151,6 @@ export function ProductModal({
       promotional: product.promotional_price
     };
   };
-
-  // Inject scrollbar styles
-  useEffect(() => {
-    const styleId = 'custom-scrollbar-styles';
-    if (!document.getElementById(styleId)) {
-      const style = document.createElement('style');
-      style.id = styleId;
-      style.innerHTML = getScrollbarStyles(accentColor, secondaryColor);
-      document.head.appendChild(style);
-    }
-
-    return () => {
-      const styleElement = document.getElementById(styleId);
-      if (styleElement) {
-        styleElement.remove();
-      }
-    };
-  }, [accentColor, secondaryColor]);
 
   return (
     <Modal
@@ -217,7 +217,7 @@ export function ProductModal({
                         backgroundColor: `${primaryColor}80`,
                         color: secondaryColor
                       }}
-                      disabled={currentImageIndex === product.images.length - 1}
+                      disabled={currentImageIndex === (product.images?.length || 0) - 1}
                       aria-label="Próxima imagem"
                     >
                       <ChevronRight className="w-6 h-6" />
@@ -246,7 +246,7 @@ export function ProductModal({
 
           {/* Thumbnails aprimoradas */}
           {product.images && product.images.length > 1 && (
-            <div className="flex gap-3 mt-4 pb-2 custom-scrollbar">
+            <div className="flex gap-3 mt-4 pb-2 product-modal-scrollbar overflow-x-auto">
               {product.images.map((image: string, index: number) => (
                 <button
                   key={`thumb-${index}`}
@@ -377,7 +377,7 @@ export function ProductModal({
 
           {/* Descrição com scrollbar personalizado */}
           <div 
-            className="prose prose-lg max-w-none max-h-80 overflow-y-auto custom-scrollbar pr-4 space-y-4" 
+            className="prose prose-lg max-w-none max-h-80 overflow-y-auto product-modal-scrollbar pr-4 space-y-4" 
             style={{ color: mutedTextColor }}
           >
             <ReactMarkdown>{product.description}</ReactMarkdown>
@@ -446,7 +446,7 @@ export function ProductModal({
           )}
 
           {/* Tags com design moderno */}
-          {product.tags.length > 0 && (
+          {product.tags && product.tags.length > 0 && (
             <div>
               <h4 className="font-medium mb-3 text-lg">Tags</h4>
               <div className="flex flex-wrap gap-2">
@@ -470,4 +470,15 @@ export function ProductModal({
       </div>
     </Modal>
   );
+}
+
+// Helper function to calculate text color based on background
+function calculateTextColor(backgroundColor: string): 'light' | 'dark' {
+  const hex = backgroundColor.replace('#', '');
+  const r = parseInt(hex.substr(0, 2), 16);
+  const g = parseInt(hex.substr(2, 2), 16);
+  const b = parseInt(hex.substr(4, 2), 16);
+  
+  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  return luminance > 0.5 ? 'dark' : 'light';
 }
