@@ -1,5 +1,6 @@
 import { memo } from 'react';
 import { Check } from 'lucide-react';
+import { COLOR_THEMES } from '../../../../../constants/theme';
 
 interface ThemePresetButtonProps {
   presetKey: string;
@@ -22,8 +23,8 @@ export const ThemePresetButton = memo(function ThemePresetButton({
         isSelected ? 'border-blue-500 shadow-lg' : 'border-gray-200 dark:border-gray-700'
       }`}
       style={{
-        backgroundColor: theme.colors.primary,
-        color: theme.colors.secondary
+        backgroundColor: theme.colors.primary as string,
+        color: theme.colors.secondary as string
       }}
     >
       {isSelected && (
@@ -41,7 +42,7 @@ export const ThemePresetButton = memo(function ThemePresetButton({
               key={colorKey}
               className="w-8 h-8 rounded-full border border-gray-200 dark:border-gray-700 shadow-sm"
               style={{ 
-                background: color,
+                background: color as string,
                 borderColor: `${theme.colors.secondary}20`
               }}
               title={`${colorKey.charAt(0).toUpperCase() + colorKey.slice(1)}: ${color}`}

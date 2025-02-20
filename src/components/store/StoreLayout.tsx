@@ -13,7 +13,7 @@ export function StoreLayout({ store, children }: StoreLayoutProps) {
     <div 
       className="min-h-screen transition-colors duration-200"
       style={{
-        backgroundColor: store.background || store.primary_color,
+        backgroundColor: store.primary_color,
         color: store.secondary_color
       }}
     >

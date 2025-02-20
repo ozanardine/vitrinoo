@@ -117,13 +117,13 @@ export function ProductModal({
       onClose={onClose}
       title=""
       maxWidth="max-w-6xl"
+      style={{ backgroundColor: primaryColor }}
     >
       <div 
         className="flex flex-col lg:flex-row gap-8"
         style={{ 
           color: textColor,
-          fontFamily,
-          backgroundColor: primaryColor
+          fontFamily
         }}
         onKeyDown={handleKeyNavigation}
         tabIndex={0}

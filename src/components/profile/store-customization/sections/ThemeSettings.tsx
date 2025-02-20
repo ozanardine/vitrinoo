@@ -1,67 +1,86 @@
-import { useEffect, useMemo, useCallback } from 'react';
-import { Palette } from 'lucide-react';
+import { useEffect, useCallback } from 'react';
+import { Palette, Droplet } from 'lucide-react';
+import { StoreHeader } from '../../../store/StoreHeader';
 import { useThemeStore } from '../../../../stores/useThemeStore';
 import { useStoreCustomization } from '../StoreCustomizationContext';
-import { COLOR_THEMES, COLOR_PRESETS, GRADIENT_DIRECTIONS } from '../../../../constants/theme';
-import { ColorPickerField } from './theme/ColorPickerField';
-import { ThemePresetButton } from './theme/ThemePresetButton';
+import { EXTENDED_COLOR_PRESETS } from '../../../../constants/theme';
+import { ColorPicker } from '../forms/ColorPicker';
+import { ThemePresetSelector } from './theme/ThemePresetSelector';
 
-export function ThemeSettings() {
+interface ThemeSettingsProps {
+  onLocalChange: (data: any) => void;
+  selectedPreset: string | null;
+  onPresetChange: (presetId: string) => void;
+}
+
+export function ThemeSettings({ onLocalChange, selectedPreset, onPresetChange }: ThemeSettingsProps) {
   const { formData, updateFormData } = useStoreCustomization();
   const themeState = useThemeStore();
   
-  // Inicialização
+  // Initialize theme state
   useEffect(() => {
+    if (!formData.primaryColor) return;
     themeState.initializeTheme(formData);
   }, []);
 
-  // Sincronização com formData
+  // Sync with formData changes
   useEffect(() => {
-    updateFormData({
-      primaryColor: themeState.primaryColor,
-      secondaryColor: themeState.secondaryColor,
-      accentColor: themeState.accentColor,
-      background: themeState.background,
-      headerBackground: themeState.headerBackground,
-      headerStyle: themeState.headerStyle,
-      headerGradient: themeState.gradient.direction
-    });
-  }, [themeState, updateFormData]);
+    if (!formData.primaryColor) return;
 
-  // Handlers memoizados
-  const handleColorChange = useCallback((key: keyof typeof themeState) => (color: string) => {
-    themeState.updateColor(key, color);
-  }, []);
+    const hasChanges = 
+      formData.primaryColor !== themeState.primaryColor ||
+      formData.secondaryColor !== themeState.secondaryColor ||
+      formData.accentColor !== themeState.accentColor ||
+      formData.headerBackground !== themeState.headerBackground ||
+      formData.headerStyle !== themeState.headerStyle ||
+      formData.headerGradient !== themeState.gradient.direction;
 
-  const handleGradientChange = useCallback((prop: 'direction' | 'startColor' | 'endColor') => (value: string) => {
-    themeState.updateGradient(prop, value);
-  }, []);
-
-  // Presets memoizados
-  const presetButtons = useMemo(() => (
-    Object.entries(COLOR_THEMES).map(([key, theme]) => (
-      <ThemePresetButton
-        key={key}
-        presetKey={key}
-        theme={theme}
-        isSelected={themeState.selectedPreset === key}
-        onSelect={themeState.applyPreset}
-      />
-    ))
-  ), [themeState.selectedPreset]);
-
-  // Estilos memoizados para preview
-  const previewStyles = useMemo(() => ({
-    container: {
-      backgroundColor: themeState.primaryColor,
-      color: themeState.secondaryColor
-    },
-    header: {
-      background: themeState.headerStyle === 'gradient'
-        ? `linear-gradient(${themeState.gradient.direction}, ${themeState.gradient.startColor}, ${themeState.gradient.endColor})`
-        : themeState.headerBackground
+    if (hasChanges) {
+      themeState.updateColor('primaryColor', formData.primaryColor);
+      themeState.updateColor('secondaryColor', formData.secondaryColor);
+      themeState.updateColor('accentColor', formData.accentColor);
+      themeState.updateColor('headerBackground', formData.headerBackground || formData.primaryColor);
+      themeState.updateColor('background', formData.primaryColor);
+      if (formData.headerStyle !== 'image') {
+        themeState.updateHeaderStyle(formData.headerStyle || 'solid');
+      }
+      themeState.updateGradient('direction', formData.headerGradient || 'to bottom');
     }
-  }), [themeState]);
+  }, [formData]);
+
+  const handleColorChange = useCallback((key: 'background' | 'accentColor' | 'primaryColor' | 'secondaryColor' | 'headerBackground') => (color: string) => {
+    themeState.updateColor(key, color);
+    const updatedData = {
+      primaryColor: key === 'primaryColor' ? color : themeState.primaryColor,
+      secondaryColor: key === 'secondaryColor' ? color : themeState.secondaryColor,
+      accentColor: key === 'accentColor' ? color : themeState.accentColor,
+      headerBackground: key === 'headerBackground' ? color : themeState.headerBackground,
+      background: key === 'primaryColor' ? color : themeState.primaryColor
+    };
+    updateFormData(updatedData);
+    onLocalChange(updatedData);
+  }, [themeState, updateFormData, onLocalChange]);
+
+  const handlePresetSelect = useCallback((presetId: string, colors: any) => {
+    const updatedData = {
+      primaryColor: colors.primary,
+      secondaryColor: colors.secondary,
+      accentColor: colors.accent,
+      headerBackground: colors.headerBackground || colors.primary,
+      background: colors.primary
+    };
+    
+    themeState.updateColor('primaryColor', colors.primary);
+    themeState.updateColor('secondaryColor', colors.secondary);
+    themeState.updateColor('accentColor', colors.accent);
+    themeState.updateColor('headerBackground', colors.headerBackground || colors.primary);
+    themeState.updateColor('background', colors.primary);
+    themeState.applyPreset(presetId);
+    
+    // Only update local state for preview
+    onLocalChange(updatedData);
+    onPresetChange(presetId);
+  }, [themeState, onLocalChange, onPresetChange]);
 
   return (
     <div className="space-y-8">
@@ -71,31 +90,136 @@ export function ThemeSettings() {
           <Palette className="w-5 h-5" />
           Temas Predefinidos
         </h3>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {presetButtons}
-        </div>
+        <ThemePresetSelector
+          selectedPreset={selectedPreset}
+          onSelect={handlePresetSelect}
+        />
       </section>
 
       {/* Color Pickers Section */}
       <section className="space-y-6">
-        <h3 className="text-lg font-semibold">Cores Personalizadas</h3>
+        <h3 className="text-lg font-semibold flex items-center gap-2">
+          <Droplet className="w-5 h-5" />
+          Cores Personalizadas
+        </h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <ColorPickerField
+          <ColorPicker
             label="Cor Principal"
             value={themeState.primaryColor}
             onChange={handleColorChange('primaryColor')}
-            description="Cor de fundo principal"
-            presets={COLOR_PRESETS.primary}
+            description="Cor de fundo principal e cabeçalho"
+            presets={EXTENDED_COLOR_PRESETS.primary}
           />
-          {/* Adicione os outros ColorPickerFields aqui */}
+          <ColorPicker
+            label="Cor Secundária"
+            value={themeState.secondaryColor}
+            onChange={handleColorChange('secondaryColor')}
+            description="Cor do texto e elementos de contraste"
+            presets={EXTENDED_COLOR_PRESETS.secondary}
+          />
+          <ColorPicker
+            label="Cor de Destaque"
+            value={themeState.accentColor}
+            onChange={handleColorChange('accentColor')}
+            description="Cor para botões e elementos interativos"
+            presets={EXTENDED_COLOR_PRESETS.accent}
+          />
+          {formData.headerStyle !== 'image' && (
+            <ColorPicker
+              label="Cor do Cabeçalho"
+              value={themeState.headerBackground}
+              onChange={handleColorChange('headerBackground')}
+              description="Cor de fundo específica para o cabeçalho"
+              presets={EXTENDED_COLOR_PRESETS.primary}
+            />
+          )}
         </div>
       </section>
 
       {/* Preview Section */}
       <section className="space-y-4">
         <h3 className="text-lg font-semibold">Preview</h3>
-        <div className="p-6 rounded-lg" style={previewStyles.container}>
-          {/* Preview content */}
+        <div className="rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700">
+          <StoreHeader
+            name="Nome da Loja"
+            description="Uma descrição atraente para sua loja online"
+            logoUrl={formData.logoUrl || "/api/placeholder/400/400"}
+            primaryColor={themeState.primaryColor}
+            secondaryColor={themeState.secondaryColor}
+            accentColor={themeState.accentColor}
+            socialLinks={[
+              { type: 'instagram', url: 'loja' },
+              { type: 'whatsapp', url: '5511999999999' },
+              { type: 'email', url: 'contato@loja.com' }
+            ]}
+            customization={{
+              headerStyle: formData.headerStyle,
+              headerHeight: '200px',
+              headerImage: formData.headerImage,
+              headerGradient: themeState.gradient.direction,
+              headerAlignment: 'center',
+              headerOverlayOpacity: formData.headerOverlayOpacity,
+              headerVisibility: {
+                logo: true,
+                title: true,
+                description: true,
+                socialLinks: true
+              },
+              logoSize: '120px',
+              titleSize: '32px',
+              descriptionSize: '16px',
+              titleFont: 'Roboto',
+              bodyFont: 'Roboto',
+              socialSettings: {
+                contactsPosition: 'above',
+                displayFormat: 'username'
+              },
+              headerBackground: themeState.headerBackground,
+              preview: true
+            }}
+          />
+          <div className="p-8" style={{ backgroundColor: themeState.primaryColor }}>
+            <div className="max-w-7xl mx-auto">
+              {/* Products Grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                {[1, 2, 3, 4].map((_, index) => (
+                  <div 
+                    key={index}
+                    className="group rounded-lg overflow-hidden transition-all hover:shadow-lg"
+                    style={{ 
+                      backgroundColor: '#FFFFFF',
+                      border: `1px solid ${themeState.secondaryColor}20`
+                    }}
+                  >
+                    <div className="aspect-square bg-gray-100 dark:bg-gray-800 relative">
+                      <div className="absolute inset-0 flex items-center justify-center text-gray-400">
+                        <svg className="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
+                      </div>
+                    </div>
+                    <div className="p-4">
+                      <h5 className="font-medium mb-2" style={{ color: themeState.secondaryColor }}>Produto Exemplo</h5>
+                      <p className="text-sm mb-4" style={{ color: `${themeState.secondaryColor}80` }}>Descrição breve do produto</p>
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold" style={{ color: themeState.secondaryColor }}>R$ 99,90</span>
+                        <button
+                          type="button"
+                          className="px-4 py-2 rounded-lg transition-all"
+                          style={{
+                            backgroundColor: themeState.accentColor,
+                            color: '#FFFFFF'
+                          }}
+                        >
+                          Comprar
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
         </div>
       </section>
     </div>

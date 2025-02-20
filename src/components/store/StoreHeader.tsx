@@ -68,24 +68,28 @@ export function StoreHeader({
 
   // Gerar estilos do header
   const headerStyles = useMemo(() => {
-    let background;
+    let backgroundColor;
+    let backgroundImage;
     
     switch (customization.headerStyle) {
       case 'gradient':
-        background = `linear-gradient(${customization.headerGradient}, ${customization.headerBackground || primaryColor}, ${adjustColorBrightness(customization.headerBackground || primaryColor, -30)})`;
+        backgroundImage = `linear-gradient(${customization.headerGradient}, ${customization.headerBackground || primaryColor}, ${adjustColorBrightness(customization.headerBackground || primaryColor, -30)})`;
         break;
       case 'image':
-        background = customization.headerImage 
+        backgroundImage = customization.headerImage 
           ? `url(${customization.headerImage})`
-          : primaryColor;
+          : 'none';
+        backgroundColor = primaryColor;
         break;
       default: // solid
-        background = customization.headerBackground || primaryColor;
+        backgroundColor = customization.headerBackground || primaryColor;
+        backgroundImage = 'none';
     }
 
     return {
       minHeight: customization.headerHeight,
-      background,
+      backgroundColor,
+      backgroundImage,
       backgroundSize: customization.headerStyle === 'image' ? 'cover' : undefined,
       backgroundPosition: customization.headerStyle === 'image' ? 'center' : undefined,
       backgroundRepeat: customization.headerStyle === 'image' ? 'no-repeat' : undefined,
@@ -317,17 +321,6 @@ export function StoreHeader({
           </div>
         )}
       </div>
-
-      {/* Barra de destaque opcional no topo ou base */}
-      {customization.headerStyle === 'solid' && (
-        <div 
-          className="absolute left-0 right-0 h-1 transition-colors duration-300"
-          style={{ 
-            backgroundColor: themeColors.accent,
-            bottom: 0
-          }}
-        />
-      )}
     </header>
   );
 }
