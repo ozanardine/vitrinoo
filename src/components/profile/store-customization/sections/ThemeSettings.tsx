@@ -3,7 +3,7 @@ import { Palette, Droplet } from 'lucide-react';
 import { StoreHeader } from '../../../store/StoreHeader';
 import { useThemeStore } from '../../../../stores/useThemeStore';
 import { useStoreCustomization } from '../StoreCustomizationContext';
-import { EXTENDED_COLOR_PRESETS } from '../../../../constants/theme';
+import { COLOR_PRESETS } from '../../../../constants/theme';
 import { ColorPicker } from '../forms/ColorPicker';
 import { ThemePresetSelector } from './theme/ThemePresetSelector';
 
@@ -31,9 +31,7 @@ export function ThemeSettings({ onLocalChange, selectedPreset, onPresetChange }:
       formData.primaryColor !== themeState.primaryColor ||
       formData.secondaryColor !== themeState.secondaryColor ||
       formData.accentColor !== themeState.accentColor ||
-      formData.headerBackground !== themeState.headerBackground ||
-      formData.headerStyle !== themeState.headerStyle ||
-      formData.headerGradient !== themeState.gradient.direction;
+      formData.headerBackground !== themeState.headerBackground;
 
     if (hasChanges) {
       themeState.updateColor('primaryColor', formData.primaryColor);
@@ -41,10 +39,6 @@ export function ThemeSettings({ onLocalChange, selectedPreset, onPresetChange }:
       themeState.updateColor('accentColor', formData.accentColor);
       themeState.updateColor('headerBackground', formData.headerBackground || formData.primaryColor);
       themeState.updateColor('background', formData.primaryColor);
-      if (formData.headerStyle !== 'image') {
-        themeState.updateHeaderStyle(formData.headerStyle || 'solid');
-      }
-      themeState.updateGradient('direction', formData.headerGradient || 'to bottom');
     }
   }, [formData]);
 
@@ -66,14 +60,14 @@ export function ThemeSettings({ onLocalChange, selectedPreset, onPresetChange }:
       primaryColor: colors.primary,
       secondaryColor: colors.secondary,
       accentColor: colors.accent,
-      headerBackground: colors.headerBackground || colors.primary,
+      headerBackground: colors.header.background,
       background: colors.primary
     };
     
     themeState.updateColor('primaryColor', colors.primary);
     themeState.updateColor('secondaryColor', colors.secondary);
     themeState.updateColor('accentColor', colors.accent);
-    themeState.updateColor('headerBackground', colors.headerBackground || colors.primary);
+    themeState.updateColor('headerBackground', colors.header.background);
     themeState.updateColor('background', colors.primary);
     themeState.applyPreset(presetId);
     
@@ -107,22 +101,22 @@ export function ThemeSettings({ onLocalChange, selectedPreset, onPresetChange }:
             label="Cor Principal"
             value={themeState.primaryColor}
             onChange={handleColorChange('primaryColor')}
-            description="Cor de fundo principal e cabeçalho"
-            presets={EXTENDED_COLOR_PRESETS.primary}
+            description="Cor de fundo principal"
+            presets={COLOR_PRESETS.primary}
           />
           <ColorPicker
             label="Cor Secundária"
             value={themeState.secondaryColor}
             onChange={handleColorChange('secondaryColor')}
             description="Cor do texto e elementos de contraste"
-            presets={EXTENDED_COLOR_PRESETS.secondary}
+            presets={COLOR_PRESETS.secondary}
           />
           <ColorPicker
             label="Cor de Destaque"
             value={themeState.accentColor}
             onChange={handleColorChange('accentColor')}
             description="Cor para botões e elementos interativos"
-            presets={EXTENDED_COLOR_PRESETS.accent}
+            presets={COLOR_PRESETS.accent}
           />
           {formData.headerStyle !== 'image' && (
             <ColorPicker
@@ -130,7 +124,7 @@ export function ThemeSettings({ onLocalChange, selectedPreset, onPresetChange }:
               value={themeState.headerBackground}
               onChange={handleColorChange('headerBackground')}
               description="Cor de fundo específica para o cabeçalho"
-              presets={EXTENDED_COLOR_PRESETS.primary}
+              presets={COLOR_PRESETS.primary}
             />
           )}
         </div>
@@ -156,7 +150,7 @@ export function ThemeSettings({ onLocalChange, selectedPreset, onPresetChange }:
               headerStyle: formData.headerStyle,
               headerHeight: '200px',
               headerImage: formData.headerImage,
-              headerGradient: themeState.gradient.direction,
+              headerGradient: 'to bottom',
               headerAlignment: 'center',
               headerOverlayOpacity: formData.headerOverlayOpacity,
               headerVisibility: {
