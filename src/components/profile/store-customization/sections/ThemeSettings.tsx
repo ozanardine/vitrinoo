@@ -71,7 +71,6 @@ export function ThemeSettings({ onLocalChange, selectedPreset, onPresetChange }:
     themeState.updateColor('background', colors.primary);
     themeState.applyPreset(presetId);
     
-    // Only update local state for preview
     onLocalChange(updatedData);
     onPresetChange(presetId);
   }, [themeState, onLocalChange, onPresetChange]);

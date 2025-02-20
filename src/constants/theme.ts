@@ -21,7 +21,7 @@ export const COLOR_THEMES: Record<string, ColorTheme> = {
   // Light Themes
   minimal: {
     id: 'minimal',
-    name: 'Minimalista',
+    name: 'Clean Modern',
     category: 'light',
     colors: {
       primary: '#FFFFFF',
@@ -35,45 +35,45 @@ export const COLOR_THEMES: Record<string, ColorTheme> = {
         text: '#1A1A1A'
       }
     },
-    description: 'Design limpo e moderno com alto contraste'
+    description: 'Design minimalista com alto contraste e clareza'
   },
   
-  warmLight: {
-    id: 'warmLight',
-    name: 'Aconchegante',
+  softLight: {
+    id: 'softLight',
+    name: 'Suave',
     category: 'light',
     colors: {
+      primary: '#F7F9FC',
+      secondary: '#334155',
+      accent: '#6366F1',
+      surface: '#FFFFFF',
+      border: '#E2E8F0',
+      muted: '#94A3B8',
+      header: {
+        background: '#EEF2FF',
+        text: '#334155'
+      }
+    },
+    description: 'Tons suaves e relaxantes com toques de roxo'
+  },
+
+  warmElegant: {
+    id: 'warmElegant',
+    category: 'light',
+    name: 'Elegante',
+    colors: {
       primary: '#FFFBF5',
-      secondary: '#2D1810',
-      accent: '#D97706',
-      surface: '#FFF7ED',
+      secondary: '#422006',
+      accent: '#C2410C',
+      surface: '#FFFFFF',
       border: '#FDDCAB',
       muted: '#92400E',
       header: {
         background: '#FEF3C7',
-        text: '#2D1810'
+        text: '#422006'
       }
     },
-    description: 'Tons quentes e acolhedores'
-  },
-
-  coolLight: {
-    id: 'coolLight',
-    name: 'Sereno',
-    category: 'light',
-    colors: {
-      primary: '#F0F9FF',
-      secondary: '#0C4A6E',
-      accent: '#0284C7',
-      surface: '#F0FDFF',
-      border: '#BAE6FD',
-      muted: '#0369A1',
-      header: {
-        background: '#E0F2FE',
-        text: '#0C4A6E'
-      }
-    },
-    description: 'Tons suaves de azul com ótima legibilidade'
+    description: 'Tons quentes e elegantes com toques terrosos'
   },
 
   // Dark Themes
@@ -96,20 +96,39 @@ export const COLOR_THEMES: Record<string, ColorTheme> = {
     description: 'Tema escuro profissional com alto contraste'
   },
 
-  darkLuxury: {
-    id: 'darkLuxury',
-    name: 'Dark Luxury',
+  darkSoft: {
+    id: 'darkSoft',
+    name: 'Dark Suave',
     category: 'dark',
     colors: {
       primary: '#18181B',
       secondary: '#FAFAFA',
-      accent: '#EAB308',
+      accent: '#A855F7',
       surface: '#27272A',
       border: '#3F3F46',
       muted: '#A1A1AA',
       header: {
         background: '#09090B',
         text: '#FAFAFA'
+      }
+    },
+    description: 'Tema escuro com tons suaves de roxo'
+  },
+
+  darkLuxury: {
+    id: 'darkLuxury',
+    name: 'Dark Luxury',
+    category: 'dark',
+    colors: {
+      primary: '#1C1917',
+      secondary: '#FAFAF9',
+      accent: '#EAB308',
+      surface: '#292524',
+      border: '#44403C',
+      muted: '#A8A29E',
+      header: {
+        background: '#0C0A09',
+        text: '#FAFAF9'
       }
     },
     description: 'Elegante com detalhes dourados'
@@ -132,7 +151,7 @@ export const COLOR_THEMES: Record<string, ColorTheme> = {
         text: '#FFFFFF'
       }
     },
-    description: 'Inspirado em tons naturais'
+    description: 'Inspirado em tons naturais e orgânicos'
   },
 
   ocean: {
@@ -148,10 +167,29 @@ export const COLOR_THEMES: Record<string, ColorTheme> = {
       muted: '#0E7490',
       header: {
         background: '#06B6D4',
-        text: '#164E63'
+        text: '#FFFFFF'
       }
     },
     description: 'Tons relaxantes de azul'
+  },
+
+  tech: {
+    id: 'tech',
+    name: 'Tech',
+    category: 'branded',
+    colors: {
+      primary: '#FAFAFA',
+      secondary: '#18181B',
+      accent: '#6366F1',
+      surface: '#FFFFFF',
+      border: '#E4E4E7',
+      muted: '#71717A',
+      header: {
+        background: '#4F46E5',
+        text: '#FFFFFF'
+      }
+    },
+    description: 'Visual moderno e tecnológico'
   }
 };
 
@@ -159,36 +197,36 @@ export const COLOR_THEMES: Record<string, ColorTheme> = {
 export const COLOR_PRESETS = {
   primary: [
     // Backgrounds claros
-    '#FFFFFF', '#F8FAFC', '#F0F9FF', '#F0FDFF', '#F5F3FF',
+    '#FFFFFF', '#F7F9FC', '#FFFBF5', '#F1F5F2', '#F0FDFF', '#FAFAFA',
     // Backgrounds escuros
-    '#0F172A', '#18181B', '#1E293B', '#1E1E1E', '#0C0A09'
+    '#0F172A', '#18181B', '#1C1917', '#020617', '#09090B', '#0C0A09'
   ],
   
   secondary: [
     // Texto em fundos claros
-    '#0F172A', '#18181B', '#1E293B', '#1A1A1A', '#0C0A09',
+    '#1A1A1A', '#334155', '#422006', '#1E3A2B', '#164E63', '#18181B',
     // Texto em fundos escuros
-    '#F8FAFC', '#F1F5F9', '#FAFAFA', '#FFFFFF', '#F5F5F5'
+    '#F8FAFC', '#FAFAFA', '#FAFAF9', '#FFFFFF', '#F1F5F9', '#F4F4F5'
   ],
   
   accent: [
-    // Cores de destaque com bom contraste
-    '#2563EB', '#0891B2', '#059669', '#D97706', '#DC2626',
-    '#6D28D9', '#BE185D', '#EA580C', '#65A30D', '#0284C7'
+    // Cores de destaque modernas
+    '#2563EB', '#6366F1', '#C2410C', '#2F7A4D', '#0891B2', '#4F46E5',
+    '#A855F7', '#EAB308', '#EC4899', '#10B981', '#F97316', '#8B5CF6'
   ],
 
   surface: [
     // Superfícies elevadas claras
-    '#FFFFFF', '#F8FAFC', '#F0F9FF', '#FEFCE8', '#F5F3FF',
+    '#FFFFFF', '#F8FAFC', '#FFFBF5', '#F1F5F2', '#F0FDFF', '#FAFAFA',
     // Superfícies elevadas escuras
-    '#1E293B', '#27272A', '#292524', '#1F2937', '#18181B'
+    '#1E293B', '#27272A', '#292524', '#1F2937', '#18181B', '#1C1917'
   ],
 
   border: [
     // Bordas para temas claros
-    '#E2E8F0', '#D1D5DB', '#BAE6FD', '#FDE68A', '#DDD6FE',
+    '#E2E8F0', '#E4E4E7', '#FDDCAB', '#D1E4D9', '#A5F3FC', '#E4E4E7',
     // Bordas para temas escuros
-    '#334155', '#3F3F46', '#44403C', '#374151', '#27272A'
+    '#334155', '#3F3F46', '#44403C', '#374151', '#27272A', '#292524'
   ]
 } as const;
 
