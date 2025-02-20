@@ -1,5 +1,5 @@
-import React, { createContext, useContext, useState } from 'react';
-import { StoreFormData, StoreCustomizationContextType } from './types';
+import React, { createContext, useContext, useState, useCallback } from 'react';
+import { StoreFormData, PendingChanges } from './types';
 import { Store } from '../../../lib/types';
 import { supabase } from '../../../lib/supabase';
 
@@ -23,10 +23,25 @@ const DEFAULT_VALUES = {
     contactsPosition: 'above' as const,
     displayFormat: 'username' as const
   }
-};
+} as const;
+
+// Exportando a interface do contexto
+export interface StoreCustomizationContextType {
+  formData: StoreFormData;
+  updatePreview: (updates: Partial<StoreFormData>, section: string) => void;
+  loading: boolean;
+  error: string | null;
+  activeSection: string;
+  setActiveSection: (section: string) => void;
+  pendingChanges: PendingChanges;
+  hasPendingChanges: (section?: string) => boolean;
+  revertSectionChanges: (section: string) => void;
+  saveChanges: () => Promise<boolean>;
+}
 
 export function StoreCustomizationProvider({ children, store, onUpdate }: ProviderProps) {
-  const [formData, setFormData] = useState<StoreFormData>({
+  // Estado inicial do formulário
+  const [formData, setFormData] = useState<StoreFormData>(() => ({
     name: store.name,
     slug: store.slug,
     description: store.description || '',
@@ -35,7 +50,8 @@ export function StoreCustomizationProvider({ children, store, onUpdate }: Provid
     secondaryColor: store.secondary_color || '#ffffff',
     accentColor: store.accent_color || '#0066FF',
     headerBackground: store.header_background || '#ffffff',
-    allowThemeToggle: store.allow_theme_toggle ?? true,
+    background: store.background || '#ffffff',
+    allowThemeToggle: true,
     headerStyle: (store.header_style as StoreFormData['headerStyle']) || DEFAULT_VALUES.headerStyle,
     headerHeight: store.header_height?.replace('px', '') || '400',
     headerImage: store.header_image || '',
@@ -59,106 +75,162 @@ export function StoreCustomizationProvider({ children, store, onUpdate }: Provid
     containerWidth: (store.container_width as StoreFormData['containerWidth']) || DEFAULT_VALUES.containerWidth,
     socialLinks: store.social_links || [],
     socialSettings: store.social_settings || DEFAULT_VALUES.socialSettings
-  });
+  }));
 
-  // Estado local para mudanças não salvas
-  const [localData, setLocalData] = useState<Partial<StoreFormData>>({});
+  const [pendingChanges, setPendingChanges] = useState<PendingChanges>({});
+  const [activeSection, setActiveSection] = useState<string>('general');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
 
-  const updateFormData = (updates: Partial<StoreFormData>) => {
-    setFormData(prev => ({ ...prev, ...updates }));
-  };
+  // Função para atualizar preview mantendo alterações pendentes
+  const updatePreview = useCallback((updates: Partial<StoreFormData>, section: string) => {
+    const timestamp = Date.now();
+    
+    setPendingChanges(prev => {
+      const newChanges = { ...prev };
+      
+      Object.entries(updates).forEach(([key, value]) => {
+        if (value !== formData[key as keyof StoreFormData]) {
+          newChanges[key] = {
+            section,
+            value,
+            timestamp,
+            previousValue: formData[key as keyof StoreFormData]
+          };
+        } else {
+          delete newChanges[key];
+        }
+      });
+      
+      return newChanges;
+    });
 
-  const onSave = async () => {
-    setLoading(true);
-    setError(null);
-    setSuccess(null);
+    setFormData(prev => ({
+      ...prev,
+      ...updates
+    }));
+  }, [formData]);
 
-    try {
-      // Verificar se o slug já existe
-      const { data: existingStores, error: checkError } = await supabase
+  // Função para reverter alterações de uma seção
+  const revertSectionChanges = useCallback((section: string) => {
+    const updatesToRevert: Partial<StoreFormData> = {};
+    
+    Object.entries(pendingChanges).forEach(([key, change]) => {
+      if (change.section === section) {
+        updatesToRevert[key as keyof StoreFormData] = change.previousValue;
+      }
+    });
+
+    setPendingChanges(prev => {
+      const newChanges = { ...prev };
+      Object.entries(newChanges).forEach(([key, change]) => {
+        if (change.section === section) {
+          delete newChanges[key];
+        }
+      });
+      return newChanges;
+    });
+
+    setFormData(prev => ({
+      ...prev,
+      ...updatesToRevert
+    }));
+  }, [pendingChanges]);
+
+  // Função para validar alterações antes de salvar
+  const validateChanges = useCallback(async () => {
+    if (!pendingChanges.slug) return true;
+
+    // Validação básica de campos obrigatórios
+    if (pendingChanges.name && !pendingChanges.name.value.trim()) {
+      throw new Error('O nome da loja é obrigatório');
+    }
+
+    // Validação de slug
+    if (pendingChanges.slug) {
+      const { data, error: checkError } = await supabase
         .from('stores')
         .select('id')
-        .eq('slug', formData.slug)
-        .neq('id', store.id);
+        .eq('slug', pendingChanges.slug.value)
+        .neq('id', store.id)
+        .single();
 
-      if (checkError) throw checkError;
-      if (existingStores && existingStores.length > 0) {
-        throw new Error('Esta URL já está em uso. Por favor, escolha outra.');
+      if (checkError && checkError.code !== 'PGRST116') {
+        throw checkError;
       }
 
-      // Mesclar dados locais com formData
-      const finalData = {
-        ...formData,
-        ...localData
-      };
+      if (data) {
+        throw new Error('Esta URL já está em uso. Por favor, escolha outra.');
+      }
+    }
+
+    return true;
+  }, [pendingChanges, store.id]);
+
+  // Função aprimorada para salvar alterações
+  const saveChanges = async () => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      await validateChanges();
+
+      const updateData: Record<string, any> = {};
+      
+      Object.entries(pendingChanges).forEach(([key, change]) => {
+        const dbKey = key.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
+        updateData[dbKey] = change.value;
+
+        if (['logoSize', 'titleSize', 'descriptionSize', 'headerHeight'].includes(key)) {
+          updateData[dbKey] = `${change.value}px`;
+        }
+      });
+
+      updateData.updated_at = new Date().toISOString();
 
       const { error: updateError } = await supabase
         .from('stores')
-        .update({
-          name: finalData.name,
-          slug: finalData.slug,
-          description: finalData.description || null,
-          logo_url: finalData.logoUrl || null,
-          primary_color: finalData.primaryColor,
-          secondary_color: finalData.secondaryColor,
-          accent_color: finalData.accentColor,
-          header_background: finalData.headerBackground,
-          allow_theme_toggle: finalData.allowThemeToggle,
-          header_style: finalData.headerStyle,
-          header_height: `${finalData.headerHeight}px`,
-          header_image: finalData.headerImage || null,
-          header_gradient: finalData.headerGradient,
-          header_overlay_opacity: finalData.headerOverlayOpacity,
-          header_alignment: finalData.headerAlignment,
-          header_visibility: finalData.headerVisibility,
-          logo_size: `${finalData.logoSize}px`,
-          title_size: `${finalData.titleSize}px`,
-          description_size: `${finalData.descriptionSize}px`,
-          title_font: finalData.titleFont,
-          body_font: finalData.bodyFont,
-          product_card_style: finalData.productCardStyle,
-          grid_columns: finalData.gridColumns,
-          grid_gap: finalData.gridGap,
-          container_width: finalData.containerWidth,
-          social_links: finalData.socialLinks,
-          social_settings: finalData.socialSettings,
-          updated_at: new Date().toISOString()
-        })
+        .update(updateData)
         .eq('id', store.id);
 
       if (updateError) throw updateError;
 
-      setSuccess('Loja atualizada com sucesso!');
-      // Limpar estado local após salvar
-      setLocalData({});
+      setPendingChanges({});
       onUpdate();
+
+      return true;
     } catch (err: any) {
       setError(err.message);
+      return false;
     } finally {
       setLoading(false);
     }
   };
 
-  const value = {
+  // Função para verificar se há alterações pendentes
+  const hasPendingChanges = useCallback((section?: string) => {
+    if (section) {
+      return Object.values(pendingChanges).some(change => change.section === section);
+    }
+    return Object.keys(pendingChanges).length > 0;
+  }, [pendingChanges]);
+
+  const contextValue: StoreCustomizationContextType = {
     formData,
-    updateFormData,
+    updatePreview,
     loading,
-    setLoading,
     error,
-    setError,
-    success,
-    setSuccess,
-    onSave,
-    localData,
-    setLocalData
+    activeSection,
+    setActiveSection,
+    pendingChanges,
+    hasPendingChanges,
+    revertSectionChanges,
+    saveChanges
   };
 
   return (
-    <StoreCustomizationContext.Provider value={value}>
-      {children(value)}
+    <StoreCustomizationContext.Provider value={contextValue}>
+      {children(contextValue)}
     </StoreCustomizationContext.Provider>
   );
 }

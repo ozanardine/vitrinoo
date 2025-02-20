@@ -1,4 +1,5 @@
 import { Store } from '../../../lib/types';
+import { ReactNode } from 'react';
 
 export interface StoreFormData {
   // General Settings
@@ -50,24 +51,34 @@ export interface StoreFormData {
   }>;
 
   // Social Settings
-  socialSettings?: {
+  socialSettings: {
     contactsPosition: 'above' | 'below';
     displayFormat: 'username' | 'network';
   };
 }
 
+interface PendingChange {
+  section: string;
+  value: any;
+  timestamp: number;
+  previousValue: any;
+}
+
+export interface PendingChanges {
+  [key: string]: PendingChange;
+}
+
 export interface StoreCustomizationContextType {
   formData: StoreFormData;
-  updateFormData: (updates: Partial<StoreFormData>) => void;
+  updatePreview: (updates: Partial<StoreFormData>, section: string) => void;
   loading: boolean;
-  setLoading: (loading: boolean) => void;
   error: string | null;
-  setError: (error: string | null) => void;
-  success: string | null;
-  setSuccess: (success: string | null) => void;
-  onSave: () => Promise<void>;
-  localData: Partial<StoreFormData>;
-  setLocalData: (data: Partial<StoreFormData> | ((prev: Partial<StoreFormData>) => Partial<StoreFormData>)) => void;
+  activeSection: string;
+  setActiveSection: (section: string) => void;
+  pendingChanges: PendingChanges;
+  hasPendingChanges: (section?: string) => boolean;
+  revertSectionChanges: (section: string) => void;
+  saveChanges: () => Promise<boolean>;
 }
 
 export interface Section {
@@ -79,4 +90,5 @@ export interface Section {
 export interface StoreCustomizationProps {
   store: Store;
   onUpdate: () => void;
+  children: (context: StoreCustomizationContextType) => ReactNode;
 }

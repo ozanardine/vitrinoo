@@ -1,4 +1,4 @@
-import { useEffect, useCallback } from 'react';
+import { useEffect, useCallback, useState } from 'react';
 import { Palette, Droplet } from 'lucide-react';
 import { StoreHeader } from '../../../store/StoreHeader';
 import { useThemeStore } from '../../../../stores/useThemeStore';
@@ -14,8 +14,15 @@ interface ThemeSettingsProps {
 }
 
 export function ThemeSettings({ onLocalChange, selectedPreset, onPresetChange }: ThemeSettingsProps) {
-  const { formData, updateFormData } = useStoreCustomization();
+  const { formData } = useStoreCustomization();
   const themeState = useThemeStore();
+  const [localThemeData, setLocalThemeData] = useState({
+    primaryColor: formData.primaryColor,
+    secondaryColor: formData.secondaryColor,
+    accentColor: formData.accentColor,
+    headerBackground: formData.headerBackground,
+    background: formData.primaryColor
+  });
   
   // Initialize theme state
   useEffect(() => {
@@ -26,34 +33,28 @@ export function ThemeSettings({ onLocalChange, selectedPreset, onPresetChange }:
   // Sync with formData changes
   useEffect(() => {
     if (!formData.primaryColor) return;
-
-    const hasChanges = 
-      formData.primaryColor !== themeState.primaryColor ||
-      formData.secondaryColor !== themeState.secondaryColor ||
-      formData.accentColor !== themeState.accentColor ||
-      formData.headerBackground !== themeState.headerBackground;
-
-    if (hasChanges) {
-      themeState.updateColor('primaryColor', formData.primaryColor);
-      themeState.updateColor('secondaryColor', formData.secondaryColor);
-      themeState.updateColor('accentColor', formData.accentColor);
-      themeState.updateColor('headerBackground', formData.headerBackground || formData.primaryColor);
-      themeState.updateColor('background', formData.primaryColor);
-    }
+    setLocalThemeData({
+      primaryColor: formData.primaryColor,
+      secondaryColor: formData.secondaryColor,
+      accentColor: formData.accentColor,
+      headerBackground: formData.headerBackground || formData.primaryColor,
+      background: formData.primaryColor
+    });
   }, [formData]);
+
+  // Notify parent of local changes
+  useEffect(() => {
+    onLocalChange(localThemeData);
+  }, [localThemeData, onLocalChange]);
 
   const handleColorChange = useCallback((key: 'background' | 'accentColor' | 'primaryColor' | 'secondaryColor' | 'headerBackground') => (color: string) => {
     themeState.updateColor(key, color);
-    const updatedData = {
-      primaryColor: key === 'primaryColor' ? color : themeState.primaryColor,
-      secondaryColor: key === 'secondaryColor' ? color : themeState.secondaryColor,
-      accentColor: key === 'accentColor' ? color : themeState.accentColor,
-      headerBackground: key === 'headerBackground' ? color : themeState.headerBackground,
-      background: key === 'primaryColor' ? color : themeState.primaryColor
-    };
-    updateFormData(updatedData);
-    onLocalChange(updatedData);
-  }, [themeState, updateFormData, onLocalChange]);
+    setLocalThemeData((prev: typeof localThemeData) => ({
+      ...prev,
+      [key]: color,
+      ...(key === 'primaryColor' ? { background: color } : {})
+    }));
+  }, [themeState]);
 
   const handlePresetSelect = useCallback((presetId: string, colors: any) => {
     const updatedData = {
@@ -64,16 +65,19 @@ export function ThemeSettings({ onLocalChange, selectedPreset, onPresetChange }:
       background: colors.primary
     };
     
+    // Update local state
+    setLocalThemeData(updatedData);
+
+    // Update theme preview state
     themeState.updateColor('primaryColor', colors.primary);
     themeState.updateColor('secondaryColor', colors.secondary);
     themeState.updateColor('accentColor', colors.accent);
     themeState.updateColor('headerBackground', colors.header.background);
     themeState.updateColor('background', colors.primary);
-    themeState.applyPreset(presetId);
     
-    onLocalChange(updatedData);
+    // Update preset selection state
     onPresetChange(presetId);
-  }, [themeState, onLocalChange, onPresetChange]);
+  }, [themeState, onPresetChange]);
 
   return (
     <div className="space-y-8">
