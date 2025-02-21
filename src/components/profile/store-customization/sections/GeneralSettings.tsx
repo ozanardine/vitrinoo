@@ -7,7 +7,7 @@ import { StoreFormData } from '../types';
 type ValidationErrors = Partial<Record<keyof StoreFormData, string>>;
 
 export function GeneralSettings() {
-  const { formData, updatePreview } = useStoreCustomization();
+  const { previewData, updatePreview, stagePendingChanges } = useStoreCustomization();
   const [validationErrors, setValidationErrors] = useState<ValidationErrors>({});
   
   // Função de validação local
@@ -51,10 +51,17 @@ export function GeneralSettings() {
     // Se houver erro e for um campo que precisa de validação imediata, não atualiza
     if (error && !debounce) return;
 
-    // Atualiza o preview
+    // Primeiro atualiza o preview
     updatePreview({
       [name]: value
     }, 'general');
+
+    // Se não houver erro, aplica a mudança
+    if (!error) {
+      stagePendingChanges({
+        [name]: value
+      }, 'general');
+    }
   };
 
   // Handler específico para logo
@@ -65,10 +72,9 @@ export function GeneralSettings() {
       logoUrl: undefined
     }));
 
-    // Atualiza o preview
-    updatePreview({
-      logoUrl: url
-    }, 'general');
+    // Atualiza preview e aplica mudança
+    updatePreview({ logoUrl: url }, 'general');
+    stagePendingChanges({ logoUrl: url }, 'general');
   };
 
   // Handler para validação de imagem
@@ -89,7 +95,7 @@ export function GeneralSettings() {
         </label>
         <input
           type="text"
-          value={formData.name}
+          value={previewData.name}
           onChange={(e) => handleFieldChange('name', e.target.value)}
           className={`w-full p-2 border rounded transition-colors
             dark:bg-gray-700 
@@ -122,7 +128,7 @@ export function GeneralSettings() {
           </span>
           <input
             type="text"
-            value={formData.slug}
+            value={previewData.slug}
             onChange={(e) => handleFieldChange('slug', e.target.value.toLowerCase())}
             className={`flex-1 p-2 border rounded transition-colors
               dark:bg-gray-700 
@@ -153,7 +159,7 @@ export function GeneralSettings() {
           Descrição
         </label>
         <textarea
-          value={formData.description}
+          value={previewData.description}
           onChange={(e) => handleFieldChange('description', e.target.value, true)}
           className={`w-full p-2 border rounded transition-colors
             dark:bg-gray-700 
@@ -172,7 +178,7 @@ export function GeneralSettings() {
             Uma breve descrição que aparecerá no cabeçalho da sua loja
           </p>
           <span className="text-sm text-gray-500">
-            {formData.description.length}/500
+            {previewData.description.length}/500
           </span>
         </div>
         {validationErrors.description && (
@@ -191,7 +197,7 @@ export function GeneralSettings() {
         <ImageUploader
           onImageUrl={handleLogoChange}
           onError={handleLogoError}
-          currentUrl={formData.logoUrl}
+          currentUrl={previewData.logoUrl}
           maxSizeMB={2}
           minWidth={200}
           minHeight={200}

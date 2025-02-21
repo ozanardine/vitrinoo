@@ -1,8 +1,8 @@
-// src/components/profile/StoreCustomizationTab.tsx
 import { useState } from 'react';
 import { Store, Palette, Layout, Type, Grid, Phone } from 'lucide-react';
 import { Store as StoreType } from '../../lib/types';
-import { StoreCustomizationProvider, StoreCustomizationContextType } from './store-customization/StoreCustomizationContext';
+import { StoreCustomizationProvider } from './store-customization/StoreCustomizationContext';
+import { StoreCustomizationContextType } from './store-customization/types';
 import { ThemePreviewProvider } from './store-customization/theme-management/ThemePreviewContext';
 import { StoreHeader } from '../store/StoreHeader';
 import { GeneralSettings } from './store-customization/sections/GeneralSettings';
@@ -44,28 +44,28 @@ const PreviewSection = ({ context }: { context: StoreCustomizationContextType })
     <h3 className="text-lg font-semibold mb-4">Preview</h3>
     <div className="rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700">
       <StoreHeader
-        name={context.formData.name}
-        description={context.formData.description}
-        logoUrl={context.formData.logoUrl}
-        primaryColor={context.formData.primaryColor}
-        secondaryColor={context.formData.secondaryColor}
-        accentColor={context.formData.accentColor}
-        socialLinks={context.formData.socialLinks}
+        name={context.previewData.name}
+        description={context.previewData.description}
+        logoUrl={context.previewData.logoUrl}
+        primaryColor={context.previewData.primaryColor}
+        secondaryColor={context.previewData.secondaryColor}
+        accentColor={context.previewData.accentColor}
+        socialLinks={context.previewData.socialLinks}
         customization={{
-          headerStyle: context.formData.headerStyle,
-          headerHeight: `${context.formData.headerHeight}px`,
-          headerImage: context.formData.headerImage,
-          headerGradient: context.formData.headerGradient,
-          headerAlignment: context.formData.headerAlignment,
-          headerOverlayOpacity: context.formData.headerOverlayOpacity,
-          headerVisibility: context.formData.headerVisibility,
-          logoSize: `${context.formData.logoSize}px`,
-          titleSize: `${context.formData.titleSize}px`,
-          descriptionSize: `${context.formData.descriptionSize}px`,
-          titleFont: context.formData.titleFont,
-          bodyFont: context.formData.bodyFont,
-          socialSettings: context.formData.socialSettings,
-          headerBackground: context.formData.headerBackground,
+          headerStyle: context.previewData.headerStyle,
+          headerHeight: `${context.previewData.headerHeight}px`,
+          headerImage: context.previewData.headerImage,
+          headerGradient: context.previewData.headerGradient,
+          headerAlignment: context.previewData.headerAlignment,
+          headerOverlayOpacity: context.previewData.headerOverlayOpacity,
+          headerVisibility: context.previewData.headerVisibility,
+          logoSize: `${context.previewData.logoSize}px`,
+          titleSize: `${context.previewData.titleSize}px`,
+          descriptionSize: `${context.previewData.descriptionSize}px`,
+          titleFont: context.previewData.titleFont,
+          bodyFont: context.previewData.bodyFont,
+          socialSettings: context.previewData.socialSettings,
+          headerBackground: context.previewData.headerBackground,
           preview: true
         }}
       />
@@ -81,6 +81,7 @@ export function StoreCustomizationTab({ store, onUpdate }: StoreCustomizationTab
   });
 
   const [selectedThemePreset, setSelectedThemePreset] = useState<string | null>(null);
+  const [pendingPreset, setPendingPreset] = useState<string | null>(null);
 
   const initialThemePreview = {
     primaryColor: store.primary_color || '#000000',
@@ -88,6 +89,58 @@ export function StoreCustomizationTab({ store, onUpdate }: StoreCustomizationTab
     accentColor: store.accent_color || '#0066FF',
     headerBackground: store.header_background || '#ffffff',
     background: store.background || '#ffffff'
+  };
+
+  const handleSave = async (context: StoreCustomizationContextType) => {
+    try {
+      const success = await context.saveChanges();
+      
+      if (success) {
+        setAlert({
+          open: true,
+          message: 'Alterações salvas com sucesso!',
+          severity: 'success'
+        });
+        
+        // Atualiza o preset selecionado apenas após o salvamento bem-sucedido
+        if (pendingPreset !== selectedThemePreset) {
+          setSelectedThemePreset(pendingPreset);
+        }
+      }
+    } catch (error: any) {
+      setAlert({
+        open: true,
+        message: error.message || 'Erro ao salvar alterações',
+        severity: 'error'
+      });
+    }
+  };
+
+  const handleSectionChange = (context: StoreCustomizationContextType, sectionId: string) => {
+    // Se houver mudanças pendentes na seção atual, pergunta se quer salvar
+    if (context.hasPendingChanges(context.activeSection)) {
+      const confirmChange = window.confirm(
+        'Existem alterações não salvas. Deseja descartar estas alterações?'
+      );
+
+      if (confirmChange) {
+        context.revertSectionChanges(context.activeSection);
+        
+        // Reverte também o preset pendente se estiver na seção de tema
+        if (context.activeSection === 'theme') {
+          setPendingPreset(selectedThemePreset);
+        }
+      } else {
+        return;
+      }
+    }
+
+    context.setActiveSection(sectionId);
+  };
+
+  const handleThemePresetChange = (presetId: string | null) => {
+    // Apenas atualiza o preset pendente, que será confirmado no salvamento
+    setPendingPreset(presetId);
   };
 
   const renderSection = (context: StoreCustomizationContextType) => {
@@ -98,7 +151,7 @@ export function StoreCustomizationTab({ store, onUpdate }: StoreCustomizationTab
         return (
           <ThemeSettings 
             selectedPreset={selectedThemePreset}
-            onPresetChange={setSelectedThemePreset}
+            onPresetChange={handleThemePresetChange}
           />
         );
       case 'header':
@@ -116,27 +169,6 @@ export function StoreCustomizationTab({ store, onUpdate }: StoreCustomizationTab
 
   const shouldShowPreview = (section: string): boolean => {
     return !['layout', 'theme'].includes(section);
-  };
-
-  const handleSave = async (context: StoreCustomizationContextType) => {
-    try {
-      const success = await context.saveChanges();
-      
-      if (success) {
-        setAlert({
-          open: true,
-          message: 'Alterações salvas com sucesso!',
-          severity: 'success'
-        });
-        setSelectedThemePreset(null);
-      }
-    } catch (error: any) {
-      setAlert({
-        open: true,
-        message: error.message || 'Erro ao salvar alterações',
-        severity: 'error'
-      });
-    }
   };
 
   return (
@@ -170,7 +202,7 @@ export function StoreCustomizationTab({ store, onUpdate }: StoreCustomizationTab
                     return (
                       <button
                         key={section.id}
-                        onClick={() => context.setActiveSection(section.id)}
+                        onClick={() => handleSectionChange(context, section.id)}
                         className={`
                           w-full flex items-center justify-between px-4 py-3 rounded-lg 
                           transition-colors relative
@@ -215,7 +247,12 @@ export function StoreCustomizationTab({ store, onUpdate }: StoreCustomizationTab
                       {context.hasPendingChanges() && (
                         <button
                           type="button"
-                          onClick={() => context.revertSectionChanges(context.activeSection)}
+                          onClick={() => {
+                            context.revertSectionChanges(context.activeSection);
+                            if (context.activeSection === 'theme') {
+                              setPendingPreset(selectedThemePreset);
+                            }
+                          }}
                           className="px-6 py-2 text-gray-600 hover:text-gray-800 transition-colors"
                         >
                           Descartar Alterações

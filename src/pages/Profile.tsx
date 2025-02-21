@@ -353,10 +353,6 @@ export function Profile() {
                   </div>
                 </div>
                 <div>
-                  <div className="flex items-center justify-between text-sm mb-2">
-                    <span className="text-gray-600 dark:text-gray-400">Imagens por Produto:</span>
-                    <span>Até {planLimits.images_per_product}</span>
-                  </div>
                 </div>
               </div>
             </div>

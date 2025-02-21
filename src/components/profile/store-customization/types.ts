@@ -70,7 +70,9 @@ export interface PendingChanges {
 
 export interface StoreCustomizationContextType {
   formData: StoreFormData;
+  previewData: StoreFormData;
   updatePreview: (updates: Partial<StoreFormData>, section: string) => void;
+  stagePendingChanges: (updates: Partial<StoreFormData>, section: string) => void;
   loading: boolean;
   error: string | null;
   activeSection: string;

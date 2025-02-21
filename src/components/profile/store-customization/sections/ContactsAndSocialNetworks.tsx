@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Plus } from 'lucide-react';
 import { useStoreCustomization } from '../StoreCustomizationContext';
 import { SectionHeader } from '../forms/SectionHeader';
@@ -7,16 +7,16 @@ import { SocialLinkItem } from './contacts/SocialLinkItem';
 import { AddNetworkMenu } from './contacts/AddNetworkMenu';
 import { validateSocialLink, getDisplayValue } from './contacts/utils';
 import { SOCIAL_NETWORKS } from '../../../../lib/constants';
-import { countries, formatPhoneNumber } from '../../../../lib/countries';
+import { formatPhoneNumber, countries } from '../../../../lib/countries';
 
 export function ContactsAndSocialNetworks() {
-  const { formData, updateFormData } = useStoreCustomization();
+  const { previewData, updatePreview, stagePendingChanges } = useStoreCustomization();
   const [showAddMenu, setShowAddMenu] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const handleAddNetwork = (type: string) => {
     const network = SOCIAL_NETWORKS[type as keyof typeof SOCIAL_NETWORKS];
-    const existingNetwork = formData.socialLinks.find(link => link.type === type);
+    const existingNetwork = previewData.socialLinks.find(link => link.type === type);
     
     if (existingNetwork) {
       setError(`Você já adicionou ${network.label}`);
@@ -29,27 +29,38 @@ export function ContactsAndSocialNetworks() {
       countryCode: network.type === 'phone' ? 'BR' : undefined
     };
 
-    updateFormData({
-      socialLinks: [...formData.socialLinks, newLink]
-    });
+    const newLinks = [...previewData.socialLinks, newLink];
+
+    // Atualiza preview
+    updatePreview({
+      socialLinks: newLinks
+    }, 'contacts');
+
+    // Aplica mudanças
+    stagePendingChanges({
+      socialLinks: newLinks
+    }, 'contacts');
+
     setShowAddMenu(false);
     setError(null);
   };
 
   const handleUpdateLink = (index: number, value: string, countryCode?: string) => {
-    const newLinks = [...formData.socialLinks];
+    const newLinks = [...previewData.socialLinks];
     const link = newLinks[index];
     const network = SOCIAL_NETWORKS[link.type as keyof typeof SOCIAL_NETWORKS];
 
     // Se for telefone, formatar o número de acordo com o país
     if (network.type === 'phone' && countryCode) {
-      const country = countries.find(c => c.code === countryCode) || countries[0];
-      const formattedValue = formatPhoneNumber(value.replace(/\D/g, ''), country);
-      newLinks[index] = { 
-        ...link, 
-        url: formattedValue,
-        countryCode
-      };
+      const country = countries.find(c => c.code === countryCode);
+      if (country) {
+        const formattedValue = formatPhoneNumber(value.replace(/\D/g, ''), country);
+        newLinks[index] = { 
+          ...link, 
+          url: formattedValue,
+          countryCode
+        };
+      }
     } else {
       newLinks[index] = { 
         ...link, 
@@ -58,24 +69,49 @@ export function ContactsAndSocialNetworks() {
       };
     }
 
-    updateFormData({ socialLinks: newLinks });
+    // Atualiza preview
+    updatePreview({
+      socialLinks: newLinks
+    }, 'contacts');
+
+    // Aplica mudanças
+    stagePendingChanges({
+      socialLinks: newLinks
+    }, 'contacts');
   };
 
   const handleRemoveLink = (index: number) => {
-    const newLinks = formData.socialLinks.filter((_, i) => i !== index);
-    updateFormData({ socialLinks: newLinks });
+    const newLinks = previewData.socialLinks.filter((_, i) => i !== index);
+    
+    // Atualiza preview
+    updatePreview({
+      socialLinks: newLinks
+    }, 'contacts');
+
+    // Aplica mudanças
+    stagePendingChanges({
+      socialLinks: newLinks
+    }, 'contacts');
   };
 
-  const handleSettingsChange = (updates: Partial<typeof formData.socialSettings>) => {
-    updateFormData({
-      socialSettings: {
-        ...formData.socialSettings,
-        ...updates
-      }
-    });
+  const handleSettingsChange = (updates: Partial<typeof previewData.socialSettings>) => {
+    const newSettings = {
+      ...previewData.socialSettings,
+      ...updates
+    };
+
+    // Atualiza preview
+    updatePreview({
+      socialSettings: newSettings
+    }, 'contacts');
+
+    // Aplica mudanças
+    stagePendingChanges({
+      socialSettings: newSettings
+    }, 'contacts');
   };
 
-  const usedTypes = new Set(formData.socialLinks.map(link => link.type));
+  const usedTypes = new Set(previewData.socialLinks.map(link => link.type));
 
   return (
     <div className="space-y-6">
@@ -85,7 +121,7 @@ export function ContactsAndSocialNetworks() {
       />
 
       <DisplaySettings
-        settings={formData.socialSettings}
+        settings={previewData.socialSettings}
         onSettingsChange={handleSettingsChange}
       />
 
@@ -96,7 +132,7 @@ export function ContactsAndSocialNetworks() {
       )}
 
       <div className="space-y-4">
-        {formData.socialLinks.map((link, index) => {
+        {previewData.socialLinks.map((link, index) => {
           const isValid = validateSocialLink(link.type, link.url, link.countryCode);
           const showError = link.url.length > 0 && !isValid;
           

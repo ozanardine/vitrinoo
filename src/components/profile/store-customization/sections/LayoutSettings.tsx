@@ -1,12 +1,81 @@
-import React, { useState } from 'react';
-import { useStoreCustomization } from '../StoreCustomizationContext';
 import { AlertCircle, Package, Tag } from 'lucide-react';
+import { useStoreCustomization } from '../StoreCustomizationContext';
 import { ProductCard } from '../../../store/ProductCard';
+import { Product } from '../../../../lib/types';
 
 export function LayoutSettings() {
-  const { formData, updateFormData } = useStoreCustomization();
-  const [currentSort, setCurrentSort] = useState<'recent' | 'price-asc' | 'price-desc'>('recent');
-  const [previewProducts] = useState(() => Array(12).fill(null).map((_, i) => ({
+  const { previewData, updatePreview, stagePendingChanges } = useStoreCustomization();
+
+  // Validar configurações de layout
+  const validateLayout = () => {
+    const messages = [];
+    
+    // Validar número de colunas com estilo compacto
+    if (previewData.productCardStyle === 'compact' && Number(previewData.gridColumns) > 3) {
+      messages.push('O estilo compacto é recomendado com no máximo 3 colunas para melhor visualização');
+    }
+
+    // Validar espaçamento com estilo minimal
+    if (previewData.productCardStyle === 'minimal' && Number(previewData.gridGap) < 24) {
+      messages.push('O estilo minimal funciona melhor com espaçamento maior (24px ou mais) para dar destaque às imagens');
+    }
+
+    // Validar combinação de colunas e largura
+    if (Number(previewData.gridColumns) >= 4 && previewData.containerWidth === 'max-w-5xl') {
+      messages.push('Com 4 ou mais colunas, recomendamos usar largura média ou larga para melhor visualização dos produtos');
+    }
+
+    return messages;
+  };
+
+  const layoutWarnings = validateLayout();
+
+  // Handler para mudança de estilo do card
+  const handleCardStyleChange = (style: 'default' | 'compact' | 'minimal') => {
+    const updates = { productCardStyle: style };
+    
+    // Atualiza preview
+    updatePreview(updates, 'layout');
+    
+    // Aplica mudanças
+    stagePendingChanges(updates, 'layout');
+  };
+
+  // Handler para mudança de colunas
+  const handleColumnsChange = (columns: '2' | '3' | '4' | '5') => {
+    const updates = { gridColumns: columns };
+    
+    // Atualiza preview
+    updatePreview(updates, 'layout');
+    
+    // Aplica mudanças
+    stagePendingChanges(updates, 'layout');
+  };
+
+  // Handler para mudança de espaçamento
+  const handleGapChange = (value: string) => {
+    const updates = { gridGap: value };
+    
+    // Atualiza preview
+    updatePreview(updates, 'layout');
+    
+    // Aplica mudanças
+    stagePendingChanges(updates, 'layout');
+  };
+
+  // Handler para mudança de largura do container
+  const handleContainerWidthChange = (width: 'max-w-5xl' | 'max-w-6xl' | 'max-w-7xl' | 'max-w-full') => {
+    const updates = { containerWidth: width };
+    
+    // Atualiza preview
+    updatePreview(updates, 'layout');
+    
+    // Aplica mudanças
+    stagePendingChanges(updates, 'layout');
+  };
+
+  // Dados de exemplo para preview com tipo correto
+  const previewProducts: Product[] = Array(12).fill(null).map((_, i) => ({
     id: `preview-${i}`,
     title: `Produto ${i + 1}`,
     description: 'Lorem ipsum dolor sit amet',
@@ -16,103 +85,14 @@ export function LayoutSettings() {
     images: [],
     type: 'simple',
     store_id: '',
-    created_at: new Date().toISOString()
-  })));
-
-  const buildCategoryOptions = (categories: Category[], parentId: string | null = null, level = 0): JSX.Element[] => {
-    // Existing implementation
-  };
-
-  // Validar configurações de layout
-  const validateLayout = () => {
-    const messages = [];
-    
-    // Validar número de colunas com estilo compacto
-    if (formData.productCardStyle === 'compact' && Number(formData.gridColumns) > 3) {
-      messages.push('O estilo compacto é recomendado com no máximo 3 colunas para melhor visualização');
-    }
-
-    // Validar espaçamento com estilo minimal
-    if (formData.productCardStyle === 'minimal' && Number(formData.gridGap) < 24) {
-      messages.push('O estilo minimal funciona melhor com espaçamento maior (24px ou mais) para dar destaque às imagens');
-    }
-
-    // Validar combinação de colunas e largura
-    if (Number(formData.gridColumns) >= 4 && formData.containerWidth === 'max-w-5xl') {
-      messages.push('Com 4 ou mais colunas, recomendamos usar largura média ou larga para melhor visualização dos produtos');
-    }
-
-    return messages;
-  };
-
-  const layoutWarnings = validateLayout();
-
-  // Função para renderizar preview do grid
-  const renderGridPreview = () => {
-    const columns = Number(formData.gridColumns);
-    const gap = Number(formData.gridGap);
-    
-    return (
-      <div 
-        className="grid p-4 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700"
-        style={{ 
-          gridTemplateColumns: `repeat(${columns}, 1fr)`,
-          gap: `${gap}px`
-        }}
-      >
-        {Array.from({ length: columns * 2 }).map((_, index) => (
-          <div 
-            key={index}
-            className={`
-              rounded-lg bg-white dark:bg-gray-700 shadow-sm overflow-hidden
-              ${formData.productCardStyle === 'minimal' ? '' : 'p-4'}
-              ${formData.productCardStyle === 'compact' ? 'flex gap-3' : ''}
-              transition-all duration-200 hover:shadow-md
-            `}
-          >
-            {formData.productCardStyle === 'compact' ? (
-              <>
-                <div className="w-24 h-24 bg-gray-200 dark:bg-gray-600 rounded flex-shrink-0 flex items-center justify-center">
-                  <Package className="w-8 h-8 text-gray-400 dark:text-gray-500" />
-                </div>
-                <div className="flex-1 py-2 space-y-2">
-                  <div className="h-4 bg-gray-200 dark:bg-gray-600 rounded w-3/4" />
-                  <div className="h-3 bg-gray-200 dark:bg-gray-600 rounded w-1/2" />
-                  <div className="flex gap-2">
-                    <div className="h-6 bg-gray-200 dark:bg-gray-600 rounded px-3 text-sm flex items-center justify-center text-gray-600 dark:text-gray-400">R$ 99,90</div>
-                    <div className="h-6 bg-blue-100 dark:bg-blue-900/30 rounded px-3 text-sm flex items-center justify-center text-blue-600 dark:text-blue-400">-20%</div>
-                  </div>
-                </div>
-              </>
-            ) : (
-              <>
-                <div className={`
-                  aspect-square bg-gray-200 dark:bg-gray-600 rounded-lg
-                  flex items-center justify-center relative overflow-hidden group
-                  ${formData.productCardStyle === 'minimal' ? 'mb-3' : 'mb-4'}
-                `}>
-                  <Package className="w-12 h-12 text-gray-300 dark:text-gray-500 transition-transform group-hover:scale-110" />
-                  {index % 3 === 0 && (
-                    <div className="absolute top-2 right-2 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 text-xs font-medium px-2 py-1 rounded">-20%</div>
-                  )}
-                </div>
-                <div className={formData.productCardStyle === 'minimal' ? 'text-center px-3 pb-3' : ''}>
-                  <div className="h-4 bg-gray-200 dark:bg-gray-600 rounded w-3/4 mb-2" />
-                  <div className="h-3 bg-gray-200 dark:bg-gray-600 rounded w-1/2 mb-3" />
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <div className="h-6 bg-gray-200 dark:bg-gray-600 rounded px-3 text-sm flex items-center justify-center text-gray-600 dark:text-gray-400">R$ 99,90</div>
-                    {index % 2 === 0 && (
-                      <div className="h-6 bg-green-100 dark:bg-green-900/30 rounded px-3 text-sm flex items-center justify-center text-green-600 dark:text-green-400">Em estoque</div>
-                    )}
-                  </div>
-                </div>
-              </>
-            )}
-          </div>
-        ))}
-      </div>
-    );
-  };
+    created_at: new Date().toISOString(),
+    status: true,
+    sku: null,
+    category_id: null,
+    promotional_price: null,
+    components: [],
+    attributes: {}
+  }));
 
   return (
     <div className="space-y-6">
@@ -121,9 +101,9 @@ export function LayoutSettings() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <button
             type="button"
-            onClick={() => updateFormData({ productCardStyle: 'default' })}
+            onClick={() => handleCardStyleChange('default')}
             className={`p-4 border rounded-lg ${
-              formData.productCardStyle === 'default'
+              previewData.productCardStyle === 'default'
                 ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
                 : 'hover:bg-gray-50 dark:hover:bg-gray-800'
             }`}
@@ -146,9 +126,9 @@ export function LayoutSettings() {
 
           <button
             type="button"
-            onClick={() => updateFormData({ productCardStyle: 'compact' })}
+            onClick={() => handleCardStyleChange('compact')}
             className={`p-4 border rounded-lg ${
-              formData.productCardStyle === 'compact'
+              previewData.productCardStyle === 'compact'
                 ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
                 : 'hover:bg-gray-50 dark:hover:bg-gray-800'
             }`}
@@ -169,9 +149,9 @@ export function LayoutSettings() {
 
           <button
             type="button"
-            onClick={() => updateFormData({ productCardStyle: 'minimal' })}
+            onClick={() => handleCardStyleChange('minimal')}
             className={`p-4 border rounded-lg ${
-              formData.productCardStyle === 'minimal'
+              previewData.productCardStyle === 'minimal'
                 ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
                 : 'hover:bg-gray-50 dark:hover:bg-gray-800'
             }`}
@@ -194,8 +174,8 @@ export function LayoutSettings() {
         <div>
           <label className="block text-sm font-medium mb-1">Colunas na Grade</label>
           <select
-            value={formData.gridColumns}
-            onChange={(e) => updateFormData({ gridColumns: e.target.value })}
+            value={previewData.gridColumns}
+            onChange={(e) => handleColumnsChange(e.target.value as '2' | '3' | '4' | '5')}
             className="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600"
           >
             <option value="2">2 Colunas</option>
@@ -213,8 +193,8 @@ export function LayoutSettings() {
           <div className="flex items-center space-x-2">
             <input
               type="number"
-              value={formData.gridGap}
-              onChange={(e) => updateFormData({ gridGap: e.target.value })}
+              value={previewData.gridGap}
+              onChange={(e) => handleGapChange(e.target.value)}
               className="flex-1 p-2 border rounded dark:bg-gray-700 dark:border-gray-600"
               min="16"
               max="48"
@@ -230,8 +210,8 @@ export function LayoutSettings() {
         <div>
           <label className="block text-sm font-medium mb-1">Largura do Conteúdo</label>
           <select
-            value={formData.containerWidth}
-            onChange={(e) => updateFormData({ containerWidth: e.target.value })}
+            value={previewData.containerWidth}
+            onChange={(e) => handleContainerWidthChange(e.target.value as 'max-w-5xl' | 'max-w-6xl' | 'max-w-7xl' | 'max-w-full')}
             className="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600"
           >
             <option value="max-w-5xl">Estreita (1024px) - Ideal para até 3 colunas</option>
@@ -243,49 +223,6 @@ export function LayoutSettings() {
             Escolha a largura que melhor se adapta ao número de colunas e quantidade de produtos
           </p>
         </div>
-      </div>
-
-      {/* Grid Preview */}
-      <div>
-        <h3 className="text-lg font-medium mb-4">Prévia da Grade</h3>
-        <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4 mb-4">
-          <h4 className="font-medium text-yellow-800 dark:text-yellow-200 flex items-center gap-2 mb-2">
-            <AlertCircle className="w-5 h-5" />
-            Importante
-          </h4>
-          <ul className="list-disc list-inside space-y-1 text-sm text-yellow-700 dark:text-yellow-300">
-            <li>Esta é uma prévia com produtos de exemplo para demonstrar o layout</li>
-            <li>O layout final pode variar dependendo da quantidade de produtos e conteúdo</li>
-            <li>Para melhor visualização, mantenha uma proporção adequada entre largura e número de colunas</li>
-            <li>Recomendamos testar diferentes combinações com seus produtos reais</li>
-          </ul>
-        </div>
-
-        <div className={`${formData.containerWidth} mx-auto bg-gray-50 dark:bg-gray-900 p-4 rounded-lg border border-gray-200 dark:border-gray-700`}>
-          <div className={`grid gap-${formData.gridGap} grid-cols-1 sm:grid-cols-2 ${
-            formData.gridColumns === '3' ? 'lg:grid-cols-3' :
-            formData.gridColumns === '4' ? 'lg:grid-cols-4' :
-            formData.gridColumns === '5' ? 'lg:grid-cols-5' :
-            'lg:grid-cols-2'
-          }`}
-          style={{
-            gap: `${formData.gridGap}px`
-          }}>
-            {previewProducts.slice(0, Number(formData.gridColumns) * 2).map((product) => (
-              <ProductCard
-                key={product.id}
-                product={product}
-                onClick={() => {}}
-                style={formData.productCardStyle}
-                view="grid"
-              />
-            ))}
-          </div>
-        </div>
-
-        <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
-          A prévia usa {Number(formData.gridColumns) * 2} produtos de exemplo para demonstrar o layout
-        </p>
       </div>
 
       {layoutWarnings.length > 0 && (
@@ -303,6 +240,32 @@ export function LayoutSettings() {
           </ul>
         </div>
       )}
+
+      {/* Preview Grid */}
+      <div>
+        <h3 className="text-lg font-medium mb-4">Prévia da Grade</h3>
+        <div className={`${previewData.containerWidth} mx-auto bg-gray-50 dark:bg-gray-900 p-4 rounded-lg border border-gray-200 dark:border-gray-700`}>
+          <div className={`grid gap-${previewData.gridGap} grid-cols-1 sm:grid-cols-2 ${
+            previewData.gridColumns === '3' ? 'lg:grid-cols-3' :
+            previewData.gridColumns === '4' ? 'lg:grid-cols-4' :
+            previewData.gridColumns === '5' ? 'lg:grid-cols-5' :
+            'lg:grid-cols-2'
+          }`}
+          style={{
+            gap: `${previewData.gridGap}px`
+          }}>
+            {previewProducts.slice(0, Number(previewData.gridColumns) * 2).map((product) => (
+              <ProductCard
+                key={product.id}
+                product={product}
+                onClick={() => {}}
+                style={previewData.productCardStyle}
+                view="grid"
+              />
+            ))}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

@@ -1,4 +1,3 @@
-import React, { useState, useEffect } from 'react';
 import { useStoreCustomization } from '../StoreCustomizationContext';
 import { RangeInput } from '../forms/RangeInput';
 import '@fontsource/roboto';
@@ -27,45 +26,8 @@ const FONT_OPTIONS = {
   ]
 };
 
-interface TypographyData {
-  titleFont: string;
-  bodyFont: string;
-  logoSize: string;
-  titleSize: string;
-  descriptionSize: string;
-}
-
-interface TypographySettingsProps {
-  onLocalChange?: (localData: TypographyData) => void;
-}
-
-export function TypographySettings({ onLocalChange }: TypographySettingsProps) {
-  const { formData } = useStoreCustomization();
-
-  // Estado local para armazenar alterações temporárias
-  const [localTypographyData, setLocalTypographyData] = useState<TypographyData>({
-    titleFont: formData.titleFont,
-    bodyFont: formData.bodyFont,
-    logoSize: formData.logoSize,
-    titleSize: formData.titleSize,
-    descriptionSize: formData.descriptionSize
-  });
-
-  // Sincronizar com formData quando ele mudar
-  useEffect(() => {
-    setLocalTypographyData({
-      titleFont: formData.titleFont,
-      bodyFont: formData.bodyFont,
-      logoSize: formData.logoSize,
-      titleSize: formData.titleSize,
-      descriptionSize: formData.descriptionSize
-    });
-  }, [formData]);
-
-  // Notificar mudanças no estado local
-  useEffect(() => {
-    onLocalChange?.(localTypographyData);
-  }, [localTypographyData, onLocalChange]);
+export function TypographySettings() {
+  const { previewData, updatePreview, stagePendingChanges } = useStoreCustomization();
 
   // Função para obter a família da fonte
   const getFontFamily = (font: string) => {
@@ -76,12 +38,26 @@ export function TypographySettings({ onLocalChange }: TypographySettingsProps) {
     return 'system-ui';
   };
 
-  // Função para atualizar o estado local
-  const updateLocalData = (updates: Partial<TypographyData>) => {
-    setLocalTypographyData(prev => ({
-      ...prev,
-      ...updates
-    }));
+  // Handler para mudança de tamanhos
+  const handleSizeChange = (key: 'logoSize' | 'titleSize' | 'descriptionSize', value: string) => {
+    const updates = { [key]: value };
+    
+    // Atualiza preview
+    updatePreview(updates, 'typography');
+    
+    // Aplica mudanças
+    stagePendingChanges(updates, 'typography');
+  };
+
+  // Handler para mudança de fontes
+  const handleFontChange = (key: 'titleFont' | 'bodyFont', value: string) => {
+    const updates = { [key]: value };
+    
+    // Atualiza preview
+    updatePreview(updates, 'typography');
+    
+    // Aplica mudanças
+    stagePendingChanges(updates, 'typography');
   };
 
   return (
@@ -92,8 +68,8 @@ export function TypographySettings({ onLocalChange }: TypographySettingsProps) {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <RangeInput
           label="Tamanho da Logo"
-          value={localTypographyData.logoSize.replace('px', '')}
-          onChange={(value) => updateLocalData({ logoSize: `${value}px` })}
+          value={previewData.logoSize.replace('px', '')}
+          onChange={(value) => handleSizeChange('logoSize', value)}
           min="80"
           max="300"
           step="10"
@@ -103,8 +79,8 @@ export function TypographySettings({ onLocalChange }: TypographySettingsProps) {
 
         <RangeInput
           label="Tamanho do Título"
-          value={localTypographyData.titleSize.replace('px', '')}
-          onChange={(value) => updateLocalData({ titleSize: `${value}px` })}
+          value={previewData.titleSize.replace('px', '')}
+          onChange={(value) => handleSizeChange('titleSize', value)}
           min="24"
           max="72"
           step="2"
@@ -114,8 +90,8 @@ export function TypographySettings({ onLocalChange }: TypographySettingsProps) {
 
         <RangeInput
           label="Tamanho da Descrição"
-          value={localTypographyData.descriptionSize.replace('px', '')}
-          onChange={(value) => updateLocalData({ descriptionSize: `${value}px` })}
+          value={previewData.descriptionSize.replace('px', '')}
+          onChange={(value) => handleSizeChange('descriptionSize', value)}
           min="14"
           max="24"
           step="1"
@@ -138,10 +114,10 @@ export function TypographySettings({ onLocalChange }: TypographySettingsProps) {
                     <button
                       key={font.value}
                       type="button"
-                      onClick={() => updateLocalData({ titleFont: font.value })}
+                      onClick={() => handleFontChange('titleFont', font.value)}
                       className={`
                         p-3 text-left rounded-lg border-2 transition-all hover:bg-gray-50 dark:hover:bg-gray-800
-                        ${localTypographyData.titleFont === font.value 
+                        ${previewData.titleFont === font.value 
                           ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' 
                           : 'border-gray-200 dark:border-gray-700'}
                       `}
@@ -167,10 +143,10 @@ export function TypographySettings({ onLocalChange }: TypographySettingsProps) {
                     <button
                       key={font.value}
                       type="button"
-                      onClick={() => updateLocalData({ bodyFont: font.value })}
+                      onClick={() => handleFontChange('bodyFont', font.value)}
                       className={`
                         p-3 text-left rounded-lg border-2 transition-all hover:bg-gray-50 dark:hover:bg-gray-800
-                        ${localTypographyData.bodyFont === font.value 
+                        ${previewData.bodyFont === font.value 
                           ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' 
                           : 'border-gray-200 dark:border-gray-700'}
                       `}
@@ -191,8 +167,8 @@ export function TypographySettings({ onLocalChange }: TypographySettingsProps) {
         <div className="p-6 bg-gray-50 dark:bg-gray-800 rounded-lg space-y-4">
           <h1 
             style={{ 
-              fontSize: localTypographyData.titleSize,
-              fontFamily: getFontFamily(localTypographyData.titleFont)
+              fontSize: `${previewData.titleSize}px`,
+              fontFamily: getFontFamily(previewData.titleFont)
             }}
             className="mb-4"
           >
@@ -200,8 +176,8 @@ export function TypographySettings({ onLocalChange }: TypographySettingsProps) {
           </h1>
           <p 
             style={{ 
-              fontSize: localTypographyData.descriptionSize,
-              fontFamily: getFontFamily(localTypographyData.bodyFont)
+              fontSize: `${previewData.descriptionSize}px`,
+              fontFamily: getFontFamily(previewData.bodyFont)
             }}
             className="max-w-2xl"
           >
