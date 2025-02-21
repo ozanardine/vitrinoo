@@ -1,38 +1,53 @@
 import { useEffect, useCallback, useState, useMemo } from 'react';
 import { Palette, Droplet, AlertCircle } from 'lucide-react';
-import { Alert } from '@mui/material';
+import { Alert, Snackbar } from '@mui/material';
 import { StoreHeader } from '../../../store/StoreHeader';
 import { useThemeStore } from '../../../../stores/useThemeStore';
 import { useStoreCustomization } from '../StoreCustomizationContext';
-import { useThemePreviewContext } from '../theme-management/ThemePreviewContext';
 import { COLOR_PRESETS } from '../../../../constants/theme';
 import { ColorPicker } from '../forms/ColorPicker';
 import { ThemePresetSelector } from './theme/ThemePresetSelector';
-import { ThemePreviewData } from '../theme-management/types';
 
 interface ThemeSettingsProps {
   selectedPreset: string | null;
-  onPresetChange: (presetId: string | null) => void;
+  onPresetChange: (presetId: string) => void;
+}
+
+interface ThemeData {
+  primaryColor: string;
+  secondaryColor: string;
+  accentColor: string;
+  headerBackground: string;
+  background: string;
 }
 
 interface ValidationError {
-  field: keyof ThemePreviewData;
+  field: keyof ThemeData;
   message: string;
 }
 
 export function ThemeSettings({ selectedPreset, onPresetChange }: ThemeSettingsProps) {
-  const { formData, updatePendingChanges } = useStoreCustomization();
-  const { previewData, updatePreview } = useThemePreviewContext();
+  const { formData, updateFormData } = useStoreCustomization();
   const themeState = useThemeStore();
+  
+  // Estado inicial com valores do formData
+  const initialState = useMemo(() => ({
+    primaryColor: formData.primaryColor,
+    secondaryColor: formData.secondaryColor,
+    accentColor: formData.accentColor,
+    headerBackground: formData.headerBackground || formData.primaryColor,
+    background: formData.primaryColor
+  }), [formData]);
 
+  const [localData, setLocalData] = useState<ThemeData>(initialState);
   const [validationErrors, setValidationErrors] = useState<ValidationError[]>([]);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
-  // Sincronizar com o tema inicial
   useEffect(() => {
     if (formData.primaryColor) {
       themeState.initializeTheme(formData);
     }
-  }, []);
+  }, [formData.primaryColor]);
 
   // Validar cor no formato hexadecimal
   const validateColor = useCallback((color: string): boolean => {
@@ -41,12 +56,12 @@ export function ThemeSettings({ selectedPreset, onPresetChange }: ThemeSettingsP
   }, []);
 
   // Validar todas as cores do tema
-  const validateTheme = useCallback((theme: Partial<ThemePreviewData>): ValidationError[] => {
+  const validateTheme = useCallback((theme: Partial<ThemeData>): ValidationError[] => {
     const errors: ValidationError[] = [];
     Object.entries(theme).forEach(([key, value]) => {
       if (!validateColor(value)) {
         errors.push({
-          field: key as keyof ThemePreviewData,
+          field: key as keyof ThemeData,
           message: `Cor ${key} inválida. Use formato hexadecimal.`
         });
       }
@@ -56,16 +71,16 @@ export function ThemeSettings({ selectedPreset, onPresetChange }: ThemeSettingsP
 
   // Detectar mudanças comparando com o estado inicial
   const hasChanges = useMemo(() => {
-    return Object.entries(previewData).some(([key, value]) => {
+    return Object.entries(localData).some(([key, value]) => {
       if (key === 'headerBackground') {
         return value !== (formData.headerBackground || formData.primaryColor);
       }
       return value !== formData[key as keyof typeof formData];
     });
-  }, [previewData, formData]);
+  }, [localData, formData]);
 
   // Handler para mudança de cores individuais
-  const handleColorChange = useCallback((key: keyof ThemePreviewData) => (color: string) => {
+  const handleColorChange = useCallback((key: keyof ThemeData) => (color: string) => {
     if (!validateColor(color)) {
       setValidationErrors(prev => {
         const filtered = prev.filter(e => e.field !== key);
@@ -77,61 +92,113 @@ export function ThemeSettings({ selectedPreset, onPresetChange }: ThemeSettingsP
     setValidationErrors(prev => prev.filter(error => error.field !== key));
     
     const newData = {
-      ...previewData,
+      ...localData,
       [key]: color,
       ...(key === 'primaryColor' ? { background: color } : {})
     };
 
-    // Atualiza preview
-    updatePreview(newData);
-
-    // Atualiza mudanças pendentes
-    const pendingData = {
-      primary_color: newData.primaryColor,
-      secondary_color: newData.secondaryColor,
-      accent_color: newData.accentColor,
-      header_background: newData.headerBackground,
-      background: newData.background
-    };
-    updatePendingChanges(pendingData, 'theme');
-  }, [previewData, updatePreview, updatePendingChanges, validateColor]);
+    setLocalData(newData);
+    themeState.updateColor(key, color);
+  }, [localData, themeState]);
 
   // Handler para seleção de preset
-  const handlePresetSelect = useCallback((presetId: string, colors: any) => {
-    const updatedData = {
-      primaryColor: colors.primary,
-      secondaryColor: colors.secondary,
-      accentColor: colors.accent,
-      headerBackground: colors.header.background,
-      background: colors.primary
-    };
+  const handlePresetSelect = useCallback(async (presetId: string, colors: any) => {
+    try {
+      const updatedData = {
+        primaryColor: colors.primary,
+        secondaryColor: colors.secondary,
+        accentColor: colors.accent,
+        headerBackground: colors.header.background,
+        background: colors.primary
+      };
 
-    const errors = validateTheme(updatedData);
+      const errors = validateTheme(updatedData);
+      if (errors.length > 0) {
+        setValidationErrors(errors);
+        return;
+      }
+
+      setValidationErrors([]);
+      setLocalData(updatedData);
+
+      // Atualizar estado do tema
+      Object.entries(updatedData).forEach(([key, value]) => {
+        themeState.updateColor(key as keyof ThemeData, value);
+      });
+
+      // Atualizar preview sem salvar
+      updateFormData(updatedData);
+      
+      onPresetChange(presetId);
+      setSuccessMessage('Tema predefinido aplicado com sucesso!');
+    } catch (error) {
+      console.error('Erro ao aplicar preset:', error);
+      setValidationErrors([{
+        field: 'primaryColor',
+        message: 'Erro ao aplicar tema. Tente novamente.'
+      }]);
+    }
+  }, [themeState, onPresetChange, validateTheme, updateFormData]);
+
+  // Handler para aplicar mudanças
+  const handleApplyChanges = useCallback(() => {
+    const errors = validateTheme(localData);
     if (errors.length > 0) {
       setValidationErrors(errors);
       return;
     }
 
+    try {
+      const themeUpdates = {
+        primaryColor: localData.primaryColor,
+        secondaryColor: localData.secondaryColor,
+        accentColor: localData.accentColor,
+        headerBackground: localData.headerBackground,
+        background: localData.background
+      };
+
+      updateFormData(themeUpdates);
+      setValidationErrors([]);
+      setSuccessMessage('Alterações aplicadas com sucesso!');
+    } catch (error) {
+      console.error('Erro ao salvar alterações:', error);
+      setValidationErrors([{
+        field: 'primaryColor',
+        message: 'Erro ao salvar alterações. Tente novamente.'
+      }]);
+    }
+  }, [localData, updateFormData, validateTheme]);
+
+  // Handler para descartar mudanças
+  const handleDiscardChanges = useCallback(() => {
+    setLocalData(initialState);
     setValidationErrors([]);
     
-    // Atualiza preview
-    updatePreview(updatedData);
-
-    // Atualiza mudanças pendentes
-    const pendingData = {
-      primary_color: colors.primary,
-      secondary_color: colors.secondary,
-      accent_color: colors.accent,
-      header_background: colors.header.background,
-      background: colors.primary
-    };
-    updatePendingChanges(pendingData, 'theme');
+    Object.entries(initialState).forEach(([key, value]) => {
+      themeState.updateColor(key as keyof ThemeData, value);
+    });
     
-    onPresetChange(presetId);
-  }, [validateTheme, updatePreview, updatePendingChanges, onPresetChange]);
+    updateFormData(initialState);
+  }, [initialState, themeState, updateFormData]);
 
   return (
     <div className="space-y-8">
+      <Snackbar
+        open={!!successMessage}
+        autoHideDuration={3000}
+        onClose={() => setSuccessMessage(null)}
+        anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
+      >
+        <Alert
+          onClose={() => setSuccessMessage(null)}
+          severity="success"
+          variant="filled"
+          sx={{ width: '100%' }}
+        >
+          {successMessage}
+        </Alert>
+      </Snackbar>
+
       {validationErrors.length > 0 && (
         <Alert
           severity="error"
@@ -166,7 +233,7 @@ export function ThemeSettings({ selectedPreset, onPresetChange }: ThemeSettingsP
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <ColorPicker
             label="Cor Principal"
-            value={previewData.primaryColor}
+            value={localData.primaryColor}
             onChange={handleColorChange('primaryColor')}
             description="Cor de fundo principal"
             presets={COLOR_PRESETS.primary}
@@ -174,7 +241,7 @@ export function ThemeSettings({ selectedPreset, onPresetChange }: ThemeSettingsP
           />
           <ColorPicker
             label="Cor Secundária"
-            value={previewData.secondaryColor}
+            value={localData.secondaryColor}
             onChange={handleColorChange('secondaryColor')}
             description="Cor do texto e elementos de contraste"
             presets={COLOR_PRESETS.secondary}
@@ -182,7 +249,7 @@ export function ThemeSettings({ selectedPreset, onPresetChange }: ThemeSettingsP
           />
           <ColorPicker
             label="Cor de Destaque"
-            value={previewData.accentColor}
+            value={localData.accentColor}
             onChange={handleColorChange('accentColor')}
             description="Cor para botões e elementos interativos"
             presets={COLOR_PRESETS.accent}
@@ -191,7 +258,7 @@ export function ThemeSettings({ selectedPreset, onPresetChange }: ThemeSettingsP
           {formData.headerStyle !== 'image' && (
             <ColorPicker
               label="Cor do Cabeçalho"
-              value={previewData.headerBackground}
+              value={localData.headerBackground}
               onChange={handleColorChange('headerBackground')}
               description="Cor de fundo específica para o cabeçalho"
               presets={COLOR_PRESETS.primary}
@@ -199,6 +266,26 @@ export function ThemeSettings({ selectedPreset, onPresetChange }: ThemeSettingsP
             />
           )}
         </div>
+
+        {hasChanges && (
+          <div className="flex justify-end space-x-4 mt-6">
+            <button
+              type="button"
+              onClick={handleDiscardChanges}
+              className="px-4 py-2 text-gray-600 hover:text-gray-800"
+            >
+              Descartar Alterações
+            </button>
+            <button
+              type="button"
+              onClick={handleApplyChanges}
+              className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+              disabled={validationErrors.length > 0}
+            >
+              Aplicar Alterações
+            </button>
+          </div>
+        )}
       </section>
 
       <section className="space-y-4">
@@ -208,9 +295,9 @@ export function ThemeSettings({ selectedPreset, onPresetChange }: ThemeSettingsP
             name="Nome da Loja"
             description="Uma descrição atraente para sua loja online"
             logoUrl={formData.logoUrl || "/api/placeholder/400/400"}
-            primaryColor={previewData.primaryColor}
-            secondaryColor={previewData.secondaryColor}
-            accentColor={previewData.accentColor}
+            primaryColor={localData.primaryColor}
+            secondaryColor={localData.secondaryColor}
+            accentColor={localData.accentColor}
             socialLinks={[
               { type: 'instagram', url: 'instagram' },
               { type: 'whatsapp', url: '5541999999999' },
@@ -238,7 +325,7 @@ export function ThemeSettings({ selectedPreset, onPresetChange }: ThemeSettingsP
                 contactsPosition: 'above',
                 displayFormat: 'username'
               },
-              headerBackground: previewData.headerBackground,
+              headerBackground: localData.headerBackground,
               preview: true
             }}
           />

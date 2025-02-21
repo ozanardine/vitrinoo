@@ -28,7 +28,7 @@ const DEFAULT_VALUES = {
 // Exportando a interface do contexto
 export interface StoreCustomizationContextType {
   formData: StoreFormData;
-  updatePreview: (updates: Partial<StoreFormData>, section: string) => void;
+  updateFormData: (updates: Partial<StoreFormData>) => void;
   loading: boolean;
   error: string | null;
   activeSection: string;
@@ -82,8 +82,8 @@ export function StoreCustomizationProvider({ children, store, onUpdate }: Provid
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Função para atualizar preview mantendo alterações pendentes
-  const updatePreview = useCallback((updates: Partial<StoreFormData>, section: string) => {
+  // Função para atualizar o estado do formulário sem salvar
+  const updateFormData = useCallback((updates: Partial<StoreFormData>) => {
     const timestamp = Date.now();
     
     setPendingChanges(prev => {
@@ -92,7 +92,7 @@ export function StoreCustomizationProvider({ children, store, onUpdate }: Provid
       Object.entries(updates).forEach(([key, value]) => {
         if (value !== formData[key as keyof StoreFormData]) {
           newChanges[key] = {
-            section,
+            section: activeSection,
             value,
             timestamp,
             previousValue: formData[key as keyof StoreFormData]
@@ -109,7 +109,7 @@ export function StoreCustomizationProvider({ children, store, onUpdate }: Provid
       ...prev,
       ...updates
     }));
-  }, [formData]);
+  }, [formData, activeSection]);
 
   // Função para reverter alterações de uma seção
   const revertSectionChanges = useCallback((section: string) => {
@@ -217,7 +217,7 @@ export function StoreCustomizationProvider({ children, store, onUpdate }: Provid
 
   const contextValue: StoreCustomizationContextType = {
     formData,
-    updatePreview,
+    updateFormData,
     loading,
     error,
     activeSection,
