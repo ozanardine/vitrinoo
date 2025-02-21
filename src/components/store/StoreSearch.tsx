@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { 
   Search, X, Tag, Package, Star, DollarSign, Filter, 
-  ChevronDown, ChevronUp, AlertCircle 
+  ChevronDown, ChevronUp
 } from 'lucide-react';
 import { debounce } from 'lodash';
 
@@ -12,12 +12,14 @@ interface StoreSearchProps {
   brands: string[];
   tags: string[];
   searchResults?: any[];
-  loading?: boolean;
   storeId: string;
   initialProducts?: any[];
   accentColor?: string;
   secondaryColor?: string;
   primaryColor?: string;
+  surfaceColor?: string;
+  borderColor?: string;
+  mutedColor?: string;
   fontFamily?: string;
 }
 
@@ -57,18 +59,22 @@ const INITIAL_FILTERS: SearchFilters = {
   brand: null
 };
 
+
+
 export function StoreSearch({
   onSearch,
   categories,
   brands,
   tags,
   searchResults = [],
-  loading = false,
   storeId,
   initialProducts = [],
   accentColor = '#3B82F6',
   secondaryColor = '#1F2937',
   primaryColor = '#FFFFFF',
+  surfaceColor = '#FFFFFF',
+  borderColor = '#E5E7EB',
+  mutedColor = '#6B7280',
   fontFamily = 'ui-sans-serif, system-ui, sans-serif'
 }: StoreSearchProps) {
   // States
@@ -83,7 +89,7 @@ export function StoreSearch({
   const [isSearching, setIsSearching] = useState(false);
   
   // Refs
-  const filterRef = useRef<HTMLDivElement>(null);
+  const filterRef = useRef<HTMLFormElement>(null);
   const searchTimeoutRef = useRef<NodeJS.Timeout>();
   const searchInputRef = useRef<HTMLInputElement>(null);
 
@@ -149,7 +155,7 @@ export function StoreSearch({
       setIsSearching(true);
       
       // Local filtering
-      const filteredProducts = initialProducts.filter(product => {
+      initialProducts.filter(product => {
         // Text search
         if (newFilters.search && 
             !product.title.toLowerCase().includes(newFilters.search.toLowerCase())) {
@@ -254,28 +260,38 @@ export function StoreSearch({
   // Styles
   const styles = useMemo(() => ({
     input: {
-      backgroundColor: primaryColor,
+      backgroundColor: surfaceColor,
       color: secondaryColor,
-      borderColor: `${secondaryColor}20`
+      borderColor: `${borderColor}`
     },
     button: {
-      backgroundColor: `${secondaryColor}10`,
-      color: secondaryColor,
-      hoverBackgroundColor: `${secondaryColor}20`
+      backgroundColor: `${secondaryColor}15`,
+      color: mutedColor,
+      hoverBackgroundColor: `${secondaryColor}25`
     },
     activeButton: {
-      backgroundColor: `${accentColor}20`,
+      backgroundColor: `${accentColor}25`,
       color: accentColor
     },
     tag: {
-      backgroundColor: `${secondaryColor}10`,
-      color: secondaryColor
+      backgroundColor: `${borderColor}40`,
+      color: mutedColor
     },
     activeTag: {
-      backgroundColor: `${accentColor}20`,
+      backgroundColor: `${accentColor}25`,
       color: accentColor
+    },
+    dropdown: {
+      position: 'absolute',
+      top: '100%',
+      left: '50%',
+      transform: 'translateX(-50%)',
+      marginTop: '0.5rem',
+      backgroundColor: surfaceColor,
+      borderColor: borderColor,
+      boxShadow: `0 10px 25px -5px ${secondaryColor}10, 0 8px 10px -6px ${secondaryColor}10`
     }
-  }), [accentColor, secondaryColor, primaryColor]);
+  }), [accentColor, secondaryColor, primaryColor, surfaceColor, borderColor, mutedColor]);
 
   return (
     <form 
@@ -285,34 +301,38 @@ export function StoreSearch({
       style={{ fontFamily }}
     >
       {/* Search Bar and Quick Filters */}
-      <div className="flex flex-col lg:flex-row gap-4">
+      <div className="flex flex-col lg:flex-row gap-6">
         {/* Search Input */}
-        <div className="relative flex-1">
+        <div className="relative flex-1 group">
           <input
             ref={searchInputRef}
             type="text"
             value={filters.search}
             onChange={(e) => updateFilters({ search: e.target.value })}
             placeholder="Buscar produtos..."
-            className="w-full pl-12 pr-4 py-3 rounded-lg shadow-sm focus:ring-2 
-              focus:ring-opacity-50 transition-all duration-200"
+            className="w-full pl-12 pr-4 py-3.5 rounded-xl shadow-sm focus:ring-2 
+              focus:ring-opacity-50 transition-all duration-300 hover:shadow-md
+              group-hover:shadow-md"
             style={{
               ...styles.input,
-              focusRing: accentColor
+              outlineColor: accentColor,
+              boxShadow: `0 4px 6px -1px ${secondaryColor}20, 0 2px 4px -1px ${secondaryColor}20`
             }}
           />
           <Search 
-            className="absolute left-4 top-3.5 w-5 h-5" 
-            style={{ color: `${secondaryColor}60` }}
+            className="absolute left-4 top-4 w-5 h-5 transition-opacity duration-300
+              group-hover:opacity-80" 
+            style={{ color: `${secondaryColor}80` }}
             aria-hidden="true"
           />
           {filters.search && (
             <button
               type="button"
               onClick={() => updateFilters({ search: '' })}
-              className="absolute right-4 top-3.5 hover:opacity-70 transition-opacity"
-              style={{ color: `${secondaryColor}60` }}
-              aria-label="Limpar busca"
+              className="absolute right-4 top-4 hover:opacity-70 
+                transition-all duration-300 hover:scale-110"
+              style={{ color: `${secondaryColor}80` }}
+              aria-label="Clear search"
             >
               <X className="w-5 h-5" />
             </button>
@@ -320,273 +340,275 @@ export function StoreSearch({
         </div>
 
         {/* Quick Filter Buttons */}
-        <div className="flex gap-2 items-center overflow-x-auto pb-2 lg:pb-0">
+        <div className="flex gap-3 items-center relative">
           {/* Categories */}
-          <button
-            type="button"
-            onClick={() => toggleDropdown('categories')}
-            className="flex items-center gap-2 px-4 py-3 rounded-lg transition-all duration-200"
-            style={filters.categoryId ? styles.activeButton : styles.button}
-            aria-expanded={dropdowns.categories}
-            aria-haspopup="true"
-          >
-            <Package className="w-5 h-5" />
-            <span>{filters.categoryId 
-              ? categories.find(c => c.id === filters.categoryId)?.name 
-              : 'Categorias'}</span>
-            {dropdowns.categories ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-          </button>
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => toggleDropdown('categories')}
+              className="flex items-center gap-2 px-4 py-3 rounded-xl 
+                transition-all duration-300 hover:shadow-md"
+              style={filters.categoryId ? styles.activeButton : styles.button}
+              aria-expanded={dropdowns.categories}
+              aria-haspopup="true"
+            >
+              <Package className="w-5 h-5" />
+              <span>{filters.categoryId 
+                ? categories.find(c => c.id === filters.categoryId)?.name 
+                : 'Categories'}</span>
+              {dropdowns.categories ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+            </button>
+
+            {/* Category Dropdown */}
+            {dropdowns.categories && (
+              <div className="absolute left-0 mt-2 w-64 rounded-lg shadow-lg z-50 overflow-hidden
+                transform transition-all duration-300 ease-out origin-top-left
+                animate-in fade-in slide-in-from-top-2"
+                style={{ 
+                  backgroundColor: primaryColor,
+                  border: `1px solid ${secondaryColor}30`,
+                  boxShadow: `0 10px 15px -3px ${secondaryColor}20, 0 4px 6px -2px ${secondaryColor}20`
+                }}
+              >
+                <div className="p-2 max-h-80 overflow-y-auto custom-scrollbar">
+                  {categories.map(category => (
+                    <button
+                      key={category.id}
+                      type="button"
+                      onClick={() => {
+                        updateFilters({ categoryId: category.id });
+                        toggleDropdown('categories');
+                      }}
+                      className="w-full text-left px-3 py-2 rounded-lg transition-all duration-200
+                        hover:scale-[1.02] active:scale-[0.98]"
+                      style={filters.categoryId === category.id ? styles.activeButton : styles.button}
+                    >
+                      {category.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
 
           {/* Brands */}
-          <button
-            type="button"
-            onClick={() => toggleDropdown('brands')}
-            className="flex items-center gap-2 px-4 py-3 rounded-lg transition-all duration-200"
-            style={filters.brand ? styles.activeButton : styles.button}
-            aria-expanded={dropdowns.brands}
-            aria-haspopup="true"
-          >
-            <Star className="w-5 h-5" />
-            <span>{filters.brand || 'Marcas'}</span>
-            {dropdowns.brands ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-          </button>
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => toggleDropdown('brands')}
+              className="flex items-center gap-2 px-4 py-3 rounded-lg transition-all duration-200"
+              style={filters.brand ? styles.activeButton : styles.button}
+              aria-expanded={dropdowns.brands}
+              aria-haspopup="true"
+            >
+              <Star className="w-5 h-5" />
+              <span>{filters.brand || 'Brands'}</span>
+              {dropdowns.brands ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+            </button>
+
+            {/* Brands Dropdown */}
+            {dropdowns.brands && (
+              <div className="absolute left-0 mt-2 w-64 rounded-lg shadow-lg z-50 overflow-hidden
+                transform transition-all duration-300 ease-out origin-top-left
+                animate-in fade-in slide-in-from-top-2"
+                style={{ 
+                  backgroundColor: primaryColor,
+                  border: `1px solid ${secondaryColor}30`,
+                  boxShadow: `0 10px 15px -3px ${secondaryColor}20, 0 4px 6px -2px ${secondaryColor}20`
+                }}
+              >
+                <div className="p-2 max-h-80 overflow-y-auto custom-scrollbar">
+                  {brands.map(brand => (
+                    <button
+                      key={brand}
+                      type="button"
+                      onClick={() => {
+                        updateFilters({ brand });
+                        toggleDropdown('brands');
+                      }}
+                      className="w-full text-left px-3 py-2 rounded-lg transition-all duration-200
+                        hover:scale-[1.02] active:scale-[0.98]"
+                      style={filters.brand === brand ? styles.activeButton : styles.button}
+                    >
+                      {brand}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
 
           {/* Tags */}
-          <button
-            type="button"
-            onClick={() => toggleDropdown('tags')}
-            className="flex items-center gap-2 px-4 py-3 rounded-lg transition-all duration-200"
-            style={filters.selectedTags.length > 0 ? styles.activeButton : styles.button}
-            aria-expanded={dropdowns.tags}
-            aria-haspopup="true"
-          >
-            <Tag className="w-5 h-5" />
-            <span>Tags {filters.selectedTags.length > 0 && `(${filters.selectedTags.length})`}</span>
-            {dropdowns.tags ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-          </button>
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => toggleDropdown('tags')}
+              className="flex items-center gap-2 px-4 py-3 rounded-lg transition-all duration-200"
+              style={filters.selectedTags.length > 0 ? styles.activeButton : styles.button}
+              aria-expanded={dropdowns.tags}
+              aria-haspopup="true"
+            >
+              <Tag className="w-5 h-5" />
+              <span>Tags {filters.selectedTags.length > 0 && `(${filters.selectedTags.length})`}</span>
+              {dropdowns.tags ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+            </button>
 
-          {/* More Filters */}
-          <button
-            type="button"
-            onClick={() => toggleDropdown('filter')}
-            className="flex items-center gap-2 px-4 py-3 rounded-lg transition-all duration-200 relative"
-            style={activeFiltersCount > 0 ? styles.activeButton : styles.button}
-            aria-expanded={dropdowns.filter}
-            aria-haspopup="true"
-          >
-            <Filter className="w-5 h-5" />
-            <span>Filtros</span>
-            {activeFiltersCount > 0 && (
-              <span 
-                className="absolute -top-2 -right-2 w-5 h-5 rounded-full flex items-center justify-center text-xs"
-                style={{ backgroundColor: accentColor, color: primaryColor }}
-              >
-                {activeFiltersCount}
-              </span>
-            )}
-          </button>
-        </div>
-      </div>
-
-      {/* Category Dropdown */}
-      {dropdowns.categories && (
-        <div className="absolute mt-2 w-64 rounded-lg shadow-lg z-50 overflow-hidden"
-          style={{ 
-            backgroundColor: primaryColor,
-            border: `1px solid ${secondaryColor}20`
-          }}
-        >
-          <div className="p-2 max-h-80 overflow-y-auto custom-scrollbar">
-            {categories.map(category => (
-              <button
-                key={category.id}
-                type="button"
-                onClick={() => {
-                  updateFilters({ categoryId: category.id });
-                  toggleDropdown('categories');
+            {/* Tags Dropdown */}
+            {dropdowns.tags && (
+              <div className="absolute left-0 mt-2 w-80 rounded-lg shadow-lg z-50 overflow-hidden"
+                style={{ 
+                  backgroundColor: primaryColor,
+                  border: `1px solid ${secondaryColor}30`,
+                  boxShadow: `0 10px 15px -3px ${secondaryColor}20, 0 4px 6px -2px ${secondaryColor}20`
                 }}
-                className="w-full text-left px-3 py-2 rounded-lg transition-all duration-200"
-                style={
-                  filters.categoryId === category.id
-                    ? styles.activeButton
-                    : {
-                        ...styles.button,
-                        ':hover': { backgroundColor: styles.button.hoverBackgroundColor }
-                      }
-                }
               >
-                {category.name}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Brands Dropdown */}
-      {dropdowns.brands && (
-        <div className="absolute mt-2 w-64 rounded-lg shadow-lg z-50 overflow-hidden"
-          style={{ 
-            backgroundColor: primaryColor,
-            border: `1px solid ${secondaryColor}20`
-          }}
-        >
-          <div className="p-2 max-h-80 overflow-y-auto custom-scrollbar">
-            {brands.map(brand => (
-              <button
-                key={brand}
-                type="button"
-                onClick={() => {
-                  updateFilters({ brand });
-                  toggleDropdown('brands');
-                }}
-                className="w-full text-left px-3 py-2 rounded-lg transition-all duration-200"
-                style={
-                  filters.brand === brand
-                    ? styles.activeButton
-                    : {
-                        ...styles.button,
-                        ':hover': { backgroundColor: styles.button.hoverBackgroundColor }
-                      }
-                }
-              >
-                {brand}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Tags Dropdown */}
-      {dropdowns.tags && (
-        <div className="absolute mt-2 w-80 rounded-lg shadow-lg z-50 overflow-hidden"
-          style={{ 
-            backgroundColor: primaryColor,
-            border: `1px solid ${secondaryColor}20`
-          }}
-        >
-          <div className="p-3 max-h-80 overflow-y-auto custom-scrollbar">
-            <div className="flex flex-wrap gap-2">
-              {tags.map(tag => (
-                <button
-                  key={tag}
-                  type="button"
-                  onClick={() => toggleTag(tag)}
-                  className="px-3 py-1 rounded-full text-sm transition-all duration-200"
-                  style={
-                    filters.selectedTags.includes(tag)
-                      ? styles.activeButton
-                      : styles.button
-                  }
-                >
-                  {tag}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Advanced Filters Dropdown */}
-      {dropdowns.filter && (
-        <div className="absolute mt-2 w-72 rounded-lg shadow-lg z-50 overflow-hidden"
-          style={{ 
-            backgroundColor: primaryColor,
-            border: `1px solid ${secondaryColor}20`
-          }}
-        >
-          <div className="p-4 space-y-4">
-            {/* Price Range */}
-            <div>
-              <h3 className="font-medium mb-2 flex items-center gap-2">
-                <DollarSign className="w-5 h-5" style={{ color: accentColor }} />
-                <span>Preço</span>
-              </h3>
-              <div className="space-y-4">
-                <div className="flex items-center gap-2">
-                  <div className="relative flex-1">
-                    <span className="absolute left-3 top-2" style={{ color: `${secondaryColor}60` }}>
-                      R$
-                    </span>
-                    <input
-                      type="number"
-                      value={filters.minPrice ?? ''}
-                      onChange={(e) => {
-                        const value = e.target.value === '' ? null : Number(e.target.value);
-                        updateFilters({ minPrice: value });
-                      }}
-                      placeholder="Mínimo"
-                      className="w-full pl-10 p-2 rounded transition-all duration-200"
-                      style={styles.input}
-                      min="0"
-                      step="0.01"
-                    />
-                  </div>
-                  <span style={{ color: `${secondaryColor}60` }}>até</span>
-                  <div className="relative flex-1">
-                    <span className="absolute left-3 top-2" style={{ color: `${secondaryColor}60` }}>
-                      R$
-                    </span>
-                    <input
-                      type="number"
-                      value={filters.maxPrice ?? ''}
-                      onChange={(e) => {
-                        const value = e.target.value === '' ? null : Number(e.target.value);
-                        updateFilters({ maxPrice: value });
-                      }}
-                      placeholder="Máximo"
-                      className="w-full pl-10 p-2 rounded transition-all duration-200"
-                      style={styles.input}
-                      min="0"
-                      step="0.01"
-                    />
+                <div className="p-3 max-h-80 overflow-y-auto custom-scrollbar">
+                  <div className="flex flex-wrap gap-2">
+                    {tags.map(tag => (
+                      <button
+                        key={tag}
+                        type="button"
+                        onClick={() => toggleTag(tag)}
+                        className="px-3 py-1 rounded-full text-sm transition-all duration-200"
+                        style={
+                          filters.selectedTags.includes(tag)
+                            ? styles.activeButton
+                            : styles.button
+                        }
+                      >
+                        {tag}
+                      </button>
+                    ))}
                   </div>
                 </div>
-
-                {/* Promotion Checkbox */}
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={filters.hasPromotion === true}
-                    onChange={(e) => {
-                      updateFilters({ hasPromotion: e.target.checked ? true : null });
-                    }}
-                    className="rounded transition-colors"
-                    style={{ 
-                      accentColor: accentColor,
-                      borderColor: `${secondaryColor}40`
-                    }}
-                  />
-                  <span style={{ color: secondaryColor }}>
-                    Somente produtos em promoção
-                  </span>
-                </label>
               </div>
-            </div>
+            )}
+          </div>
 
-            {/* Action Buttons */}
-            <div className="pt-4 border-t flex justify-between items-center"
-              style={{ borderColor: `${secondaryColor}20` }}
+          {/* More Filters */}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => toggleDropdown('filter')}
+              className="flex items-center gap-2 px-4 py-3 rounded-lg transition-all duration-200 relative"
+              style={activeFiltersCount > 0 ? styles.activeButton : styles.button}
+              aria-expanded={dropdowns.filter}
+              aria-haspopup="true"
             >
-              <button
-                type="button"
-                onClick={clearFilters}
-                className="text-sm transition-colors"
-                style={{ color: `${accentColor}` }}
+              <Filter className="w-5 h-5" />
+              <span>Filtros</span>
+              {activeFiltersCount > 0 && (
+                <span 
+                  className="absolute -top-2 -right-2 w-5 h-5 rounded-full flex items-center justify-center text-xs"
+                  style={{ backgroundColor: accentColor, color: primaryColor }}
+                >
+                  {activeFiltersCount}
+                </span>
+              )}
+            </button>
+
+            {/* Advanced Filters Dropdown */}
+            {dropdowns.filter && (
+              <div className="absolute right-0 mt-2 w-72 rounded-lg shadow-lg z-50 overflow-hidden"
+                style={{ 
+                  backgroundColor: primaryColor,
+                  border: `1px solid ${secondaryColor}30`,
+                  boxShadow: `0 10px 15px -3px ${secondaryColor}20, 0 4px 6px -2px ${secondaryColor}20`
+                }}
               >
-                Limpar filtros
-              </button>
-              <button
-                type="button"
-                onClick={() => toggleDropdown('filter')}
-                className="text-sm transition-colors"
-                style={{ color: accentColor }}
-              >
-                Fechar
-              </button>
-            </div>
+                <div className="p-4 space-y-4">
+                  {/* Price Range */}
+                  <div>
+                    <h3 className="font-medium mb-2 flex items-center gap-2">
+                      <DollarSign className="w-5 h-5" style={{ color: accentColor }} />
+                      <span style={{ color: secondaryColor }}>Preço</span>
+                    </h3>
+                    <div className="space-y-4">
+                      <div className="flex items-center gap-2">
+                        <div className="relative flex-1">
+                          <span className="absolute left-3 top-2" style={{ color: `${secondaryColor}80` }}>
+                            R$
+                          </span>
+                          <input
+                            type="number"
+                            value={filters.minPrice ?? ''}
+                            onChange={(e) => {
+                              const value = e.target.value === '' ? null : Number(e.target.value);
+                              updateFilters({ minPrice: value });
+                            }}
+                            placeholder="Mínimo"
+                            className="w-full pl-10 p-2 rounded transition-all duration-200"
+                            style={{
+                              ...styles.input,
+                              borderColor: `${secondaryColor}30`
+                            }}
+                            min="0"
+                            step="0.01"
+                          />
+                        </div>
+                        <span style={{ color: `${secondaryColor}80` }}>até</span>
+                        <div className="relative flex-1">
+                          <span className="absolute left-3 top-2" style={{ color: `${secondaryColor}80` }}>
+                            R$
+                          </span>
+                          <input
+                            type="number"
+                            value={filters.maxPrice ?? ''}
+                            onChange={(e) => {
+                              const value = e.target.value === '' ? null : Number(e.target.value);
+                              updateFilters({ maxPrice: value });
+                            }}
+                            placeholder="Máximo"
+                            className="w-full pl-10 p-2 rounded transition-all duration-200"
+                            style={{
+                              ...styles.input,
+                              borderColor: `${secondaryColor}30`
+                            }}
+                            min="0"
+                            step="0.01"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Promotion Checkbox */}
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={filters.hasPromotion === true}
+                          onChange={(e) => {
+                            updateFilters({ hasPromotion: e.target.checked ? true : null });
+                          }}
+                          className="rounded transition-colors"
+                          style={{ 
+                            accentColor: accentColor,
+                            borderColor: `${secondaryColor}40`
+                          }}
+                        />
+                        <span style={{ color: secondaryColor }}>
+                          Apenas produtos em promoção
+                        </span>
+                      </label>
+                    </div>
+                  </div>
+
+                  {/* Clear Filters Button */}
+                  <button
+                    type="button"
+                    onClick={clearFilters}
+                    className="w-full py-2 rounded-lg transition-all duration-200 mt-4"
+                    style={{
+                      backgroundColor: `${accentColor}15`,
+                      color: accentColor
+                    }}
+                  >
+                    Limpar Filtros
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
-      )}
+      </div>
 
       {/* Active Filters */}
       {activeFiltersCount > 0 && (

@@ -3,14 +3,30 @@ import { Package } from 'lucide-react';
 import { Product } from '../../lib/types';
 import ReactMarkdown from 'react-markdown';
 
+// Font family mapping function
+const getFontFamily = (font: string) => {
+  const fontMap: Record<string, string> = {
+    'roboto': 'Roboto',
+    'open-sans': 'Open Sans',
+    'lato': 'Lato',
+    'montserrat': 'Montserrat',
+    'playfair': 'Playfair Display',
+    'merriweather': 'Merriweather',
+    'source-code-pro': 'Source Code Pro',
+    'fira-mono': 'Fira Mono'
+  };
+  return fontMap[font] || font || 'system-ui';
+};
+
 interface ProductCardProps extends React.HTMLAttributes<HTMLDivElement> {
   product: Product;
   onClick: () => void;
   view?: 'grid' | 'list';
-  style?: 'default' | 'compact' | 'minimal';
+  variant?: 'default' | 'compact' | 'minimal';
   accentColor?: string;
   secondaryColor?: string;
   primaryColor?: string;
+  surfaceColor?: string;
   fontFamily?: string;
 }
 
@@ -18,25 +34,15 @@ export function ProductCard({
   product, 
   onClick, 
   view = 'grid', 
-  style = 'default', 
+  variant = 'default', 
   className = '',
-  accentColor = '#3B82F6',
-  secondaryColor = '#1F2937',
-  primaryColor = '#FFFFFF',
-  fontFamily = 'ui-sans-serif, system-ui, sans-serif',
+  accentColor,
+  secondaryColor,
+  primaryColor,
+  surfaceColor,
+  fontFamily,
   ...props 
 }: ProductCardProps) {
-  // Memoize type label
-  const typeLabel = useMemo(() => {
-    switch (product.type) {
-      case 'variable': return 'Produto com Variações';
-      case 'kit': return 'Kit/Combo';
-      case 'manufactured': return 'Produto Fabricado';
-      case 'service': return 'Serviço';
-      default: return 'Produto Simples';
-    }
-  }, [product.type]);
-
   // Memoize discount percentage
   const discountPercentage = useMemo(() => {
     if (!product.promotional_price) return 0;
@@ -57,13 +63,14 @@ export function ProductCard({
         onClick={onClick}
         className={`
           relative overflow-hidden rounded-lg shadow-sm hover:shadow-md 
-          transition-all duration-300 cursor-pointer group flex
+          transition-all duration-300 cursor-pointer group
           ${className}
         `}
         style={{
-          backgroundColor: primaryColor,
+          backgroundColor: surfaceColor,
           color: secondaryColor,
-          fontFamily
+          fontFamily: getFontFamily(fontFamily || ''),
+          borderColor: `${secondaryColor}20`
         }}
         role="button"
         tabIndex={0}
@@ -71,7 +78,7 @@ export function ProductCard({
       >
         <div className={`
           relative overflow-hidden flex-shrink-0
-          ${style === 'compact' ? 'w-32 h-32' : 'w-48 h-48'}
+          ${variant === 'compact' ? 'w-32 h-32' : 'w-48 h-48'}
         `}
         style={{ backgroundColor: `${secondaryColor}10` }}>
           {product.images?.[0] ? (
@@ -84,12 +91,12 @@ export function ProductCard({
             />
           ) : (
             <div className="w-full h-full flex items-center justify-center">
-              <Package className="w-12 h-12" style={{ color: `${secondaryColor}40` }} />
+              <Package className="w-12 h-12" style={{ color: `${primaryColor}` }} />
             </div>
           )}
           {product.promotional_price && (
             <div 
-              className="absolute top-2 right-2 px-2 py-1 rounded-full text-sm font-medium"
+              className="absolute top-2 right-2 px-2 py-1 rounded-full text-sm font-medium shadow-sm"
               style={{ backgroundColor: accentColor, color: primaryColor }}
             >
               {discountPercentage}% OFF
@@ -101,7 +108,7 @@ export function ProductCard({
           <div className="mb-4">
             <div className="flex justify-between items-start">
               <div>
-                <h3 className="text-xl font-semibold mb-2">{product.title}</h3>
+                <h3 className="text-xl font-semibold mb-2" style={{ color: secondaryColor }}>{product.title}</h3>
                 <p className="text-sm mb-2" style={{ color: `${secondaryColor}80` }}>
                   {product.brand}
                 </p>
@@ -156,14 +163,14 @@ export function ProductCard({
       className={`
         relative overflow-hidden rounded-lg shadow-sm hover:shadow-md 
         transition-all duration-300 cursor-pointer group w-full
-        ${style === 'minimal' ? 'border-0' : 'border border-opacity-10'}
+        ${variant === 'minimal' ? 'border-0' : 'border'}
         ${className}
       `}
       style={{
-        backgroundColor: primaryColor,
+        backgroundColor: surfaceColor,
         color: secondaryColor,
-        borderColor: secondaryColor,
-        fontFamily
+        borderColor: `${secondaryColor}20`,
+        fontFamily: getFontFamily(fontFamily || '')
       }}
       role="button"
       tabIndex={0}
@@ -171,8 +178,8 @@ export function ProductCard({
     >
       <div className={`
         relative overflow-hidden
-        ${style === 'minimal' ? 'aspect-[4/5]' : 
-          style === 'compact' ? 'aspect-[3/2]' : 
+        ${variant === 'minimal' ? 'aspect-[4/5]' : 
+          variant === 'compact' ? 'aspect-[3/2]' : 
           'aspect-square'}
       `}
       style={{ backgroundColor: `${secondaryColor}10` }}>
@@ -186,114 +193,100 @@ export function ProductCard({
           />
         ) : (
           <div className="w-full h-full flex items-center justify-center">
-            <Package className="w-12 h-12" style={{ color: `${secondaryColor}40` }} />
+            <Package className="w-12 h-12" style={{ color: `${primaryColor}` }} />
           </div>
         )}
         {product.promotional_price && (
           <div 
-            className="absolute top-2 right-2 px-2 py-1 rounded-full text-sm font-medium"
+            className="absolute top-2 right-2 px-2 py-1 rounded-full text-sm font-medium shadow-sm"
             style={{ backgroundColor: accentColor, color: primaryColor }}
           >
             {discountPercentage}% OFF
           </div>
         )}
-        <div className="absolute bottom-2 left-2">
-          <span 
-            className="px-2 py-1 text-xs rounded-full"
-            style={{ backgroundColor: accentColor, color: primaryColor }}
-          >
-            {typeLabel}
-          </span>
-        </div>
       </div>
 
       <div className={`
-        ${style === 'minimal' ? 'p-3 text-center' : 'p-4'}
-        ${style === 'compact' ? 'flex items-center justify-between' : ''}
-        ${style === 'minimal' ? 'space-y-2' : ''}
+        ${variant === 'minimal' ? 'p-3' : 'p-4'}
+        ${variant === 'compact' ? 'flex items-center justify-between' : 'flex flex-col'}
+        ${variant === 'minimal' ? 'space-y-2' : 'space-y-3'}
+        flex flex-col min-h-[120px]
       `}>
-        <div className={style !== 'minimal' ? 'mb-2' : ''}>
+        <div className="flex-1 space-y-2">
           <h3 className={`
-            font-semibold line-clamp-1
-            ${style === 'minimal' ? 'text-base' : 'text-lg'}
-          `}>
+            font-semibold line-clamp-2
+            ${variant === 'minimal' ? 'text-base' : 'text-lg'}
+          `}
+          style={{ color: secondaryColor }}>
             {product.title}
           </h3>
           <p className={`
             text-sm
-            ${style === 'minimal' ? 'text-center' : ''}
+            ${variant === 'minimal' ? 'text-center' : ''}
           `}
           style={{ color: `${secondaryColor}80` }}>
             {product.brand}
           </p>
+
+          {variant !== 'compact' && (
+            <div className={`
+              prose-sm line-clamp-2
+              ${variant === 'minimal' ? 'text-sm' : ''}
+            `}
+            style={{ color: `${secondaryColor}90` }}>
+              <ReactMarkdown>{product.description}</ReactMarkdown>
+            </div>
+          )}
+
+          {product.tags && product.tags.length > 0 && (
+            <div className="flex flex-wrap gap-1 mt-2">
+              {product.tags.slice(0, 3).map((tag) => (
+                <span
+                  key={tag}
+                  className="text-xs px-2 py-1 rounded-full transition-all hover:scale-105"
+                  style={{ 
+                    backgroundColor: `${secondaryColor}10`,
+                    color: secondaryColor
+                  }}
+                >
+                  {tag}
+                </span>
+              ))}
+              {product.tags.length > 3 && (
+                <span 
+                  className="text-xs px-2 py-1 rounded-full transition-all hover:scale-105"
+                  style={{ 
+                    backgroundColor: `${secondaryColor}10`,
+                    color: secondaryColor
+                  }}
+                >
+                  +{product.tags.length - 3}
+                </span>
+              )}
+            </div>
+          )}
         </div>
 
-        {style !== 'compact' && (
+        <div className="mt-auto">
           <div className={`
-            prose-sm line-clamp-2 mb-3
-            ${style === 'minimal' ? 'h-8 text-sm' : 'h-10'}
-            ${style === 'minimal' ? 'text-center' : ''}
-          `}
-          style={{ color: `${secondaryColor}90` }}>
-            <ReactMarkdown>{product.description}</ReactMarkdown>
-          </div>
-        )}
-
-        {style !== 'compact' && (
-          <div className={`
-            flex flex-wrap gap-1 mb-3
-            ${style === 'minimal' ? 'justify-center' : ''}
+            ${variant === 'minimal' ? 'text-center' : ''}
+            ${variant === 'compact' ? 'text-right' : ''}
           `}>
-            {product.tags.slice(0, 3).map((tag) => (
-              <span
-                key={tag}
-                className={`
-                  text-xs px-2 py-1 rounded-full
-                  ${style === 'minimal' ? 'inline-block mx-1' : ''}
-                `}
-                style={{ 
-                  backgroundColor: `${secondaryColor}10`,
-                  color: secondaryColor
-                }}
-              >
-                {tag}
-              </span>
-            ))}
-            {product.tags.length > 3 && (
-              <span
-                className={`
-                  text-xs px-2 py-1 rounded-full
-                  ${style === 'minimal' ? 'inline-block mx-1' : ''}
-                `}
-                style={{ 
-                  backgroundColor: `${secondaryColor}10`,
-                  color: secondaryColor
-                }}
-              >
-                +{product.tags.length - 3}
-              </span>
-            )}
-          </div>
-        )}
-
-        <div className={`
-          ${style === 'minimal' ? 'text-center' : 'mt-auto'}
-          ${style === 'compact' ? 'text-right' : ''}
-        `}>
-          {product.promotional_price ? (
-            <div className="space-y-1">
-              <p className="text-sm line-through" style={{ color: `${secondaryColor}60` }}>
+            {product.promotional_price ? (
+              <div className="space-y-1">
+                <p className="text-sm line-through" style={{ color: `${secondaryColor}60` }}>
+                  R$ {product.price.toFixed(2)}
+                </p>
+                <p className="text-lg font-bold" style={{ color: accentColor }}>
+                  R$ {product.promotional_price.toFixed(2)}
+                </p>
+              </div>
+            ) : (
+              <p className="text-lg font-bold" style={{ color: secondaryColor }}>
                 R$ {product.price.toFixed(2)}
               </p>
-              <p className="text-lg font-bold" style={{ color: accentColor }}>
-                R$ {product.promotional_price.toFixed(2)}
-              </p>
-            </div>
-          ) : (
-            <p className="text-lg font-bold" style={{ color: secondaryColor }}>
-              R$ {product.price.toFixed(2)}
-            </p>
-          )}
+            )}
+          </div>
         </div>
       </div>
     </div>

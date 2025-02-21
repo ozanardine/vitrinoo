@@ -116,8 +116,10 @@ export function StoreHeader({
   const themeColors = useMemo(() => ({
     text: secondaryColor,
     muted: `${secondaryColor}80`,
-    accent: accentColor
-  }), [secondaryColor, accentColor]);
+    accent: accentColor,
+    surface: customization.surfaceColor || '#FFFFFF',
+    border: customization.borderColor || '#E5E7EB'
+  }), [secondaryColor, accentColor, customization]);
 
   // Estilos do container de conteúdo
   const contentStyles = useMemo(() => ({
@@ -218,7 +220,7 @@ export function StoreHeader({
                 transition-all duration-300 backdrop-blur-sm hover:scale-105
                 hover:shadow-md"
               style={{
-                backgroundColor: `${themeColors.text}15`,
+                backgroundColor: `${themeColors.surface}15`,
                 color: themeColors.text
               }}
               aria-label={`Visite nosso ${SOCIAL_NAMES[link.type as keyof typeof SOCIAL_NAMES]}`}
@@ -256,13 +258,13 @@ export function StoreHeader({
         {/* Logo */}
         {customization.headerVisibility.logo && logoUrl && (
           <div 
-            className="mx-auto mb-8 rounded-lg overflow-hidden bg-white/10 
+            className="mx-auto mb-8 rounded-lg overflow-hidden
               flex items-center justify-center backdrop-blur-sm 
               transition-all duration-300"
             style={{ 
               width: customization.logoSize,
               height: customization.logoSize,
-              backgroundColor: `${themeColors.text}10`
+              backgroundColor: `${themeColors.surface}05`
             }}
           >
             <img 

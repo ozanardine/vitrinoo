@@ -1,5 +1,3 @@
-import { User } from '@supabase/supabase-js';
-
 export interface Product {
   id: string;
   title: string;
@@ -53,6 +51,8 @@ export interface Store {
   accent_color: string;
   header_background: string;
   background: string;
+  border_color: string;
+  surface_color: string;
   
   // Configurações do cabeçalho
   header_style: 'solid' | 'gradient' | 'image';
@@ -131,5 +131,17 @@ export interface StoreHeaderCustomization {
     displayFormat: 'username' | 'network';
   };
   headerBackground: string;
+  surfaceColor?: string;
+  borderColor?: string;
   preview?: boolean;
+}
+
+export interface Category {
+  id: string;
+  name: string;
+  slug: string;
+  parent_id: string | null;
+  store_id: string;
+  children?: Category[];
+  level?: number;
 }

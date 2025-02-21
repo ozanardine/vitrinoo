@@ -2,6 +2,7 @@ import React from 'react';
 import { StoreHeader } from './StoreHeader';
 import { StoreFooter } from './StoreFooter';
 import { Store } from '../../lib/types';
+import { useThemeStore } from '../../stores/useThemeStore';
 
 interface StoreLayoutProps {
   store: Store;
@@ -9,12 +10,15 @@ interface StoreLayoutProps {
 }
 
 export function StoreLayout({ store, children }: StoreLayoutProps) {
+  const themeState = useThemeStore();
+
   return (
     <div 
       className="min-h-screen transition-colors duration-200"
       style={{
         backgroundColor: store.primary_color,
-        color: store.secondary_color
+        color: store.secondary_color,
+        borderColor: store.border_color || themeState.borderColor
       }}
     >
       {/* Store Header */}
@@ -49,7 +53,12 @@ export function StoreLayout({ store, children }: StoreLayoutProps) {
         className={`${store.container_width === 'max-w-full' 
           ? 'container-fluid px-4'
           : `container mx-auto px-4 ${store.container_width}`} transition-all duration-200`}
-        style={{ fontFamily: store.body_font }}
+        style={{ 
+          fontFamily: store.body_font,
+          backgroundColor: store.primary_color || themeState.surfaceColor,
+          color: store.secondary_color,
+          borderColor: store.border_color || themeState.borderColor
+        }}
       >
         {children}
       </main>

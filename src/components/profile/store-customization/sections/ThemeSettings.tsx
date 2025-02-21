@@ -1,5 +1,5 @@
 import { useEffect, useCallback, useState } from 'react';
-import { Palette, Droplet, AlertCircle, Grid } from 'lucide-react';
+import { Palette, Droplet, AlertCircle, Grid, Package } from 'lucide-react';
 import { Alert } from '@mui/material';
 import { StoreHeader } from '../../../store/StoreHeader';
 import { useThemeStore } from '../../../../stores/useThemeStore';
@@ -19,6 +19,9 @@ interface ThemeData {
   accentColor: string;
   headerBackground: string;
   background: string;
+  surfaceColor: string;
+  borderColor: string;
+  mutedColor: string;
 }
 
 interface ValidationError {
@@ -91,7 +94,10 @@ export function ThemeSettings({ selectedPreset, onPresetChange }: ThemeSettingsP
         secondaryColor: colors.secondary,
         accentColor: colors.accent,
         headerBackground: colors.header.background,
-        background: colors.primary
+        background: colors.primary,
+        surfaceColor: colors.surface,
+        borderColor: colors.border,
+        mutedColor: colors.muted
       };
 
       const errors = validateTheme(updatedData);
@@ -199,6 +205,30 @@ export function ThemeSettings({ selectedPreset, onPresetChange }: ThemeSettingsP
               error={validationErrors.find(e => e.field === 'headerBackground')?.message}
             />
           )}
+          <ColorPicker
+            label="Cor de Superfície"
+            value={previewData.surfaceColor}
+            onChange={handleColorChange('surfaceColor')}
+            description="Cor para dropdowns, cards e elementos elevados"
+            presets={COLOR_PRESETS.surface}
+            error={validationErrors.find(e => e.field === 'surfaceColor')?.message}
+          />
+          <ColorPicker
+            label="Cor de Borda"
+            value={previewData.borderColor}
+            onChange={handleColorChange('borderColor')}
+            description="Cor para bordas e divisores"
+            presets={COLOR_PRESETS.border}
+            error={validationErrors.find(e => e.field === 'borderColor')?.message}
+          />
+          <ColorPicker
+            label="Cor Secundária"
+            value={previewData.mutedColor}
+            onChange={handleColorChange('mutedColor')}
+            description="Cor para textos secundários e estados desabilitados"
+            presets={COLOR_PRESETS.secondary}
+            error={validationErrors.find(e => e.field === 'mutedColor')?.message}
+          />
         </div>
       </section>
 
@@ -207,7 +237,7 @@ export function ThemeSettings({ selectedPreset, onPresetChange }: ThemeSettingsP
           <Grid className="w-5 h-5" />
           Preview do Layout
         </h3>
-        <div className="rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700">
+        <div className="rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
           <StoreHeader
             name="Nome da Loja"
             description="Uma descrição atraente para sua loja online"
@@ -246,6 +276,92 @@ export function ThemeSettings({ selectedPreset, onPresetChange }: ThemeSettingsP
               preview: true
             }}
           />
+          
+          <div className="p-8" style={{ backgroundColor: previewData.primaryColor }}>
+            <div className="max-w-3xl mx-auto mb-8">
+              <div className="relative">
+                <input
+                  type="text"
+                  placeholder="Buscar produtos..."
+                  className="w-full px-4 py-3 rounded-lg shadow-sm transition-all"
+                  style={{
+                    backgroundColor: previewData.surfaceColor,
+                    color: previewData.secondaryColor,
+                    borderColor: `${previewData.borderColor}40`
+                  }}
+                  readOnly
+                />
+                <div 
+                  className="absolute right-3 top-1/2 -translate-y-1/2 p-2 rounded-full"
+                  style={{ backgroundColor: previewData.accentColor }}
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className="w-4 h-4"
+                    style={{ color: '#FFFFFF' }}
+                  >
+                    <circle cx="11" cy="11" r="8" />
+                    <path d="m21 21-4.3-4.3" />
+                  </svg>
+                </div>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {[1, 2, 3].map((index) => (
+                <div 
+                  key={index}
+                  className="rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-all"
+                  style={{ backgroundColor: previewData.surfaceColor, borderColor: previewData.borderColor }}
+                >
+                  <div className="aspect-square bg-gray-100 relative">
+                    <div className="absolute inset-0 flex items-center justify-center" style={{ backgroundColor: previewData.secondaryColor, color: '#FFFFFF' }}>
+                      <Package className="w-8 h-8 text-gray-400"/>
+                    </div>
+                    <div 
+                      className="absolute top-2 left-2 px-2 py-1 rounded-full text-sm font-medium"
+                      style={{ backgroundColor: previewData.accentColor, color: '#FFFFFF' }}
+                    >
+                      Novo
+                    </div>
+                  </div>
+                  <div className="p-4">
+                    <h3 
+                      className="font-semibold text-lg mb-2"
+                      style={{ color: previewData.secondaryColor }}
+                    >
+                      Produto Exemplo {index}
+                    </h3>
+                    <p 
+                      className="text-sm mb-3"
+                      style={{ color: previewData.mutedColor }}
+                    >
+                      Descrição breve do produto exemplo para demonstração do layout
+                    </p>
+                    <div className="flex gap-2">
+                      <span 
+                        className="text-xs px-2 py-1 rounded-full"
+                        style={{ backgroundColor: `${previewData.borderColor}40`, color: previewData.mutedColor }}
+                      >
+                        Tag 1
+                      </span>
+                      <span 
+                        className="text-xs px-2 py-1 rounded-full"
+                        style={{ backgroundColor: `${previewData.borderColor}40`, color: previewData.mutedColor }}
+                      >
+                        Tag 2
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       </section>
     </div>

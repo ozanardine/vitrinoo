@@ -9,6 +9,9 @@ interface ThemeState {
   headerBackground: string;
   headerStyle: 'solid' | 'gradient' | 'image';
   selectedPreset: string | null;
+  surfaceColor: string;
+  borderColor: string;
+  mutedColor: string;
 }
 
 interface ThemeStore extends ThemeState {
@@ -26,6 +29,9 @@ export const useThemeStore = create<ThemeStore>((set) => ({
   headerBackground: '#ffffff',
   headerStyle: 'solid',
   selectedPreset: null,
+  surfaceColor: '#ffffff',
+  borderColor: '#e5e7eb',
+  mutedColor: '#6b7280',
 
   updateColor: (key, value) => set(state => ({ ...state, [key]: value })),
 

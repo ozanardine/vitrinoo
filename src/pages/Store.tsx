@@ -88,7 +88,6 @@ export function Store() {
           categories={categories}
           brands={brands}
           tags={tags}
-          loading={searchLoading}
           searchResults={products}
           accentColor={store.accent_color}
           secondaryColor={store.secondary_color}
@@ -128,27 +127,32 @@ export function Store() {
           </p>
         </div>
       ) : (
-        <div 
-          className={`grid ${gridConfig.gridTemplateColumns} transition-all duration-300`}
-          style={{ 
-            gap: gridConfig.gap,
-            opacity: searchLoading ? '0.5' : '1'
-          }}
-        >
-          {sortedProducts.map((product) => (
-            <ProductCard
-              key={product.id}
-              product={product}
-              onClick={() => setSelectedProduct(product)}
-              view={currentView}
-              style={store.product_card_style}
-              accentColor={store.accent_color}
-              secondaryColor={store.secondary_color}
-              primaryColor={store.primary_color}
-              className="transition-all duration-300 hover:scale-[1.02]"
-              fontFamily={store.body_font}
-            />
-          ))}
+        <div data-store-content className="min-h-screen">
+          <style>
+            {getScrollbarStyles(store.accent_color, store.secondary_color)}
+          </style>
+          <div 
+            className={`grid ${gridConfig.gridTemplateColumns} transition-all duration-300`}
+            style={{ 
+              gap: gridConfig.gap,
+              opacity: searchLoading ? '0.5' : '1'
+            }}
+          >
+            {sortedProducts.map((product) => (
+              <ProductCard
+                key={product.id}
+                product={product}
+                onClick={() => setSelectedProduct(product)}
+                view={currentView}
+                style={store.product_card_style}
+                accentColor={store.accent_color}
+                secondaryColor={store.secondary_color}
+                primaryColor={store.primary_color}
+                className="transition-all duration-300 hover:scale-[1.02]"
+                fontFamily={store.body_font}
+              />
+            ))}
+          </div>
         </div>
       )}
 
@@ -167,3 +171,24 @@ export function Store() {
     </StoreLayout>
   );
 }
+const getScrollbarStyles = (accentColor: string, secondaryColor: string) => `
+  [data-store-content] ::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+  }
+
+  [data-store-content] ::-webkit-scrollbar-track {
+    background: ${secondaryColor}10;
+    border-radius: 5px;
+  }
+
+  [data-store-content] ::-webkit-scrollbar-thumb {
+    background-color: ${accentColor}40;
+    border-radius: 5px;
+    transition: all 0.3s ease;
+  }
+
+  [data-store-content] ::-webkit-scrollbar-thumb:hover {
+    background-color: ${accentColor}60;
+  }
+`;

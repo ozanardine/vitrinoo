@@ -1,12 +1,11 @@
-import React from 'react';
 import { Search } from 'lucide-react';
 import { ProductTypeSelector } from '../ProductTypeSelector';
 
 interface BasicInfoProps {
   form: any;
   setForm: (form: any) => void;
-  productType: string;
-  setProductType: (type: 'simple' | 'variable' | 'kit' | 'manufactured') => void;
+  productType: 'simple' | 'variable' | 'kit' | 'manufactured' | 'service';
+  setProductType: (type: 'simple' | 'variable' | 'kit' | 'manufactured' | 'service') => void;
   categories: any[];
   onOpenCategoryModal: () => void;
   disabled?: boolean;

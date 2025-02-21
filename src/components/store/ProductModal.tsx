@@ -6,23 +6,27 @@ import { Modal } from '../Modal';
 
 // Styles para o scrollbar customizado
 const getScrollbarStyles = (accentColor: string, secondaryColor: string) => `
-  .product-modal-scrollbar::-webkit-scrollbar {
-    width: 2px;
-    height: 2px;
+  [data-product-modal-content] ::-webkit-scrollbar,
+  [data-product-modal-content] *::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
   }
 
-  .product-modal-scrollbar::-webkit-scrollbar-track {
+  [data-product-modal-content] ::-webkit-scrollbar-track,
+  [data-product-modal-content] *::-webkit-scrollbar-track {
     background: ${secondaryColor}10;
     border-radius: 5px;
   }
 
-  .product-modal-scrollbar::-webkit-scrollbar-thumb {
+  [data-product-modal-content] ::-webkit-scrollbar-thumb,
+  [data-product-modal-content] *::-webkit-scrollbar-thumb {
     background-color: ${accentColor}40;
     border-radius: 5px;
     transition: all 0.3s ease;
   }
 
-  .product-modal-scrollbar::-webkit-scrollbar-thumb:hover {
+  [data-product-modal-content] ::-webkit-scrollbar-thumb:hover,
+  [data-product-modal-content] *::-webkit-scrollbar-thumb:hover {
     background-color: ${accentColor}60;
   }
 `;
@@ -50,6 +54,14 @@ export function ProductModal({
   const [imageLoaded, setImageLoaded] = useState(false);
   const [selectedAttributes, setSelectedAttributes] = useState<Record<string, string>>({});
 
+  // Calculate text colors for better contrast
+  const textColor = calculateTextColor(primaryColor) === 'light' ? '#FFFFFF' : secondaryColor;
+  const mutedTextColor = calculateTextColor(primaryColor) === 'light' 
+    ? 'rgba(255, 255, 255, 0.7)' 
+    : `${secondaryColor}80`;
+  const surfaceColor = `${secondaryColor}05`;
+  const borderColor = `${secondaryColor}10`;
+
   // Reset image loaded state when changing images
   useEffect(() => {
     setImageLoaded(false);
@@ -73,11 +85,31 @@ export function ProductModal({
     };
   }, [accentColor, secondaryColor]);
 
-  // Calculate text colors for better contrast
-  const textColor = calculateTextColor(primaryColor) === 'light' ? '#FFFFFF' : secondaryColor;
-  const mutedTextColor = calculateTextColor(primaryColor) === 'light' 
-    ? 'rgba(255, 255, 255, 0.7)' 
-    : `${secondaryColor}80`;
+  // Inject scrollbar and prose styles
+  useEffect(() => {
+    const styleId = 'product-modal-styles';
+    if (!document.getElementById(styleId)) {
+      const style = document.createElement('style');
+      style.id = styleId;
+      style.innerHTML = `
+        ${getScrollbarStyles(accentColor, secondaryColor)}
+        [data-product-modal-content] .prose {
+          --tw-prose-body: ${mutedTextColor};
+          --tw-prose-headings: ${textColor};
+          --tw-prose-bold: ${textColor};
+          --tw-prose-links: ${accentColor};
+        }
+      `;
+      document.head.appendChild(style);
+    }
+
+    return () => {
+      const styleElement = document.getElementById(styleId);
+      if (styleElement) {
+        styleElement.remove();
+      }
+    };
+  }, [accentColor, secondaryColor, textColor, mutedTextColor]);
 
   // Calculate discount percentage
   const discountPercentage = product.promotional_price
@@ -142,13 +174,13 @@ export function ProductModal({
   const getCurrentPrice = () => {
     if (selectedVariation) {
       return {
-        regular: selectedVariation.price,
-        promotional: selectedVariation.promotional_price
+        regular: selectedVariation.price || 0,
+        promotional: selectedVariation.promotional_price || null
       };
     }
     return {
-      regular: product.price,
-      promotional: product.promotional_price
+      regular: product.price || 0,
+      promotional: product.promotional_price || null
     };
   };
 
@@ -161,6 +193,7 @@ export function ProductModal({
       style={{ backgroundColor: primaryColor }}
     >
       <div 
+        data-product-modal-content
         className="flex flex-col lg:flex-row gap-8"
         style={{ 
           color: textColor,
@@ -224,18 +257,6 @@ export function ProductModal({
                     </button>
                   </div>
                 )}
-                {/* Badge de desconto melhorado */}
-                {product.promotional_price && (
-                  <div 
-                    className="absolute top-4 left-4 px-4 py-2 rounded-full text-sm font-medium shadow-lg backdrop-blur-sm"
-                    style={{ 
-                      backgroundColor: `${accentColor}CC`,
-                      color: primaryColor
-                    }}
-                  >
-                    {discountPercentage}% OFF
-                  </div>
-                )}
               </>
             ) : (
               <div className="w-full h-full flex items-center justify-center">
@@ -246,7 +267,7 @@ export function ProductModal({
 
           {/* Thumbnails aprimoradas */}
           {product.images && product.images.length > 1 && (
-            <div className="flex gap-3 mt-4 pb-2 product-modal-scrollbar overflow-x-auto">
+            <div className="flex gap-3 mt-4 pb-2 overflow-x-auto custom-scrollbar">
               {product.images.map((image: string, index: number) => (
                 <button
                   key={`thumb-${index}`}
@@ -312,8 +333,8 @@ export function ProductModal({
           {/* Preço com design melhorado */}
           <div className="p-6 rounded-2xl" 
             style={{ 
-              backgroundColor: `${secondaryColor}05`,
-              border: `1px solid ${secondaryColor}10`
+              backgroundColor: surfaceColor,
+              border: `1px solid ${borderColor}`
             }}
           >
             {getCurrentPrice().promotional ? (
@@ -328,7 +349,7 @@ export function ProductModal({
                   </span>
                 </div>
                 <p className="text-4xl font-bold" style={{ color: accentColor }}>
-                  R$ {getCurrentPrice().promotional.toFixed(2)}
+                  R$ {getCurrentPrice().promotional?.toFixed(2) || '0.00'}
                 </p>
               </div>
             ) : (
@@ -377,8 +398,13 @@ export function ProductModal({
 
           {/* Descrição com scrollbar personalizado */}
           <div 
-            className="prose prose-lg max-w-none max-h-80 overflow-y-auto product-modal-scrollbar pr-4 space-y-4" 
-            style={{ color: mutedTextColor }}
+            className="prose prose-lg max-w-none max-h-80 overflow-y-auto custom-scrollbar pr-4 space-y-4" 
+            style={{ 
+              backgroundColor: surfaceColor,
+              border: `1px solid ${borderColor}`,
+              padding: '1rem',
+              borderRadius: '0.75rem'
+            }}
           >
             <ReactMarkdown>{product.description}</ReactMarkdown>
           </div>

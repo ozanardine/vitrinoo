@@ -1,10 +1,9 @@
-import React from 'react';
 import { ImageGalleryUploader } from '../../ImageGalleryUploader';
 
 interface ImagesProps {
   form: any;
   setForm: (form: any) => void;
-  planType: string;
+  planType: 'free' | 'basic' | 'plus';
 }
 
 export function Images({ form, setForm, planType }: ImagesProps) {

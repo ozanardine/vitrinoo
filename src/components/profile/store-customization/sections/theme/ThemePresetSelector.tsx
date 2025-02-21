@@ -1,8 +1,8 @@
-import { COLOR_THEMES } from '../../../../../constants/theme';
+import { COLOR_THEMES, ColorTheme } from '../../../../../constants/theme';
 
 interface ThemePresetSelectorProps {
   selectedPreset: string | null;
-  onSelect: (presetId: string, colors: any) => void;
+  onSelect: (presetId: string, colors: ColorTheme['colors']) => void;
 }
 
 export function ThemePresetSelector({ selectedPreset, onSelect }: ThemePresetSelectorProps) {
@@ -30,12 +30,23 @@ export function ThemePresetSelector({ selectedPreset, onSelect }: ThemePresetSel
           <p className="text-sm text-gray-600 dark:text-gray-400">
             {theme.description}
           </p>
-          <div className="mt-3 flex gap-2">
-            {['primary', 'secondary', 'accent'].map(colorKey => (
+          <div className="mt-3 flex flex-wrap gap-2">
+            {[
+              { key: 'primary', label: 'Primary' },
+              { key: 'secondary', label: 'Secondary' },
+              { key: 'accent', label: 'Accent' },
+              { key: 'surface', label: 'Surface' },
+              { key: 'border', label: 'Border' },
+              { key: 'muted', label: 'Muted' }
+            ].map(({ key, label }) => (
               <div
-                key={colorKey}
+                key={key}
                 className="w-6 h-6 rounded-full border-2 border-white shadow-sm"
-                style={{ backgroundColor: theme.colors[colorKey as keyof typeof theme.colors] }}
+                style={{ backgroundColor: typeof theme.colors[key as keyof ColorTheme['colors']] === 'string' 
+                  ? theme.colors[key as keyof ColorTheme['colors']] as string
+                  : (theme.colors[key as keyof ColorTheme['colors']] as { background: string }).background
+                }}
+                title={label}
               />
             ))}
           </div>

@@ -1,4 +1,4 @@
-import { Store as StoreIcon, ThumbsUp } from 'lucide-react';
+import { Store as StoreIcon } from 'lucide-react';
 import { Store } from '../../lib/types';
 
 interface StoreFooterProps {
@@ -24,18 +24,21 @@ export function StoreFooter({ store }: StoreFooterProps) {
             style={{ color: store.accent_color }}
           />
           <p 
-            className="mb-4"
+            className="mb-4 text-sm"
             style={{ color: `${store.secondary_color}80` }}
           >
             Catálogo criado com Vitryno Digital
           </p>
           <a
             href="/"
-            className="inline-flex items-center space-x-2 transition-colors duration-200 hover:opacity-80"
-            style={{ color: store.accent_color }}
+            className="px-6 py-2.5 rounded-lg font-medium
+              transition-all duration-300 hover:opacity-90"
+            style={{ 
+              backgroundColor: store.accent_color,
+              color: '#FFFFFF'
+            }}
           >
-            <ThumbsUp className="w-4 h-4" />
-            <span>Crie seu catálogo digital</span>
+            Crie seu próprio catálogo digital
           </a>
         </div>
       </div>

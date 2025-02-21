@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Plus, Package, Search, Filter, AlertTriangle } from 'lucide-react';
-import { Store, Product } from '../../lib/types';
+import { Store, Product, Category } from '../../lib/types';
 import { supabase } from '../../lib/supabase';
 import { ProductModal } from '../ProductModal';
 import { ProductCard } from '../ProductCard';
@@ -21,7 +21,7 @@ export function ProductsTab({ store, onUpdate }: ProductsTabProps) {
   const [productToView, setProductToView] = useState<Product | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [showFilters, setShowFilters] = useState(false);
-  const [categories, setCategories] = useState([]);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [hasErpIntegration, setHasErpIntegration] = useState(false);
 
   useEffect(() => {

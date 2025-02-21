@@ -1,5 +1,5 @@
 import React from 'react';
-import { Clock, MapPin, Globe } from 'lucide-react';
+import { X } from 'lucide-react';
 
 interface ServiceInfoProps {
   form: any;
@@ -22,7 +22,7 @@ export function ServiceInfo({ form, setForm }: ServiceInfoProps) {
     const weekdays = currentAvailability.weekdays || [];
     
     const newWeekdays = weekdays.includes(day)
-      ? weekdays.filter(d => d !== day)
+      ? weekdays.filter((d: string) => d !== day)
       : [...weekdays, day];
 
     setForm({
@@ -70,7 +70,7 @@ export function ServiceInfo({ form, setForm }: ServiceInfoProps) {
 
   const removeTimeSlot = (index: number) => {
     const currentAvailability = form.availability || { weekdays: [], hours: [] };
-    const hours = currentAvailability.hours.filter((_, i) => i !== index);
+    const hours = currentAvailability.hours.filter((_: unknown, i: number) => i !== index);
 
     setForm({
       ...form,

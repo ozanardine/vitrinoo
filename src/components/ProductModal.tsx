@@ -62,16 +62,18 @@ export function ProductModal({
   });
 
   useEffect(() => {
-    if (product && (product.type === 'kit' || product.type === 'manufactured')) {
+    if ((product && (product.type === 'kit' || product.type === 'manufactured')) || 
+        (!product && (productType === 'kit' || productType === 'manufactured'))) {
       loadComponents();
     }
-  }, [product]);
+  }, [product, productType]);
 
   useEffect(() => {
-    if (product && product.type === 'variable') {
+    if ((product && product.type === 'variable') || 
+        (!product && productType === 'variable')) {
       loadVariations();
     }
-  }, [product]);
+  }, [product, productType]);
 
   const loadComponents = async () => {
     if (!product?.id) return;
@@ -288,159 +290,162 @@ export function ProductModal({
       title={product ? 'Editar Produto' : 'Novo Produto'}
       maxWidth="max-w-5xl"
     >
-      <div className="px-6">
-        <form onSubmit={handleSubmit} className="space-y-8">
-          {error && (
-            <div className="p-3 bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-100 rounded">
-              {error}
-            </div>
-          )}
+      <div className="flex flex-col h-[calc(100vh-200px)]">
+        <div className="flex-1 px-6 overflow-y-auto">
+          <form onSubmit={handleSubmit} className="space-y-8 pb-6">
+            {error && (
+              <div className="p-3 bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-100 rounded">
+                {error}
+              </div>
+            )}
 
-          <BasicInfo
-            form={form}
-            setForm={setForm}
-            productType={productType}
-            setProductType={setProductType}
-            categories={categories}
-            onOpenCategoryModal={() => setShowCategoryModal(true)}
-            disabled={!!product}
-          />
-
-          <Description
-            form={form}
-            setForm={setForm}
-            title={form.title}
-            brand={form.brand}
-            category={categories.find(c => c.id === form.category_id)?.name || ''}
-            planType={planType}
-          />
-
-          <Images
-            form={form}
-            setForm={setForm}
-            planType={planType}
-          />
-
-          <div className="space-y-4">
-            <h3 className="text-lg font-medium">Tags</h3>
-            <div className="flex flex-wrap gap-2 p-2 border rounded dark:bg-gray-700 dark:border-gray-600">
-              {form.tags.map((tag: string) => (
-                <span
-                  key={tag}
-                  className="inline-flex items-center px-2 py-1 rounded-full text-sm bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300"
-                >
-                  {tag}
-                  <button
-                    type="button"
-                    onClick={() => setForm({ ...form, tags: form.tags.filter(t => t !== tag) })}
-                    className="ml-1 hover:text-blue-800 dark:hover:text-blue-200"
-                  >
-                    ×
-                  </button>
-                </span>
-              ))}
-              <input
-                type="text"
-                className="flex-1 min-w-[120px] bg-transparent outline-none"
-                placeholder="Digite uma tag e pressione Enter ou vírgula"
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ',') {
-                    e.preventDefault();
-                    const value = (e.target as HTMLInputElement).value.trim();
-                    if (value) {
-                      setForm({
-                        ...form,
-                        tags: [...new Set([...form.tags, value])]
-                      });
-                      (e.target as HTMLInputElement).value = '';
-                    }
-                  } else if (e.key === 'Backspace' && (e.target as HTMLInputElement).value === '') {
-                    e.preventDefault();
-                    setForm({
-                      ...form,
-                      tags: form.tags.slice(0, -1)
-                    });
-                  }
-                }}
-              />
-            </div>
-          </div>
-
-          {productType === 'service' && (
-            <ServiceInfo
+            <BasicInfo
               form={form}
               setForm={setForm}
+              productType={productType}
+              setProductType={setProductType}
+              categories={categories}
+              onOpenCategoryModal={() => setShowCategoryModal(true)}
+              disabled={!!product}
             />
-          )}
 
-          {productType === 'variable' && (
-            <div className="space-y-4">
-              <h3 className="text-lg font-medium">Variações</h3>
-              <ProductAttributes
-                storeId={storeId}
-                selectedAttributes={variationAttributes}
-                onAttributesChange={handleAttributesChange}
-                existingAttributes={existingAttributeOptions}
-                onAttributeOptionsChange={handleAttributeOptionsChange}
-              />
-              {variationAttributes.length > 0 && (
-                <ProductVariations
-                  attributes={variationAttributes}
-                  variations={variations}
-                  onVariationsChange={handleVariationsChange}
+            <Description
+              form={form}
+              setForm={setForm}
+              title={form.title}
+              brand={form.brand}
+              category={categories.find(c => c.id === form.category_id)?.name || ''}
+              planType={planType}
+            />
+
+            <Images
+              form={form}
+              setForm={setForm}
+              planType={planType}
+            />
+
+            {/* Product Type Specific Fields */}
+            {productType === 'variable' && (
+              <div className="space-y-4">
+                <h3 className="text-lg font-medium">Variações</h3>
+                <ProductAttributes
+                  storeId={storeId}
+                  selectedAttributes={variationAttributes}
+                  onAttributesChange={handleAttributesChange}
                   existingAttributes={existingAttributeOptions}
-                  onExistingAttributesChange={handleAttributeOptionsChange}
-                  parentSku={form.sku || undefined}
+                  onAttributeOptionsChange={handleAttributeOptionsChange}
                 />
-              )}
-            </div>
-          )}
+                {variationAttributes.length > 0 && (
+                  <ProductVariations
+                    attributes={variationAttributes}
+                    variations={variations}
+                    onVariationsChange={handleVariationsChange}
+                    existingAttributes={existingAttributeOptions}
+                    onExistingAttributesChange={handleAttributeOptionsChange}
+                    parentSku={form.sku || undefined}
+                  />
+                )}
+              </div>
+            )}
 
-          {(productType === 'kit' || productType === 'manufactured') && (
-            <div className="space-y-4">
-              <h3 className="text-lg font-medium">
-                {productType === 'kit' ? 'Produtos do Kit' : 'Componentes'}
-              </h3>
-              <ProductComponents
-                storeId={storeId}
-                components={components}
-                onChange={setComponents}
-                type={productType}
-                disabled={loading}
+            {(productType === 'kit' || productType === 'manufactured') && (
+              <div className="space-y-4">
+                <h3 className="text-lg font-medium">
+                  {productType === 'kit' ? 'Produtos do Kit' : 'Componentes'}
+                </h3>
+                <ProductComponents
+                  storeId={storeId}
+                  components={components}
+                  onChange={setComponents}
+                  type={productType}
+                  disabled={loading}
+                />
+              </div>
+            )}
+
+            {productType === 'service' && (
+              <ServiceInfo
+                form={form}
+                setForm={setForm}
               />
+            )}
+
+            <div className="space-y-4">
+              <h3 className="text-lg font-medium">Tags</h3>
+              <div className="flex flex-wrap gap-2 p-2 border rounded dark:bg-gray-700 dark:border-gray-600">
+                {form.tags.map((tag: string) => (
+                  <span
+                    key={tag}
+                    className="inline-flex items-center px-2 py-1 rounded-full text-sm bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300"
+                  >
+                    {tag}
+                    <button
+                      type="button"
+                      onClick={() => setForm({ ...form, tags: form.tags.filter(t => t !== tag) })}
+                      className="ml-1 hover:text-blue-800 dark:hover:text-blue-200"
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
+                <input
+                  type="text"
+                  className="flex-1 min-w-[120px] bg-transparent outline-none"
+                  placeholder="Digite uma tag e pressione Enter ou vírgula"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ',') {
+                      e.preventDefault();
+                      const value = (e.target as HTMLInputElement).value.trim();
+                      if (value) {
+                        setForm({
+                          ...form,
+                          tags: [...new Set([...form.tags, value])]
+                        });
+                        (e.target as HTMLInputElement).value = '';
+                      }
+                    } else if (e.key === 'Backspace' && (e.target as HTMLInputElement).value === '') {
+                      e.preventDefault();
+                      setForm({
+                        ...form,
+                        tags: form.tags.slice(0, -1)
+                      });
+                    }
+                  }}
+                />
+              </div>
             </div>
-          )}
 
-          <div className="flex items-center space-x-2">
-            <input
-              type="checkbox"
-              id="status"
-              checked={form.status}
-              onChange={(e) => setForm({ ...form, status: e.target.checked })}
-              className="rounded border-gray-300"
-            />
-            <label htmlFor="status" className="text-sm">
-              Produto ativo
-            </label>
-          </div>
-
-          <div className="flex justify-end space-x-4 pt-4">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 text-gray-600 hover:text-gray-800"
-            >
-              Cancelar
-            </button>
-            <button
-              type="submit"
-              disabled={loading}
-              className="px-6 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
-            >
-              {loading ? 'Salvando...' : 'Salvar'}
-            </button>
-          </div>
+            <div className="flex items-center space-x-2">
+              <input
+                type="checkbox"
+                id="status"
+                checked={form.status}
+                onChange={(e) => setForm({ ...form, status: e.target.checked })}
+                className="rounded border-gray-300"
+              />
+              <label htmlFor="status" className="text-sm">
+                Produto ativo
+              </label>
+            </div>
         </form>
+      </div>
+
+        <div className="flex justify-end space-x-12 p-12 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-4 py-2 text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200"
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={handleSubmit}
+            disabled={loading}
+            className="px-6 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
+          >
+            {loading ? 'Salvando...' : 'Salvar'}
+          </button>
+        </div>
       </div>
 
       {showCategoryModal && (

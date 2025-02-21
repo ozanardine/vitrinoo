@@ -25,14 +25,14 @@ export const COLOR_THEMES: Record<string, ColorTheme> = {
     category: 'light',
     colors: {
       primary: '#FFFFFF',
-      secondary: '#1A1A1A',
+      secondary: '#18181B',
       accent: '#2563EB',
       surface: '#F8FAFC',
-      border: '#E2E8F0',
-      muted: '#64748B',
+      border: '#CBD5E1',
+      muted: '#475569',
       header: {
         background: '#FFFFFF',
-        text: '#1A1A1A'
+        text: '#18181B'
       }
     },
     description: 'Design minimalista com alto contraste e clareza'
@@ -43,15 +43,15 @@ export const COLOR_THEMES: Record<string, ColorTheme> = {
     name: 'Suave',
     category: 'light',
     colors: {
-      primary: '#F7F9FC',
-      secondary: '#334155',
-      accent: '#6366F1',
+      primary: '#F8FAFC',
+      secondary: '#1E293B',
+      accent: '#4F46E5',
       surface: '#FFFFFF',
-      border: '#E2E8F0',
-      muted: '#94A3B8',
+      border: '#CBD5E1',
+      muted: '#475569',
       header: {
         background: '#EEF2FF',
-        text: '#334155'
+        text: '#1E293B'
       }
     },
     description: 'Tons suaves e relaxantes com toques de roxo'
@@ -63,14 +63,14 @@ export const COLOR_THEMES: Record<string, ColorTheme> = {
     name: 'Elegante',
     colors: {
       primary: '#FFFBF5',
-      secondary: '#422006',
-      accent: '#C2410C',
+      secondary: '#431407',
+      accent: '#B45309',
       surface: '#FFFFFF',
-      border: '#FDDCAB',
-      muted: '#92400E',
+      border: '#FED7AA',
+      muted: '#9A3412',
       header: {
         background: '#FEF3C7',
-        text: '#422006'
+        text: '#431407'
       }
     },
     description: 'Tons quentes e elegantes com toques terrosos'
@@ -83,14 +83,14 @@ export const COLOR_THEMES: Record<string, ColorTheme> = {
     category: 'dark',
     colors: {
       primary: '#0F172A',
-      secondary: '#F8FAFC',
+      secondary: '#F1F5F9',
       accent: '#3B82F6',
       surface: '#1E293B',
-      border: '#334155',
+      border: '#475569',
       muted: '#94A3B8',
       header: {
         background: '#020617',
-        text: '#F8FAFC'
+        text: '#F1F5F9'
       }
     },
     description: 'Tema escuro profissional com alto contraste'
@@ -102,14 +102,14 @@ export const COLOR_THEMES: Record<string, ColorTheme> = {
     category: 'dark',
     colors: {
       primary: '#18181B',
-      secondary: '#FAFAFA',
-      accent: '#A855F7',
+      secondary: '#F4F4F5',
+      accent: '#9333EA',
       surface: '#27272A',
-      border: '#3F3F46',
+      border: '#52525B',
       muted: '#A1A1AA',
       header: {
         background: '#09090B',
-        text: '#FAFAFA'
+        text: '#F4F4F5'
       }
     },
     description: 'Tema escuro com tons suaves de roxo'
@@ -122,9 +122,9 @@ export const COLOR_THEMES: Record<string, ColorTheme> = {
     colors: {
       primary: '#1C1917',
       secondary: '#FAFAF9',
-      accent: '#EAB308',
+      accent: '#CA8A04',
       surface: '#292524',
-      border: '#44403C',
+      border: '#57534E',
       muted: '#A8A29E',
       header: {
         background: '#0C0A09',
@@ -141,13 +141,13 @@ export const COLOR_THEMES: Record<string, ColorTheme> = {
     category: 'branded',
     colors: {
       primary: '#F1F5F2',
-      secondary: '#1E3A2B',
-      accent: '#2F7A4D',
+      secondary: '#1B4332',
+      accent: '#047857',
       surface: '#FFFFFF',
       border: '#D1E4D9',
-      muted: '#4B7C5E',
+      muted: '#2D6A4F',
       header: {
-        background: '#2F7A4D',
+        background: '#047857',
         text: '#FFFFFF'
       }
     },
@@ -164,9 +164,9 @@ export const COLOR_THEMES: Record<string, ColorTheme> = {
       accent: '#0891B2',
       surface: '#FFFFFF',
       border: '#A5F3FC',
-      muted: '#0E7490',
+      muted: '#155E75',
       header: {
-        background: '#06B6D4',
+        background: '#0E7490',
         text: '#FFFFFF'
       }
     },
@@ -180,12 +180,12 @@ export const COLOR_THEMES: Record<string, ColorTheme> = {
     colors: {
       primary: '#FAFAFA',
       secondary: '#18181B',
-      accent: '#6366F1',
+      accent: '#4F46E5',
       surface: '#FFFFFF',
       border: '#E4E4E7',
-      muted: '#71717A',
+      muted: '#52525B',
       header: {
-        background: '#4F46E5',
+        background: '#4338CA',
         text: '#FFFFFF'
       }
     },
@@ -197,22 +197,22 @@ export const COLOR_THEMES: Record<string, ColorTheme> = {
 export const COLOR_PRESETS = {
   primary: [
     // Backgrounds claros
-    '#FFFFFF', '#F7F9FC', '#FFFBF5', '#F1F5F2', '#F0FDFF', '#FAFAFA',
+    '#FFFFFF', '#F8FAFC', '#FFFBF5', '#F1F5F2', '#F0FDFF', '#FAFAFA',
     // Backgrounds escuros
     '#0F172A', '#18181B', '#1C1917', '#020617', '#09090B', '#0C0A09'
   ],
   
   secondary: [
     // Texto em fundos claros
-    '#1A1A1A', '#334155', '#422006', '#1E3A2B', '#164E63', '#18181B',
+    '#18181B', '#1E293B', '#431407', '#1B4332', '#164E63', '#18181B',
     // Texto em fundos escuros
-    '#F8FAFC', '#FAFAFA', '#FAFAF9', '#FFFFFF', '#F1F5F9', '#F4F4F5'
+    '#F1F5F9', '#F4F4F5', '#FAFAF9', '#FFFFFF', '#F8FAFC', '#FAFAFA'
   ],
   
   accent: [
-    // Cores de destaque modernas
-    '#2563EB', '#6366F1', '#C2410C', '#2F7A4D', '#0891B2', '#4F46E5',
-    '#A855F7', '#EAB308', '#EC4899', '#10B981', '#F97316', '#8B5CF6'
+    // Cores de destaque com bom contraste
+    '#2563EB', '#4F46E5', '#B45309', '#047857', '#0891B2', '#4338CA',
+    '#9333EA', '#CA8A04', '#BE185D', '#059669', '#EA580C', '#7C3AED'
   ],
 
   surface: [
@@ -224,27 +224,15 @@ export const COLOR_PRESETS = {
 
   border: [
     // Bordas para temas claros
-    '#E2E8F0', '#E4E4E7', '#FDDCAB', '#D1E4D9', '#A5F3FC', '#E4E4E7',
+    '#CBD5E1', '#E4E4E7', '#FED7AA', '#D1E4D9', '#A5F3FC', '#E4E4E7',
     // Bordas para temas escuros
-    '#334155', '#3F3F46', '#44403C', '#374151', '#27272A', '#292524'
+    '#475569', '#52525B', '#57534E', '#374151', '#3F3F46', '#44403C'
+  ],
+
+  muted: [
+    // Texto secundário para temas claros
+    '#475569', '#475569', '#9A3412', '#2D6A4F', '#155E75', '#52525B',
+    // Texto secundário para temas escuros
+    '#94A3B8', '#A1A1AA', '#A8A29E', '#9CA3AF', '#A1A1AA', '#A8A29E'
   ]
 } as const;
-
-// Configurações de gradiente melhoradas
-export const GRADIENT_PRESETS = [
-  {
-    name: 'Suave',
-    value: 'to bottom',
-    stops: ['currentColor', 'color-mix(in srgb, currentColor, #000 20%)']
-  },
-  {
-    name: 'Dramático',
-    value: 'to bottom',
-    stops: ['currentColor', 'color-mix(in srgb, currentColor, #000 40%)']
-  },
-  {
-    name: 'Diagonal',
-    value: 'to bottom right',
-    stops: ['currentColor', 'color-mix(in srgb, currentColor, #000 30%)']
-  }
-];
