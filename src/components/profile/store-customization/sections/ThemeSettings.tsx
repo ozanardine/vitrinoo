@@ -1,5 +1,5 @@
 import { useEffect, useCallback, useState, useMemo } from 'react';
-import { Palette, Droplet, AlertCircle } from 'lucide-react';
+import { Palette, Droplet, AlertCircle, Grid } from 'lucide-react';
 import { Alert, Snackbar } from '@mui/material';
 import { StoreHeader } from '../../../store/StoreHeader';
 import { useThemeStore } from '../../../../stores/useThemeStore';
@@ -289,7 +289,7 @@ export function ThemeSettings({ selectedPreset, onPresetChange }: ThemeSettingsP
       </section>
 
       <section className="space-y-4">
-        <h3 className="text-lg font-semibold">Preview</h3>
+      <h3 className="text-lg font-semibold flex items-center gap-2"> <Grid className="w-5 h-5" /> Preview do Layout </h3>
         <div className="rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700">
           <StoreHeader
             name="Nome da Loja"
