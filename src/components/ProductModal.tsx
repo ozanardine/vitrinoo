@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Modal } from './Modal';
 import { supabase } from '../lib/supabase';
 import { Product } from '../lib/types';
@@ -11,6 +11,7 @@ import { ProductVariations } from './products/ProductVariations';
 import { ProductComponents } from './products/ProductComponents';
 import { ServiceInfo } from './products/form/ServiceInfo';
 import { PLAN_LIMITS } from '../lib/store';
+import { toast } from 'react-hot-toast';
 
 interface ProductModalProps {
   storeId: string;
@@ -23,27 +24,67 @@ interface ProductModalProps {
   currentCategoryCount: number;
 }
 
-export function ProductModal({ 
-  storeId, 
-  categories, 
-  onClose, 
-  onSuccess, 
+interface FormState {
+  title: string;
+  description: string;
+  brand: string;
+  sku: string;
+  price: number;
+  promotional_price: number | null;
+  category_id: string | null;
+  images: string[];
+  tags: string[];
+  status: boolean;
+  attributes: Record<string, any>;
+  duration: string;
+  availability: {
+    weekdays: string[];
+    hours: { start: string; end: string; }[];
+  };
+  service_location: string;
+  service_modality: 'presential' | 'online' | 'hybrid' | null;
+}
+
+interface Variation {
+  id?: string;
+  attributes: Record<string, string>;
+  sku: string;
+  price: number;
+  promotional_price?: number | null;
+  images: string[];
+  title?: string;
+  brand?: string;
+  description?: string;
+  status?: boolean;
+  active?: boolean;
+}
+
+export function ProductModal({
+  storeId,
+  categories,
+  onClose,
+  onSuccess,
   product,
   planType,
   categoryLimit,
   currentCategoryCount
 }: ProductModalProps) {
+  // Estado local
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [productType, setProductType] = useState<'simple' | 'variable' | 'kit' | 'manufactured' | 'service'>(product?.type || 'simple');
+  const [productType, setProductType] = useState<'simple' | 'variable' | 'kit' | 'manufactured' | 'service'>(
+    product?.type || 'simple'
+  );
   const [variationAttributes, setVariationAttributes] = useState<string[]>(
     product?.variation_attributes || []
   );
-  const [variations, setVariations] = useState<any[]>([]);
+  const [variations, setVariations] = useState<Variation[]>([]);
   const [components, setComponents] = useState<any[]>([]);
   const [existingAttributeOptions, setExistingAttributeOptions] = useState<Record<string, string[]>>({});
-  const [form, setForm] = useState({
+
+  // Estado inicial do formulário
+  const [form, setForm] = useState<FormState>({
     title: product?.title || '',
     description: product?.description || '',
     brand: product?.brand || '',
@@ -61,20 +102,18 @@ export function ProductModal({
     service_modality: product?.service_modality || null
   });
 
+  // Carregar dados iniciais
   useEffect(() => {
-    if ((product && (product.type === 'kit' || product.type === 'manufactured')) || 
-        (!product && (productType === 'kit' || productType === 'manufactured'))) {
-      loadComponents();
+    if (product?.id) {
+      if (product.type === 'variable') {
+        loadVariations();
+      } else if (product.type === 'kit' || product.type === 'manufactured') {
+        loadComponents();
+      }
     }
-  }, [product, productType]);
+  }, [product]);
 
-  useEffect(() => {
-    if ((product && product.type === 'variable') || 
-        (!product && productType === 'variable')) {
-      loadVariations();
-    }
-  }, [product, productType]);
-
+  // Carregar componentes do produto
   const loadComponents = async () => {
     if (!product?.id) return;
 
@@ -95,9 +134,11 @@ export function ProductModal({
       setComponents(data || []);
     } catch (err) {
       console.error('Erro ao carregar componentes:', err);
+      toast.error('Erro ao carregar componentes do produto');
     }
   };
 
+  // Carregar variações do produto
   const loadVariations = async () => {
     if (!product?.id) return;
 
@@ -109,7 +150,7 @@ export function ProductModal({
 
       if (error) throw error;
 
-      // Extract existing attribute values
+      // Extrair valores existentes dos atributos
       const attrs: Record<string, Set<string>> = {};
       data?.forEach(variation => {
         Object.entries(variation.attributes || {}).forEach(([key, value]) => {
@@ -118,7 +159,7 @@ export function ProductModal({
         });
       });
 
-      // Convert Sets to arrays
+      // Converter Sets para arrays
       const existingAttrs: Record<string, string[]> = {};
       Object.entries(attrs).forEach(([key, values]) => {
         existingAttrs[key] = Array.from(values);
@@ -128,82 +169,84 @@ export function ProductModal({
       setVariations(data || []);
     } catch (err) {
       console.error('Erro ao carregar variações:', err);
+      toast.error('Erro ao carregar variações do produto');
     }
   };
 
-  // Handler para mudanças nas variações
-  const handleVariationsChange = (newVariations: any[]) => {
-    setVariations(newVariations);
-  };
+  // Validar formulário
+  const validateForm = useCallback(() => {
+    if (!form.title) throw new Error('O título do produto é obrigatório');
+    if (form.price < 0) throw new Error('O preço não pode ser negativo');
+    if (form.promotional_price && form.promotional_price >= form.price) {
+      throw new Error('O preço promocional deve ser menor que o preço normal');
+    }
 
+    // Validar limite de imagens
+    const planLimits = PLAN_LIMITS[planType];
+    if (form.images.length > planLimits.images_per_product) {
+      throw new Error(`O plano ${planLimits.name} permite até ${planLimits.images_per_product} imagens por produto`);
+    }
+
+    // Validações específicas por tipo
+    if (productType === 'variable') {
+      if (variationAttributes.length === 0) {
+        throw new Error('Selecione pelo menos um atributo de variação');
+      }
+      if (variations.length === 0) {
+        throw new Error('Gere as variações antes de salvar');
+      }
+      const invalidVariations = variations.filter(v => !v.sku || v.price < 0);
+      if (invalidVariations.length > 0) {
+        throw new Error('Todas as variações devem ter SKU e preço válido');
+      }
+    }
+
+    if ((productType === 'kit' || productType === 'manufactured') && components.length === 0) {
+      throw new Error(`Adicione pelo menos um ${productType === 'kit' ? 'produto' : 'componente'}`);
+    }
+
+    if (productType === 'service') {
+      if (!form.duration) {
+        throw new Error('A duração do serviço é obrigatória');
+      }
+      if (!form.service_modality) {
+        throw new Error('A modalidade do serviço é obrigatória');
+      }
+      if ((form.service_modality === 'presential' || form.service_modality === 'hybrid') && !form.service_location) {
+        throw new Error('O local do serviço é obrigatório para serviços presenciais ou híbridos');
+      }
+      if (!form.availability?.weekdays?.length) {
+        throw new Error('Selecione pelo menos um dia de atendimento');
+      }
+      if (!form.availability?.hours?.length) {
+        throw new Error('Adicione pelo menos um horário de atendimento');
+      }
+    }
+  }, [form, productType, variationAttributes, variations, components, planType]);
+
+  // Salvar produto
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
 
     try {
-      // Validate image limit
-      const planLimits = PLAN_LIMITS[planType];
-      if (form.images.length > planLimits.images_per_product) {
-        throw new Error(`O plano ${planLimits.name} permite apenas ${planLimits.images_per_product} imagens por produto`);
-      }
+      // Validar formulário
+      validateForm();
 
-      // Format duration for services
-      let duration = null;
-      if (productType === 'service' && form.duration) {
-        const [hours, minutes] = form.duration.split(':').map(Number);
-        duration = `${hours} hours ${minutes} minutes`;
-      }
-
-      // Prepare product data
+      // Preparar dados do produto
       const productData = {
         ...form,
         store_id: storeId,
         type: productType,
-        duration,
-        service_modality: productType === 'service' ? form.service_modality : null,
         variation_attributes: productType === 'variable' ? variationAttributes : [],
+        attributes: productType === 'variable' ? {} : form.attributes,
         updated_at: new Date().toISOString()
       };
 
-      // Validações específicas por tipo
-      if (productType === 'variable' && variationAttributes.length === 0) {
-        throw new Error('Selecione pelo menos um atributo de variação');
-      }
-
-      if ((productType === 'kit' || productType === 'manufactured') && components.length === 0) {
-        throw new Error(`Adicione pelo menos um ${productType === 'kit' ? 'produto' : 'componente'}`);
-      }
-
-      if (form.promotional_price && form.promotional_price >= form.price) {
-        throw new Error('O preço promocional deve ser menor que o preço normal');
-      }
-
-      // Validações específicas para serviço
-      if (productType === 'service') {
-        if (!form.duration) {
-          throw new Error('A duração do serviço é obrigatória');
-        }
-
-        if (!form.service_modality) {
-          throw new Error('A modalidade do serviço é obrigatória');
-        }
-
-        if ((form.service_modality === 'presential' || form.service_modality === 'hybrid') && !form.service_location) {
-          throw new Error('O local do serviço é obrigatório para serviços presenciais ou híbridos');
-        }
-
-        if (!form.availability?.weekdays?.length) {
-          throw new Error('Selecione pelo menos um dia de atendimento');
-        }
-
-        if (!form.availability?.hours?.length) {
-          throw new Error('Adicione pelo menos um horário de atendimento');
-        }
-      }
-
       let productId = product?.id;
 
+      // Atualizar ou criar produto
       if (product) {
         const { error: updateError } = await supabase
           .from('products')
@@ -222,6 +265,7 @@ export function ProductModal({
         productId = newProduct.id;
       }
 
+      // Processar componentes para kits ou produtos fabricados
       if (productId && (productType === 'kit' || productType === 'manufactured')) {
         await supabase
           .from('product_components')
@@ -242,47 +286,59 @@ export function ProductModal({
         }
       }
 
+      // Processar variações
       if (productId && productType === 'variable' && variations.length > 0) {
-        // Primeiro remove todas as variações existentes
+        // Remover variações existentes
         if (product) {
           await supabase
             .from('products')
             .delete()
             .eq('parent_id', productId);
         }
-
-        // Depois insere as novas variações
-        for (const variation of variations) {
-          await supabase
-            .from('products')
-            .insert([{
-              ...variation,
-              store_id: storeId,
-              parent_id: productId,
-              type: 'simple'
-            }]);
-        }
+      
+        // Preparar variações para inserção
+        const variationsToInsert = variations.map(variation => ({
+          ...variation,
+          store_id: storeId,
+          parent_id: productId,
+          type: 'simple',
+          variation_attributes: null, // Importante: deve ser null
+          status: true,
+          active: true,
+          title: `${form.title} - ${Object.values(variation.attributes).join(' / ')}`,
+          description: form.description,
+          brand: form.brand
+        }));
+      
+        // Inserir novas variações
+        const { error: variationsError } = await supabase
+          .from('products')
+          .insert(variationsToInsert);
+      
+        if (variationsError) throw variationsError;
       }
 
+      toast.success('Produto salvo com sucesso!');
       onSuccess();
     } catch (err: any) {
       setError(err.message || 'Erro ao salvar produto. Por favor, tente novamente.');
+      toast.error(err.message || 'Erro ao salvar produto');
       console.error('Erro:', err);
     } finally {
       setLoading(false);
     }
   };
 
-  // Manipulador de mudança de atributos
+  // Handlers
   const handleAttributesChange = (attributes: string[]) => {
     setVariationAttributes(attributes);
   };
 
-  // Manipulador de mudança de opções
   const handleAttributeOptionsChange = (options: Record<string, string[]>) => {
     setExistingAttributeOptions(options);
   };
 
+  // Render
   return (
     <Modal
       isOpen={true}
@@ -324,7 +380,6 @@ export function ProductModal({
               planType={planType}
             />
 
-            {/* Product Type Specific Fields */}
             {productType === 'variable' && (
               <div className="space-y-4">
                 <h3 className="text-lg font-medium">Variações</h3>
@@ -339,10 +394,10 @@ export function ProductModal({
                   <ProductVariations
                     attributes={variationAttributes}
                     variations={variations}
-                    onVariationsChange={handleVariationsChange}
+                    onVariationsChange={setVariations}
                     existingAttributes={existingAttributeOptions}
                     onExistingAttributesChange={handleAttributeOptionsChange}
-                    parentSku={form.sku || undefined}
+                    parentSku={form.sku}
                   />
                 )}
               </div>
@@ -390,7 +445,7 @@ export function ProductModal({
                 ))}
                 <input
                   type="text"
-                  className="flex-1 min-w-[120px] bg-transparent outline-none"
+                  className="flex-1 min-w-[120px] bg-transparent outline-none dark:text-gray-200"
                   placeholder="Digite uma tag e pressione Enter ou vírgula"
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' || e.key === ',') {
@@ -421,14 +476,14 @@ export function ProductModal({
                 id="status"
                 checked={form.status}
                 onChange={(e) => setForm({ ...form, status: e.target.checked })}
-                className="rounded border-gray-300"
+                className="rounded border-gray-300 dark:border-gray-600"
               />
               <label htmlFor="status" className="text-sm">
                 Produto ativo
               </label>
             </div>
-        </form>
-      </div>
+          </form>
+        </div>
 
         <div className="flex justify-end space-x-12 p-12 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
           <button

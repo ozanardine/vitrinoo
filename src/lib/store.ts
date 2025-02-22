@@ -20,7 +20,8 @@ export const PLAN_LIMITS = {
     name: 'Gratuito',
     price: 0,
     metadata: {
-      plan_type: 'free'
+      plan_type: 'free',
+      imgur_enabled: true
     }
   },
   basic: {

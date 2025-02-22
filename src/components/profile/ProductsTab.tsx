@@ -16,6 +16,7 @@ export function ProductsTab({ store, onUpdate }: ProductsTabProps) {
   const [products, setProducts] = useState<Product[]>([]);
   const [showProductModal, setShowProductModal] = useState(false);
   const [loading, setLoading] = useState(true);
+  const handleClick = (product: Product) => { setProductToView(product); };
   const [productToEdit, setProductToEdit] = useState<Product | undefined>();
   const [productToDelete, setProductToDelete] = useState<Product | null>(null);
   const [productToView, setProductToView] = useState<Product | null>(null);
@@ -45,7 +46,35 @@ export function ProductsTab({ store, onUpdate }: ProductsTabProps) {
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      setProducts(data || []);
+
+      // Organize products into parent-child structure
+      const productsMap = new Map<string, Product>();
+      const parentProducts: Product[] = [];
+
+      // First pass: Create a map of all products
+      data?.forEach(product => {
+        productsMap.set(product.id, { ...product, children: [] });
+      });
+
+      // Second pass: Organize into parent-child structure
+      data?.forEach(product => {
+        if (product.parent_id) {
+          const parent = productsMap.get(product.parent_id);
+          if (parent && parent.children) {
+            const childProduct = productsMap.get(product.id);
+            if (childProduct) {
+              parent.children.push(childProduct);
+            }
+          }
+        } else {
+          const parentProduct = productsMap.get(product.id);
+          if (parentProduct) {
+            parentProducts.push(parentProduct);
+          }
+        }
+      });
+
+      setProducts(parentProducts || []);
     } catch (err) {
       console.error('Erro ao carregar produtos:', err);
     } finally {
@@ -193,16 +222,17 @@ export function ProductsTab({ store, onUpdate }: ProductsTabProps) {
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-          {products.map((product) => (
-            <ProductCard
-              key={product.id}
-              product={product}
-              onEdit={handleEdit}
-              onDelete={setProductToDelete}
-              onClick={setProductToView}
-            />
-          ))}
-        </div>
+        {products.map(product => (
+          <ProductCard
+            key={product.id}
+            product={product}
+            onEdit={handleEdit}
+            onDelete={handleDelete}
+            onClick={handleClick}
+            hideVariations={true}
+          />
+        ))}
+      </div>
       )}
 
       {showProductModal && (

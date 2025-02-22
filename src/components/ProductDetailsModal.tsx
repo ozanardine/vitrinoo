@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { X, Edit2, Trash2, Tag, Package, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Product } from '../lib/types';
 import ReactMarkdown from 'react-markdown';
@@ -43,16 +43,29 @@ export function ProductDetailsModal({
     setCurrentImageIndex(index);
   };
 
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white dark:bg-gray-800 rounded-lg w-full max-w-4xl max-h-[90vh] overflow-hidden relative">
-        <button
-          onClick={onClose}
-          className="absolute top-4 right-4 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 z-10"
-        >
-          <X className="w-6 h-6" />
-        </button>
+  const handleOverlayClick = (e: React.MouseEvent) => {
+    if (e.target === e.currentTarget) {
+      onClose();
+    }
+  };
 
+  useEffect(() => {
+    const handleEscKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+
+    document.addEventListener('keydown', handleEscKey);
+    return () => document.removeEventListener('keydown', handleEscKey);
+  }, [onClose]);
+
+  return (
+    <div 
+      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+      onClick={handleOverlayClick}
+    >
+      <div className="bg-white dark:bg-gray-800 rounded-lg w-full max-w-4xl max-h-[90vh] overflow-hidden relative">
         <div className="flex flex-col md:flex-row h-full">
           {/* Galeria de Imagens */}
           <div className="w-full md:w-1/2 bg-gray-100 dark:bg-gray-700">
@@ -110,36 +123,44 @@ export function ProductDetailsModal({
 
           {/* Detalhes do Produto */}
           <div className="w-full md:w-1/2 p-6 overflow-y-auto custom-scrollbar">
-            <div className="flex justify-between items-start mb-6">
-              <div>
-                <h2 className="text-2xl font-bold mb-2">{product.title}</h2>
-                <div className="flex items-center space-x-4">
-                  <p className="text-gray-600 dark:text-gray-400">{product.brand}</p>
-                  {product.sku && (
-                    <p className="text-sm text-gray-500">SKU: {product.sku}</p>
-                  )}
-                </div>
-                <div className="mt-2">
-                  <span className="inline-flex items-center px-3 py-1 rounded-full text-sm bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300">
-                    {getTypeLabel(product.type)}
-                  </span>
-                </div>
+            {/* Header com botões de ação */}
+            <div className="flex justify-end items-center space-x-2 mb-6 pb-4 border-b border-gray-200 dark:border-gray-700">
+              <button
+                onClick={() => onEdit(product)}
+                className="p-2.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                title="Editar produto"
+              >
+                <Edit2 className="w-5 h-5" />
+              </button>
+              <button
+                onClick={() => onDelete(product)}
+                className="p-2.5 hover:bg-red-100 dark:hover:bg-red-900/30 rounded-lg transition-colors text-red-500"
+                title="Excluir produto"
+              >
+                <Trash2 className="w-5 h-5" />
+              </button>
+              <button
+                onClick={onClose}
+                className="p-2.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                title="Fechar"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Informações do produto */}
+            <div className="mb-6">
+              <h2 className="text-2xl font-bold mb-2">{product.title}</h2>
+              <div className="flex items-center space-x-4">
+                <p className="text-gray-600 dark:text-gray-400">{product.brand}</p>
+                {product.sku && (
+                  <p className="text-sm text-gray-500">SKU: {product.sku}</p>
+                )}
               </div>
-              <div className="flex space-x-2">
-                <button
-                  onClick={() => onEdit(product)}
-                  className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
-                  title="Editar produto"
-                >
-                  <Edit2 className="w-5 h-5" />
-                </button>
-                <button
-                  onClick={() => onDelete(product)}
-                  className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-red-500"
-                  title="Excluir produto"
-                >
-                  <Trash2 className="w-5 h-5" />
-                </button>
+              <div className="mt-2">
+                <span className="inline-flex items-center px-3 py-1 rounded-full text-sm bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300">
+                  {getTypeLabel(product.type)}
+                </span>
               </div>
             </div>
 
@@ -174,32 +195,70 @@ export function ProductDetailsModal({
               </div>
 
               {/* Variações */}
-              {product.type === 'variable' && product.variation_attributes && (
-                <div>
-                  <h3 className="text-lg font-semibold mb-2">Variações</h3>
-                  <div className="space-y-2">
-                    {product.variation_attributes.map((attr) => (
-                      <div key={attr} className="flex items-center space-x-2">
-                        <span className="font-medium">{attr}:</span>
-                        <div className="flex flex-wrap gap-2">
-                          {Array.from(new Set(
-                            (product.children || [])
-                              .map(child => child.attributes?.[attr])
-                              .filter(Boolean)
-                          )).map((value) => (
-                            <span
-                              key={String(value)}
-                              className="px-3 py-1 bg-gray-100 dark:bg-gray-700 rounded-full text-sm"
-                            >
-                              {String(value)}
-                            </span>
-                          ))}
+              {product.type === 'variable' && product.children && (
+              <div className="mt-6 bg-gray-50 dark:bg-gray-700 rounded-xl p-6">
+                <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                  <span>Variações Disponíveis</span>
+                  <span className="text-sm font-normal text-gray-500 dark:text-gray-400">({product.children.length})</span>
+                </h3>
+                <div className="grid gap-4 max-h-[400px] overflow-y-auto custom-scrollbar pr-2">
+                  {product.children.map((variation) => (
+                    <div 
+                      key={variation.id}
+                      className="bg-white dark:bg-gray-800 rounded-lg shadow-sm hover:shadow-md transition-all p-4"
+                    >
+                      <div className="space-y-4">
+                        <div>
+                          <h4 className="font-medium text-lg mb-2">{variation.title}</h4>
+                          {/* Preço da Variação */}
+                          <div className="mb-4 p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                            {variation.promotional_price ? (
+                              <div className="space-y-1">
+                                <p className="text-gray-500 line-through">
+                                  R$ {variation.price.toFixed(2)}
+                                </p>
+                                <p className="text-xl font-bold text-green-600">
+                                  R$ {variation.promotional_price.toFixed(2)}
+                                </p>
+                                <p className="text-sm text-green-600">
+                                  {Math.round(((variation.price - variation.promotional_price) / variation.price) * 100)}% de desconto
+                                </p>
+                              </div>
+                            ) : (
+                              <p className="text-xl font-bold">
+                                R$ {variation.price.toFixed(2)}
+                              </p>
+                            )}
+                          </div>
+                          {/* Atributos da Variação */}
+                          <div className="flex flex-wrap gap-3">
+                            {Object.entries(variation.attributes || {}).map(([key, value]) => (
+                              <div 
+                                key={key}
+                                className="flex flex-col"
+                              >
+                                <span className="text-xs text-gray-500 dark:text-gray-400 mb-1">{key}</span>
+                                <span 
+                                  className="px-3 py-1.5 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-lg text-sm font-medium"
+                                >
+                                  {value}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                          {/* SKU da Variação */}
+                          {variation.sku && (
+                            <p className="mt-3 text-sm text-gray-500 dark:text-gray-400">
+                              SKU: {variation.sku}
+                            </p>
+                          )}
                         </div>
                       </div>
-                    ))}
-                  </div>
+                    </div>
+                  ))}
                 </div>
-              )}
+              </div>
+            )}
 
               {/* Componentes do Kit/Produto Fabricado */}
               {(product.type === 'kit' || product.type === 'manufactured') && product.components && (

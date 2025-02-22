@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Info, Trash2 } from 'lucide-react';
+import { Info, Trash2, X, Plus } from 'lucide-react';
 import { GalleryImageUploaderProps } from './types';
 import { BaseImageUploader } from './BaseImageUploader';
 
@@ -13,6 +13,8 @@ export function ImageGalleryUploader({
   const [images, setImages] = useState<string[]>(currentImages);
   const [showGuidelines, setShowGuidelines] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [manualUrl, setManualUrl] = useState('');
+  const [showUrlInfo, setShowUrlInfo] = useState(false);
 
   // Verificar se o plano permite upload
   const canUseImgur = planType === 'basic' || planType === 'plus';
@@ -72,12 +74,66 @@ export function ImageGalleryUploader({
           </div>
         )}
 
-        <BaseImageUploader
-          onSuccess={handleAddImage}
-          onError={setError}
-          disabled={!canUseImgur}
-          {...props}
-        />
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h4 className="text-sm font-medium">Adicionar imagem por URL</h4>
+            <button
+              type="button"
+              onClick={() => setShowUrlInfo(!showUrlInfo)}
+              className="text-blue-600 hover:text-blue-700 flex items-center gap-1 text-sm"
+            >
+              <Info className="w-4 h-4" />
+              <span>Ajuda</span>
+            </button>
+          </div>
+
+          {showUrlInfo && (
+            <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg text-sm">
+              <p className="text-blue-700 dark:text-blue-300">
+                Cole a URL direta da imagem. A URL deve terminar com uma extensão de imagem (ex: .jpg, .png, .jpeg).
+                Certifique-se de que a URL é pública e acessível.
+              </p>
+            </div>
+          )}
+
+          <div className="flex space-x-2">
+            <div className="relative flex-1">
+              <input
+                type="url"
+                value={manualUrl}
+                onChange={(e) => setManualUrl(e.target.value)}
+                className="w-full p-2 pr-8 border rounded dark:bg-gray-700 dark:border-gray-600"
+                placeholder="https://exemplo.com/imagem.jpg"
+              />
+              {manualUrl && (
+                <button
+                  onClick={() => setManualUrl('')}
+                  className="absolute right-2 top-2 text-gray-400 hover:text-gray-600"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              )}
+            </div>
+            <button
+              onClick={() => {
+                if (manualUrl) {
+                  handleAddImage(manualUrl);
+                  setManualUrl('');
+                }
+              }}
+              disabled={!manualUrl}
+              className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
+            >
+              <Plus className="w-5 h-5" />
+            </button>
+          </div>
+          <BaseImageUploader
+            onSuccess={handleAddImage}
+            onError={setError}
+            disabled={!canUseImgur}
+            {...props}
+          />
+        </div>
       </div>
 
       {error && (
@@ -95,24 +151,33 @@ export function ImageGalleryUploader({
               className="w-full h-32 object-cover rounded"
             />
             <button
-                onClick={() => handleRemoveImage(index)}
-                className="absolute top-2 right-2 p-1 bg-red-500 text-white rounded-full opacity-0 
-                    group-hover:opacity-100 transition-opacity hover:bg-red-600"
-                >
-                <Trash2 className="w-4 h-4" />
+              onClick={() => handleRemoveImage(index)}
+              className="absolute top-2 right-2 p-1 bg-red-500 text-white rounded-full opacity-0 
+                group-hover:opacity-100 transition-opacity hover:bg-red-600"
+            >
+              <Trash2 className="w-4 h-4" />
             </button>
-                    </div>
-                    ))}
-                </div>
+          </div>
+        ))}
+      </div>
 
-                <p className="text-sm text-gray-500 dark:text-gray-400">
-                    {images.length} de {maxImages} imagens
-                    {!canUseImgur && (
-                    <span className="ml-2 text-yellow-500">
-                        (Upload de imagens disponível apenas para planos Básico e Plus)
-                    </span>
-                    )}
-                </p>
-                </div>
-            );
-            }
+      <div className="space-y-2">
+        <p className="text-sm text-gray-500 dark:text-gray-400">
+          {images.length} de {maxImages} imagens
+        </p>
+        {planType === 'free' ? (
+          <div className="p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
+            <p className="text-sm text-yellow-700 dark:text-yellow-300">
+              Plano Gratuito: Você pode adicionar até 3 imagens apenas via URL.
+              Para fazer upload de imagens diretamente do seu computador, faça upgrade para o plano Básico ou Plus.
+            </p>
+          </div>
+        ) : !canUseImgur && (
+          <p className="text-sm text-yellow-600 dark:text-yellow-400">
+            Upload de imagens disponível apenas para planos Básico e Plus
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}

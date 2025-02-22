@@ -3,7 +3,6 @@ import { Package } from 'lucide-react';
 import { Product } from '../../lib/types';
 import ReactMarkdown from 'react-markdown';
 
-// Font family mapping function
 const getFontFamily = (font: string) => {
   const fontMap: Record<string, string> = {
     'roboto': 'Roboto',
@@ -43,19 +42,42 @@ export function ProductCard({
   fontFamily,
   ...props 
 }: ProductCardProps) {
-  // Memoize discount percentage
+
+  // Não renderiza se for uma variação
+  if (product.parent_id) {
+    return null;
+  }
+
   const discountPercentage = useMemo(() => {
     if (!product.promotional_price) return 0;
     return Math.round(((product.price - product.promotional_price) / product.price) * 100);
   }, [product.price, product.promotional_price]);
 
-  // Handle image error
   const handleImageError = (e: React.SyntheticEvent<HTMLImageElement>) => {
     e.currentTarget.src = '/api/placeholder/400/400';
     e.currentTarget.alt = 'Imagem não disponível';
   };
 
-  // List view component
+  // Renderização dos badges
+  const renderBadges = () => (
+    <div className="absolute top-2 right-2 flex gap-2">
+      {product.type === 'variable' && (
+        <div className="bg-blue-500 text-white px-2 py-1 rounded-full text-sm font-medium flex items-center gap-1">
+          {product.children?.length || 0} {(product.children?.length || 0) === 1 ? 'variação' : 'variações'}
+        </div>
+      )}
+      {product.promotional_price && (
+        <div 
+          className="px-2 py-1 rounded-full text-sm font-medium shadow-sm"
+          style={{ backgroundColor: accentColor, color: 'white' }}
+        >
+          {discountPercentage}% OFF
+        </div>
+      )}
+    </div>
+  );
+
+  // Componente Lista
   if (view === 'list') {
     return (
       <div 
@@ -91,17 +113,10 @@ export function ProductCard({
             />
           ) : (
             <div className="w-full h-full flex items-center justify-center">
-              <Package className="w-12 h-12" style={{ color: `${primaryColor}` }} />
+              <Package className="w-12 h-12" style={{ color: primaryColor }} />
             </div>
           )}
-          {product.promotional_price && (
-            <div 
-              className="absolute top-2 right-2 px-2 py-1 rounded-full text-sm font-medium shadow-sm"
-              style={{ backgroundColor: accentColor, color: primaryColor }}
-            >
-              {discountPercentage}% OFF
-            </div>
-          )}
+          {renderBadges()}
         </div>
 
         <div className="flex-1 p-6">
@@ -135,27 +150,29 @@ export function ProductCard({
               <ReactMarkdown>{product.description}</ReactMarkdown>
             </div>
 
-            <div className="flex flex-wrap gap-2 mt-4">
-              {product.tags.map((tag) => (
-                <span
-                  key={tag}
-                  className="text-xs px-2 py-1 rounded-full"
-                  style={{ 
-                    backgroundColor: `${secondaryColor}10`,
-                    color: secondaryColor
-                  }}
-                >
-                  {tag}
-                </span>
-              ))}
-            </div>
+            {product.tags && product.tags.length > 0 && (
+              <div className="flex flex-wrap gap-2 mt-4">
+                {product.tags.map((tag) => (
+                  <span
+                    key={tag}
+                    className="text-xs px-2 py-1 rounded-full"
+                    style={{ 
+                      backgroundColor: `${secondaryColor}10`,
+                      color: secondaryColor
+                    }}
+                  >
+                    {tag}
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </div>
     );
   }
 
-  // Grid view component
+  // Componente Grid
   return (
     <div 
       {...props}
@@ -193,17 +210,10 @@ export function ProductCard({
           />
         ) : (
           <div className="w-full h-full flex items-center justify-center">
-            <Package className="w-12 h-12" style={{ color: `${primaryColor}` }} />
+            <Package className="w-12 h-12" style={{ color: primaryColor }} />
           </div>
         )}
-        {product.promotional_price && (
-          <div 
-            className="absolute top-2 right-2 px-2 py-1 rounded-full text-sm font-medium shadow-sm"
-            style={{ backgroundColor: accentColor, color: primaryColor }}
-          >
-            {discountPercentage}% OFF
-          </div>
-        )}
+        {renderBadges()}
       </div>
 
       <div className={`

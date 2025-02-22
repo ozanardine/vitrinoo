@@ -37,7 +37,7 @@ const PLAN_FEATURES: PlanFeature[] = [
   },
   {
     text: "Upload de imagens",
-    plans: ['básico', 'plus']
+    plans: ['gratuito', 'básico', 'plus']
   },
   {
     text: "Suporte prioritário",

@@ -1,4 +1,3 @@
-import React from 'react';
 import { Package, Edit2, Trash2 } from 'lucide-react';
 import { Product } from '../lib/types';
 import ReactMarkdown from 'react-markdown';
@@ -10,19 +9,28 @@ interface ProductCardProps {
   onClick: (product: Product) => void;
 }
 
-export function ProductCard({ product, onEdit, onDelete, onClick }: ProductCardProps) {
-  const getTypeLabel = (type: string) => {
-    switch (type) {
-      case 'variable': return 'Produto com Variações';
-      case 'kit': return 'Kit/Combo';
-      case 'manufactured': return 'Produto Fabricado';
-      default: return 'Produto Simples';
-    }
-  };
+interface ProductCardProps {
+  product: Product;
+  onEdit: (product: Product) => void;
+  onDelete: (product: Product) => void;
+  onClick: (product: Product) => void;
+  hideVariations?: boolean; // Nova prop
+}
 
+export function ProductCard({ 
+  product, 
+  onEdit, 
+  onDelete, 
+  onClick,
+  hideVariations = true // Valor padrão
+}: ProductCardProps) {
+  // Se for uma variação e hideVariations estiver true, não renderiza
+  if (hideVariations && product.parent_id) {
+    return null;
+  }
   return (
     <div 
-      className="bg-white dark:bg-gray-800 rounded-lg shadow-sm overflow-hidden hover:shadow-md transition-all cursor-pointer group"
+      className="bg-white/60 dark:bg-gray-800/60 backdrop-blur-sm rounded-lg shadow-sm overflow-hidden hover:shadow-md transition-all cursor-pointer group border border-gray-100 dark:border-gray-700"
       onClick={() => onClick(product)}
     >
       <div className="aspect-square relative overflow-hidden bg-gray-100 dark:bg-gray-700">
@@ -62,11 +70,18 @@ export function ProductCard({ product, onEdit, onDelete, onClick }: ProductCardP
             <Trash2 className="w-4 h-4" />
           </button>
         </div>
-        {product.promotional_price && (
-          <div className="absolute top-2 left-2 bg-red-500 text-white px-2 py-1 rounded-full text-sm font-medium">
-            {Math.round(((product.price - product.promotional_price) / product.price) * 100)}% OFF
-          </div>
-        )}
+        <div className="absolute top-2 left-2 flex gap-2">
+          {product.promotional_price && (
+            <div className="bg-red-500 text-white px-2 py-1 rounded-full text-sm font-medium">
+              {Math.round(((product.price - product.promotional_price) / product.price) * 100)}% OFF
+            </div>
+          )}
+          {product.type === 'variable' && (
+            <div className="bg-blue-500 text-white px-2 py-1 rounded-full text-sm font-medium flex items-center gap-1">
+              {product.children?.length || 0} {(product.children?.length || 0) === 1 ? 'variação' : 'variações'}
+            </div>
+          )}
+        </div>
       </div>
       <div className="p-4">
         <div className="mb-2">

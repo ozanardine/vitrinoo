@@ -1,13 +1,18 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Plus, X, ChevronDown, ChevronUp, AlertCircle } from 'lucide-react';
 
 interface Variation {
   id?: string;
+  title?: string;
   attributes: Record<string, string>;
+  variation_attributes?: any[] | null;
   sku: string;
   price: number;
   promotional_price?: number | null;
   images: string[];
+  status?: boolean;
+  active?: boolean;
+  type?: string;
 }
 
 interface ProductVariationsProps {
@@ -29,6 +34,7 @@ export function ProductVariations({
   onExistingAttributesChange,
   parentSku
 }: ProductVariationsProps) {
+  // Estados locais
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
 
@@ -48,7 +54,8 @@ export function ProductVariations({
     }
   }, [attributes, existingAttributes]);
 
-  const toggleExpand = (id: string) => {
+  // Função para alternar expansão de uma variação
+  const toggleExpand = useCallback((id: string) => {
     setExpanded(prev => {
       const newExpanded = new Set(prev);
       if (newExpanded.has(id)) {
@@ -58,9 +65,10 @@ export function ProductVariations({
       }
       return newExpanded;
     });
-  };
+  }, []);
 
-  const generateAttributeCombinations = (
+  // Função para gerar combinações de atributos
+  const generateAttributeCombinations = useCallback((
     attrs: string[],
     options: Record<string, string[]>
   ): Record<string, string>[] => {
@@ -90,98 +98,115 @@ export function ProductVariations({
     }
     
     return combinations;
-  };
+  }, []);
 
-  const generateVariations = (e: React.MouseEvent) => {
+  // Função para gerar variações
+  const generateVariations = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     setError(null);
     
-    if (!attributes.length) {
-      setError('Selecione pelo menos um atributo de variação');
-      return;
-    }
-  
-    // Validar se todos os atributos têm opções
-    const missingOptions = attributes.filter(attr => {
-      const options = existingAttributes[attr];
-      return !options || !Array.isArray(options) || options.length === 0;
-    });
-  
-    if (missingOptions.length > 0) {
-      setError(`Atributo "${missingOptions[0]}" não tem opções definidas. Adicione opções ao atributo antes de gerar variações.`);
-      return;
-    }
-
-    // Manter variações existentes em um mapa
-    const existingVariationsMap = new Map<string, Variation>();
-    variations.forEach(variation => {
-      const key = Object.entries(variation.attributes)
-        .sort(([a], [b]) => a.localeCompare(b))
-        .map(([attr, val]) => `${attr}:${val}`)
-        .join('|');
-      existingVariationsMap.set(key, variation);
-    });
-
-    // Gerar todas as combinações possíveis
-    const combinations = generateAttributeCombinations(attributes, existingAttributes);
-    
-    if (combinations.length === 0) {
-      setError('Não foi possível gerar variações. Verifique se todos os atributos têm opções definidas.');
-      return;
-    }
-
-    // Criar novas variações mantendo dados existentes
-    const newVariations = combinations.map((combo, index) => {
-      const key = Object.entries(combo)
-        .sort(([a], [b]) => a.localeCompare(b))
-        .map(([attr, val]) => `${attr}:${val}`)
-        .join('|');
-
-      const existing = existingVariationsMap.get(key);
-      
-      if (existing) {
-        return existing;
+    try {
+      if (!attributes.length) {
+        throw new Error('Selecione pelo menos um atributo de variação antes de gerar as combinações');
       }
-
-      // Gerar SKU automático se houver SKU pai
-      const sku = parentSku 
-        ? `${parentSku}-${(index + 1).toString().padStart(3, '0')}` 
-        : '';
-
-      return {
-        attributes: combo,
-        sku,
-        price: 0,
-        promotional_price: null,
-        images: []
-      };
-    });
-
-    onVariationsChange(newVariations);
-
-    // Atualizar existingAttributes
-    const newExistingAttributes: Record<string, string[]> = {};
-    attributes.forEach(attr => {
-      newExistingAttributes[attr] = Array.from(new Set(
-        newVariations.map(v => v.attributes[attr])
-      ));
-    });
-    onExistingAttributesChange?.(newExistingAttributes);
-
-    // Expandir primeira variação
-    if (newVariations.length > 0) {
-      const firstId = newVariations[0].id || '0';
-      setExpanded(new Set([firstId]));
+  
+      // Validar se todos os atributos têm opções
+      const missingOptions = attributes.filter(attr => {
+        const options = existingAttributes[attr];
+        return !options || !Array.isArray(options) || options.length === 0;
+      });
+  
+      if (missingOptions.length > 0) {
+        throw new Error(
+          `Os seguintes atributos não têm opções definidas:\n` +
+          `${missingOptions.join(', ')}\n\n` +
+          `Adicione opções para cada atributo antes de gerar as variações.`
+        );
+      }
+  
+      // Manter variações existentes em um mapa
+      const existingVariationsMap = new Map<string, Variation>();
+      variations.forEach(variation => {
+        const key = Object.entries(variation.attributes)
+          .sort(([a], [b]) => a.localeCompare(b))
+          .map(([attr, val]) => `${attr}:${val}`)
+          .join('|');
+        existingVariationsMap.set(key, variation);
+      });
+  
+      // Gerar todas as combinações possíveis
+      const combinations = generateAttributeCombinations(attributes, existingAttributes);
+      
+      if (combinations.length === 0) {
+        throw new Error(
+          'Não foi possível gerar as variações.\n' +
+          'Verifique se todos os atributos têm opções válidas definidas.'
+        );
+      }
+  
+      // Criar novas variações mantendo dados existentes
+      const newVariations = combinations.map((combo, index) => {
+        const key = Object.entries(combo)
+          .sort(([a], [b]) => a.localeCompare(b))
+          .map(([attr, val]) => `${attr}:${val}`)
+          .join('|');
+  
+        const existing = existingVariationsMap.get(key);
+        
+        if (existing) {
+          return existing;
+        }
+  
+        // Gerar SKU automático se houver SKU pai
+        const sku = parentSku 
+          ? `${parentSku}-${(index + 1).toString().padStart(3, '0')}` 
+          : '';
+  
+        // Criar nova variação com tipagem correta
+        const newVariation: Variation = {
+          attributes: combo,
+          variation_attributes: null,
+          sku,
+          price: 0,
+          promotional_price: null,
+          images: [],
+          status: true,
+          active: true,
+          type: 'simple'
+        };
+  
+        return newVariation;
+      });
+  
+      onVariationsChange(newVariations);
+  
+      // Atualizar existingAttributes
+      const newExistingAttributes: Record<string, string[]> = {};
+      attributes.forEach(attr => {
+        newExistingAttributes[attr] = Array.from(new Set(
+          newVariations.map(v => v.attributes[attr])
+        ));
+      });
+      onExistingAttributesChange?.(newExistingAttributes);
+  
+      // Expandir primeira variação
+      if (newVariations.length > 0) {
+        setExpanded(new Set(['0'])); // Alterado para usar string fixa '0'
+      }
+    } catch (err: any) {
+      setError(err.message);
     }
-  };
+  }, [attributes, variations, existingAttributes, parentSku, generateAttributeCombinations, onVariationsChange, onExistingAttributesChange]);
 
-  const updateVariation = (index: number, updates: Partial<Variation>) => {
+  // Função para atualizar uma variação
+  const updateVariation = useCallback((index: number, updates: Partial<Variation>) => {
     const newVariations = [...variations];
     newVariations[index] = { ...newVariations[index], ...updates };
     onVariationsChange(newVariations);
-  };
+  }, [variations, onVariationsChange]);
 
-  const removeVariation = (index: number) => {
+  // Função para remover uma variação
+  const removeVariation = useCallback((index: number) => {
     const newVariations = variations.filter((_, i) => i !== index);
     onVariationsChange(newVariations);
 
@@ -200,7 +225,15 @@ export function ProductVariations({
       newExpanded.delete(variations[index].id || index.toString());
       return newExpanded;
     });
-  };
+  }, [variations, attributes, onVariationsChange, onExistingAttributesChange]);
+
+  // Validação de preço promocional
+  const validatePromotionalPrice = useCallback((price: number, promotionalPrice: number | null) => {
+    if (promotionalPrice && promotionalPrice >= price) {
+      return 'O preço promocional deve ser menor que o preço normal';
+    }
+    return null;
+  }, []);
 
   return (
     <div className="space-y-4">
@@ -296,9 +329,16 @@ export function ProductVariations({
                           <input
                             type="number"
                             value={variation.price || ''}
-                            onChange={(e) =>
-                              updateVariation(index, { price: parseFloat(e.target.value) })
-                            }
+                            onChange={(e) => {
+                              const newPrice = parseFloat(e.target.value);
+                              const priceError = validatePromotionalPrice(
+                                newPrice, 
+                                variation.promotional_price || null
+                              );
+                              if (!priceError) {
+                                updateVariation(index, { price: newPrice });
+                              }
+                            }}
                             className="w-full p-2 pl-10 border rounded dark:bg-gray-700 dark:border-gray-600"
                             disabled={disabled}
                             min="0"
@@ -315,11 +355,16 @@ export function ProductVariations({
                         <input
                           type="number"
                           value={variation.promotional_price || ''}
-                          onChange={(e) =>
-                            updateVariation(index, {
-                              promotional_price: e.target.value ? parseFloat(e.target.value) : null
-                            })
-                          }
+                          onChange={(e) => {
+                            const newPromotionalPrice = e.target.value ? parseFloat(e.target.value) : null;
+                            const priceError = validatePromotionalPrice(
+                              variation.price,
+                              newPromotionalPrice
+                            );
+                            if (!priceError) {
+                              updateVariation(index, { promotional_price: newPromotionalPrice });
+                            }
+                          }}
                           className="w-full p-2 pl-10 border rounded dark:bg-gray-700 dark:border-gray-600"
                           disabled={disabled}
                           min="0"

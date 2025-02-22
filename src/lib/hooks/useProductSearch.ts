@@ -26,21 +26,34 @@ export function useProductSearch(storeId: string): UseProductSearchReturn {
     try {
       setSearchLoading(true);
 
-      const { data, error } = await supabase.rpc('search_products_v2', {
-        p_store_id: storeId,
-        p_search: filters.search || null,
-        p_category_id: filters.categoryId,
-        p_min_price: filters.minPrice,
-        p_max_price: filters.maxPrice,
-        p_has_promotion: filters.hasPromotion,
-        p_tags: filters.selectedTags.length > 0 ? filters.selectedTags : null,
-        p_brand: filters.brand,
-        p_limit: 100,
-        p_offset: 0
-      });
+      // Modificar a consulta para incluir as variações dos produtos
+      const { data: parentProducts, error } = await supabase
+        .from('products')
+        .select(`
+          *,
+          children:products(*)
+        `)
+        .eq('store_id', storeId)
+        .eq('status', true)
+        .is('parent_id', null)
+        .or(`title.ilike.%${filters.search || ''}%,description.ilike.%${filters.search || ''}%,sku.ilike.%${filters.search || ''}%`)
+        .eq(filters.categoryId ? 'category_id' : 'status', filters.categoryId || true)
+        .gte(filters.minPrice ? 'price' : 'status', filters.minPrice || true)
+        .lte(filters.maxPrice ? 'price' : 'status', filters.maxPrice || true)
+        .eq(filters.hasPromotion ? 'has_promotion' : 'status', filters.hasPromotion || true)
+        .eq(filters.brand ? 'brand' : 'status', filters.brand || true)
+        .contains('tags', filters.selectedTags.length > 0 ? filters.selectedTags : [])
+        .limit(100);
 
       if (error) throw error;
-      setSearchResults(data || []);
+
+      // Processar produtos e suas variações
+      const processedProducts = (parentProducts || []).map(product => ({
+        ...product,
+        children: product.children || []
+      }));
+
+      setSearchResults(processedProducts);
     } catch (err) {
       console.error('Erro ao buscar produtos:', err);
     } finally {

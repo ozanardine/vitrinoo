@@ -101,10 +101,10 @@ export function BaseImageUploader({
           />
           <label
             htmlFor="image-upload"
-            className={`flex items-center px-4 py-2 border rounded cursor-pointer
-              ${(disabled || state.loading) ? 'bg-gray-100 cursor-not-allowed' : 'hover:bg-gray-50'} 
-              dark:border-gray-600 dark:hover:bg-gray-700
-              disabled:opacity-50`}
+            className={`flex items-center px-4 py-3 rounded transition-colors
+              ${(disabled || state.loading)
+                ? 'bg-blue-600/50 dark:bg-blue-600/50 text-white/50 cursor-not-allowed'
+                : 'bg-blue-600 hover:bg-blue-700 text-white dark:bg-blue-600 dark:hover:bg-blue-700'}`}
           >
             {state.loading ? (
               <Loader2 className="w-5 h-5 animate-spin" />

@@ -142,6 +142,7 @@ export interface Category {
   slug: string;
   parent_id: string | null;
   store_id: string;
+  description?: string | null;
   children?: Category[];
   level?: number;
 }

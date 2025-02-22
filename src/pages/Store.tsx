@@ -4,7 +4,7 @@ import { Package } from 'lucide-react';
 import { StoreLayout } from '../components/store/StoreLayout';
 import { StoreSearch } from '../components/store/StoreSearch';
 import { ProductCard } from '../components/store/ProductCard';
-import { ProductModal } from '../components/store/ProductModal';
+import { ProductDetailsView } from '../components/store/product-details/ProductDetailsView';
 import { ViewControls } from '../components/store/ViewControls';
 import { useStoreData } from '../lib/hooks/useStoreData';
 import { useProductSearch } from '../lib/hooks/useProductSearch';
@@ -37,6 +37,11 @@ export function Store() {
 
   // Sort products
   const sortedProducts = useProductSort(searchResults.length > 0 ? searchResults : products, currentSort);
+
+  // Count only parent products and standalone products
+  const mainProductsCount = useMemo(() => {
+    return sortedProducts.filter(product => !product.parent_id).length;
+  }, [sortedProducts]);
 
   // Grid configuration
   const gridConfig = useMemo(() => {
@@ -102,7 +107,7 @@ export function Store() {
         setCurrentView={setCurrentView}
         currentSort={currentSort}
         setCurrentSort={setCurrentSort}
-        productsCount={sortedProducts.length}
+        productsCount={mainProductsCount}
         accentColor={store.accent_color}
         secondaryColor={store.secondary_color}
         primaryColor={store.primary_color}
@@ -144,7 +149,7 @@ export function Store() {
                 product={product}
                 onClick={() => setSelectedProduct(product)}
                 view={currentView}
-                style={store.product_card_style}
+                variant={store.product_card_style}
                 accentColor={store.accent_color}
                 secondaryColor={store.secondary_color}
                 primaryColor={store.primary_color}
@@ -156,21 +161,22 @@ export function Store() {
         </div>
       )}
 
-      {/* Product Modal */}
+      {/* Product Details View */}
       {selectedProduct && (
-        <ProductModal
+        <ProductDetailsView
           product={selectedProduct}
           onClose={() => setSelectedProduct(null)}
           accentColor={store.accent_color}
           secondaryColor={store.secondary_color}
           primaryColor={store.primary_color}
           fontFamily={store.body_font}
-          style={store.product_card_style}
+          variant={store.product_card_style}
         />
       )}
     </StoreLayout>
   );
 }
+
 const getScrollbarStyles = (accentColor: string, secondaryColor: string) => `
   [data-store-content] ::-webkit-scrollbar {
     width: 4px;

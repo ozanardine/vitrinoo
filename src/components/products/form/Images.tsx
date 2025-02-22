@@ -1,4 +1,4 @@
-import { ImageGalleryUploader } from '../../ImageGalleryUploader';
+import { ImageGalleryUploader } from '../../upload/ImageGalleryUploader';
 
 interface ImagesProps {
   form: any;

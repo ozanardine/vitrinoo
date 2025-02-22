@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../supabase';
-import { StoreData, Category, Product } from '../types';
+import { Store, Category, Product } from '../types';
 
 interface UseStoreDataReturn {
-  store: StoreData | null;
+  store: Store | null;
   categories: Category[];
   products: Product[];
   brands: string[];
@@ -14,7 +14,7 @@ interface UseStoreDataReturn {
 }
 
 export function useStoreData(slug: string): UseStoreDataReturn {
-  const [store, setStore] = useState<StoreData | null>(null);
+  const [store, setStore] = useState<Store | null>(null);
   const [categories, setCategories] = useState<Category[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [brands, setBrands] = useState<string[]>([]);
@@ -69,20 +69,31 @@ export function useStoreData(slug: string): UseStoreDataReturn {
 
   const loadProducts = async (storeId?: string) => {
     try {
-      const { data, error } = await supabase
+      // Buscar produtos pai primeiro
+      const { data: parentProducts, error: parentError } = await supabase
         .from('products')
-        .select('*')
+        .select(`
+          *,
+          children:products(*)
+        `)
         .eq('store_id', storeId || store?.id || '')
-        .eq('status', true);
+        .eq('status', true)
+        .is('parent_id', null); // busca apenas produtos pai
 
-      if (error) throw error;
+      if (parentError) throw parentError;
 
-      const uniqueBrands = [...new Set(data?.map(p => p.brand) || [])];
-      const uniqueTags = [...new Set(data?.flatMap(p => p.tags) || [])];
+      // Processar produtos e suas variações
+      const processedProducts = parentProducts?.map(product => ({
+        ...product,
+        children: product.children || []
+      })) || [];
+
+      const uniqueBrands = [...new Set(processedProducts?.map(p => p.brand) || [])];
+      const uniqueTags = [...new Set(processedProducts?.flatMap(p => p.tags) || [])];
 
       setBrands(uniqueBrands);
       setTags(uniqueTags);
-      setProducts(data || []);
+      setProducts(processedProducts);
     } catch (err) {
       console.error('Erro ao carregar produtos:', err);
     }
