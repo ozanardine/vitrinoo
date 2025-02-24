@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Store, Palette, Layout, Type, Grid, Phone } from 'lucide-react';
 import { Store as StoreType } from '../../lib/types';
 import { StoreCustomizationProvider } from './store-customization/StoreCustomizationContext';
@@ -12,6 +12,7 @@ import { TypographySettings } from './store-customization/sections/TypographySet
 import { LayoutSettings } from './store-customization/sections/LayoutSettings';
 import { ContactsAndSocialNetworks } from './store-customization/sections/ContactsAndSocialNetworks';
 import { Alert, Snackbar } from '@mui/material';
+import { useThemeStore } from '../../stores/useThemeStore';
 
 interface StoreCustomizationTabProps {
   store: StoreType;
@@ -21,7 +22,7 @@ interface StoreCustomizationTabProps {
 interface AlertState {
   open: boolean;
   message: string;
-  severity: 'success' | 'error';
+  severity: 'success' | 'error' | 'info';
 }
 
 interface Section {
@@ -80,8 +81,12 @@ export function StoreCustomizationTab({ store, onUpdate }: StoreCustomizationTab
     severity: 'success'
   });
 
-  const [selectedThemePreset, setSelectedThemePreset] = useState<string | null>(null);
-  const [pendingPreset, setPendingPreset] = useState<string | null>(null);
+  // Usar null como padrão pois selected_preset pode não existir no tipo Store
+  const [selectedThemePreset, setSelectedThemePreset] = useState<string | null>((store as any).selected_preset || null);
+  const [pendingPreset, setPendingPreset] = useState<string | null>((store as any).selected_preset || null);
+  
+  const themeStore = useThemeStore();
+  const hasInitialized = useRef(false);
 
   const initialThemePreview = {
     primaryColor: store.primary_color || '#000000',
@@ -91,21 +96,51 @@ export function StoreCustomizationTab({ store, onUpdate }: StoreCustomizationTab
     background: store.background || '#ffffff'
   };
 
+  // Inicializa theme store com valores da loja apenas uma vez
+  useEffect(() => {
+    // Usando useRef para garantir que inicialize apenas uma vez
+    if (store && !hasInitialized.current) {
+      themeStore.initializeTheme({
+        primaryColor: store.primary_color,
+        secondaryColor: store.secondary_color,
+        accentColor: store.accent_color,
+        headerBackground: store.header_background,
+        background: store.background,
+        headerStyle: store.header_style,
+        surfaceColor: store.surface_color || '#ffffff',
+        borderColor: store.border_color || '#e5e7eb',
+        mutedColor: '#6b7280', // Valor padrão para mutedColor
+        selectedPreset: (store as any).selected_preset || null // Uso de cast para evitar erro de tipagem
+      });
+      hasInitialized.current = true;
+    }
+  }, [store, themeStore]);
+
   const handleSave = async (context: StoreCustomizationContextType) => {
     try {
+      // Verificar se há alterações para salvar
+      if (!context.hasPendingChanges() && !themeStore.hasChanges()) {
+        setAlert({
+          open: true,
+          message: 'Não há alterações para salvar.',
+          severity: 'info'
+        });
+        return;
+      }
+
       const success = await context.saveChanges();
       
       if (success) {
+        // Atualiza o preset selecionado após o salvamento bem-sucedido
+        if (pendingPreset !== selectedThemePreset) {
+          setSelectedThemePreset(pendingPreset);
+        }
+        
         setAlert({
           open: true,
           message: 'Alterações salvas com sucesso!',
           severity: 'success'
         });
-        
-        // Atualiza o preset selecionado apenas após o salvamento bem-sucedido
-        if (pendingPreset !== selectedThemePreset) {
-          setSelectedThemePreset(pendingPreset);
-        }
       }
     } catch (error: any) {
       setAlert({
@@ -117,29 +152,33 @@ export function StoreCustomizationTab({ store, onUpdate }: StoreCustomizationTab
   };
 
   const handleSectionChange = (context: StoreCustomizationContextType, sectionId: string) => {
-    // Se houver mudanças pendentes na seção atual, pergunta se quer salvar
-    if (context.hasPendingChanges(context.activeSection)) {
+    // Se houver mudanças pendentes na seção atual, pergunta se quer descartar
+    if (context.hasPendingChanges(context.activeSection) || 
+        (context.activeSection === 'theme' && themeStore.hasChanges())) {
+      
       const confirmChange = window.confirm(
         'Existem alterações não salvas. Deseja descartar estas alterações?'
       );
 
       if (confirmChange) {
+        // Reverter mudanças contextuais
         context.revertSectionChanges(context.activeSection);
         
-        // Reverte também o preset pendente se estiver na seção de tema
+        // Reverter mudanças do theme se estiver na seção de tema
         if (context.activeSection === 'theme') {
+          themeStore.resetToOriginal();
           setPendingPreset(selectedThemePreset);
         }
       } else {
-        return;
+        return; // Cancelar troca de seção
       }
     }
 
     context.setActiveSection(sectionId);
   };
 
-  const handleThemePresetChange = (presetId: string | null) => {
-    // Apenas atualiza o preset pendente, que será confirmado no salvamento
+  const handleThemePresetChange = (presetId: string) => {
+    // Atualiza o preset pendente, que será confirmado no salvamento
     setPendingPreset(presetId);
   };
 
@@ -150,7 +189,7 @@ export function StoreCustomizationTab({ store, onUpdate }: StoreCustomizationTab
       case 'theme':
         return (
           <ThemeSettings 
-            selectedPreset={selectedThemePreset}
+            selectedPreset={pendingPreset} // Usar o preset pendente para preview
             onPresetChange={handleThemePresetChange}
           />
         );
@@ -197,7 +236,8 @@ export function StoreCustomizationTab({ store, onUpdate }: StoreCustomizationTab
                 <div className="w-full md:w-64 space-y-2">
                   {sections.map((section) => {
                     const Icon = section.icon;
-                    const hasPendingChanges = context.hasPendingChanges(section.id);
+                    const hasPendingChanges = context.hasPendingChanges(section.id) || 
+                      (section.id === 'theme' && themeStore.hasChanges());
                     
                     return (
                       <button
@@ -244,12 +284,14 @@ export function StoreCustomizationTab({ store, onUpdate }: StoreCustomizationTab
 
                     {/* Action Buttons */}
                     <div className="flex justify-end space-x-4">
-                      {context.hasPendingChanges() && (
+                      {(context.hasPendingChanges() || 
+                        (context.activeSection === 'theme' && themeStore.hasChanges())) && (
                         <button
                           type="button"
                           onClick={() => {
                             context.revertSectionChanges(context.activeSection);
                             if (context.activeSection === 'theme') {
+                              themeStore.resetToOriginal();
                               setPendingPreset(selectedThemePreset);
                             }
                           }}
@@ -261,7 +303,9 @@ export function StoreCustomizationTab({ store, onUpdate }: StoreCustomizationTab
                       
                       <button
                         type="submit"
-                        disabled={context.loading || !context.hasPendingChanges()}
+                        disabled={context.loading || 
+                          (!context.hasPendingChanges() && 
+                            !(context.activeSection === 'theme' && themeStore.hasChanges()))}
                         className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 
                           disabled:opacity-50 disabled:hover:bg-blue-600 transition-colors duration-200"
                       >

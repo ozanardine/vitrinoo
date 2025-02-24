@@ -4,6 +4,7 @@ import { Alert } from '@mui/material';
 import { StoreHeader } from '../../../store/StoreHeader';
 import { useThemeStore } from '../../../../stores/useThemeStore';
 import { useStoreCustomization } from '../StoreCustomizationContext';
+import { ColorTheme } from '../../../../constants/theme';
 import { COLOR_PRESETS } from '../../../../constants/theme';
 import { ColorPicker } from '../forms/ColorPicker';
 import { ThemePresetSelector } from './theme/ThemePresetSelector';
@@ -30,7 +31,7 @@ interface ValidationError {
 }
 
 export function ThemeSettings({ selectedPreset, onPresetChange }: ThemeSettingsProps) {
-  const { previewData, updatePreview, stagePendingChanges } = useStoreCustomization();
+  const { previewData, updatePreview } = useStoreCustomization();
   const themeState = useThemeStore();
   
   const [validationErrors, setValidationErrors] = useState<ValidationError[]>([]);
@@ -41,20 +42,6 @@ export function ThemeSettings({ selectedPreset, onPresetChange }: ThemeSettingsP
     const hexRegex = /^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/;
     return hexRegex.test(color);
   }, []);
-
-  // Validar todas as cores do tema
-  const validateTheme = useCallback((theme: Partial<ThemeData>): ValidationError[] => {
-    const errors: ValidationError[] = [];
-    Object.entries(theme).forEach(([key, value]) => {
-      if (!validateColor(value)) {
-        errors.push({
-          field: key as keyof ThemeData,
-          message: `Cor ${key} inválida. Use formato hexadecimal.`
-        });
-      }
-    });
-    return errors;
-  }, [validateColor]);
 
   // Handler para mudança de cores individuais
   const handleColorChange = useCallback((key: keyof ThemeData) => (color: string) => {
@@ -68,58 +55,52 @@ export function ThemeSettings({ selectedPreset, onPresetChange }: ThemeSettingsP
 
     setValidationErrors(prev => prev.filter(error => error.field !== key));
     
+    // Atualiza estado local do tema - isso marca como "sujo" mas não salva
+    themeState.updateColor(key, color);
+    
+    // Criar objeto de atualizações para o preview visual
     const updates = {
       [key]: color,
       ...(key === 'primaryColor' ? { background: color } : {})
     };
     
-    // Atualiza preview
+    // Atualiza apenas o preview visual
     updatePreview(updates, 'theme');
-    
-    // Prepara mudanças para salvamento
-    stagePendingChanges(updates, 'theme');
-    
-    // Atualiza estado local do tema
-    themeState.updateColor(key, color);
     
     // Reset preset selection since we're customizing colors
     setLocalPreset(null);
-  }, [themeState, updatePreview, stagePendingChanges, validateColor]);
+  }, [themeState, updatePreview, validateColor]);
 
-  // Handler para seleção de preset
-  const handlePresetSelect = useCallback((presetId: string, colors: any) => {
+  // Handler para seleção de preset - CORRIGIDO
+  const handlePresetSelect = useCallback((presetId: string, colors: ColorTheme['colors']) => {
     try {
+      // Aplicar o preset via ThemeStore - isso apenas marca como "sujo" mas não salva
+      themeState.applyPreset(presetId);
+      
+      // Obter o estado atualizado após aplicar o preset
+      const themeData = themeState.getStateValues();
+      
+      // Criar objeto de atualizações para o preview
       const updatedData = {
-        primaryColor: colors.primary,
-        secondaryColor: colors.secondary,
-        accentColor: colors.accent,
-        headerBackground: colors.header.background,
-        background: colors.primary,
-        surfaceColor: colors.surface,
-        borderColor: colors.border,
-        mutedColor: colors.muted
+        primaryColor: themeData.primaryColor,
+        secondaryColor: themeData.secondaryColor,
+        accentColor: themeData.accentColor,
+        headerBackground: themeData.headerBackground,
+        background: themeData.background,
+        surfaceColor: themeData.surfaceColor,
+        borderColor: themeData.borderColor,
+        mutedColor: themeData.mutedColor
       };
 
-      const errors = validateTheme(updatedData);
-      if (errors.length > 0) {
-        setValidationErrors(errors);
-        return;
-      }
-
-      setValidationErrors([]);
-
-      // Atualiza preview e prepara mudanças
+      // Atualiza apenas o preview visual
       updatePreview(updatedData, 'theme');
-      stagePendingChanges(updatedData, 'theme');
-
-      // Atualiza estado local do tema para preview
-      Object.entries(updatedData).forEach(([key, value]) => {
-        themeState.updateColor(key as keyof ThemeData, value);
-      });
       
-      // Atualiza preset local e notifica mudança externa para controle de estado
+      // Atualiza preset local e notifica componente pai
       setLocalPreset(presetId);
       onPresetChange(presetId);
+      
+      // Mostrar alerta de alterações pendentes
+      setValidationErrors([]);
       
     } catch (error) {
       console.error('Erro ao aplicar preset:', error);
@@ -128,7 +109,7 @@ export function ThemeSettings({ selectedPreset, onPresetChange }: ThemeSettingsP
         message: 'Erro ao aplicar tema. Tente novamente.'
       }]);
     }
-  }, [themeState, validateTheme, updatePreview, stagePendingChanges, onPresetChange]);
+  }, [themeState, updatePreview, onPresetChange]);
 
   // Sincroniza preset local com estado externo
   useEffect(() => {
@@ -138,6 +119,7 @@ export function ThemeSettings({ selectedPreset, onPresetChange }: ThemeSettingsP
   }, [selectedPreset]);
 
   return (
+    // IMPORTANTE: Não envolver em um <form>, pois já está dentro de um form no componente pai
     <div className="space-y-8">
       {validationErrors.length > 0 && (
         <Alert
@@ -151,6 +133,17 @@ export function ThemeSettings({ selectedPreset, onPresetChange }: ThemeSettingsP
               <li key={index}>{error.message}</li>
             ))}
           </ul>
+        </Alert>
+      )}
+
+      {themeState.hasChanges() && (
+        <Alert
+          severity="info"
+          sx={{ mb: 2 }}
+        >
+          <div className="font-medium">
+            Alterações de tema ainda não foram salvas. Clique em "Salvar Alterações" para confirmar.
+          </div>
         </Alert>
       )}
 

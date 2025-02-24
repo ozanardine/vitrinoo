@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useCallback } from 'react';
 import { StoreFormData, PendingChanges } from './types';
 import { Store } from '../../../lib/types';
 import { supabase } from '../../../lib/supabase';
+import { useThemeStore } from '../../../stores/useThemeStore';
 
 const DEFAULT_VALUES = {
   titleFont: 'sans' as const,
@@ -28,6 +29,9 @@ const initializeFormData = (store: Store): StoreFormData => ({
   accentColor: store.accent_color || '#0066FF',
   headerBackground: store.header_background || '#ffffff',
   background: store.background || '#ffffff',
+  surfaceColor: store.surface_color || '#ffffff',
+  borderColor: store.border_color || '#e5e7eb',
+  mutedColor: '#6b7280', // Definido um valor padrão já que não existe na Store
   allowThemeToggle: true,
   headerStyle: (store.header_style as StoreFormData['headerStyle']) || DEFAULT_VALUES.headerStyle,
   headerHeight: store.header_height?.replace('px', '') || '400',
@@ -131,20 +135,24 @@ export function StoreCustomizationProvider({ children, store, onUpdate }: Provid
   const [activeSection, setActiveSection] = useState<string>('general');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const themeStore = useThemeStore();
 
-  const updatePreview = useCallback((updates: Partial<StoreFormData>, section: string) => {
+  // Simplificada para atualizar apenas o preview visual, sem registrar pendências
+  const updatePreview = useCallback((updates: Partial<StoreFormData>) => {
     setPreviewData(prev => ({
       ...prev,
       ...updates
     }));
   }, []);
 
+  // Registra alterações pendentes
   const applyChanges = useCallback((updates: Partial<StoreFormData>, section: string) => {
     const timestamp = Date.now();
     
     setPendingChanges(prev => {
       const newChanges = { ...prev };
       
+      // Registrar apenas mudanças em relação aos dados originais
       Object.entries(updates).forEach(([key, value]) => {
         if (value !== formData[key as keyof StoreFormData]) {
           newChanges[key] = {
@@ -153,12 +161,16 @@ export function StoreCustomizationProvider({ children, store, onUpdate }: Provid
             timestamp,
             previousValue: formData[key as keyof StoreFormData]
           };
+        } else if (newChanges[key]) {
+          // Se o valor voltou ao original, remover das pendências
+          delete newChanges[key];
         }
       });
       
       return newChanges;
     });
 
+    // Atualiza o preview visual
     setPreviewData(prev => ({
       ...prev,
       ...updates
@@ -190,33 +202,81 @@ export function StoreCustomizationProvider({ children, store, onUpdate }: Provid
     }));
   }, [pendingChanges]);
 
+  // ÚNICO método que salva no banco de dados - CORRIGIDO
   const saveChanges = async () => {
-    if (!hasPendingChanges()) return true;
+    // Verificar explicitamente se há mudanças pendentes para salvar
+    if (!hasPendingChanges() && !themeStore.hasChanges()) {
+      console.log('Não há alterações para salvar');
+      return true;
+    }
     
+    console.log('Iniciando processo de salvamento...');
     setLoading(true);
     setError(null);
-
+  
     try {
+      // Validar mudanças contextuais
       await validateChanges(pendingChanges, store);
-
+  
+      // Preparar dados para atualização
       const updateData = formatChangesForDB(pendingChanges);
       
+      // Se houver mudanças no themeStore, adicionar a updateData
+      if (themeStore.hasChanges()) {
+        console.log('Incluindo alterações do tema no salvamento');
+        const themeData = themeStore.getStateValues();
+        updateData.primary_color = themeData.primaryColor;
+        updateData.secondary_color = themeData.secondaryColor;
+        updateData.accent_color = themeData.accentColor;
+        updateData.header_background = themeData.headerBackground;
+        updateData.background = themeData.background;
+        updateData.surface_color = themeData.surfaceColor;
+        updateData.border_color = themeData.borderColor;
+        updateData.header_style = themeData.headerStyle;
+        
+        // Incluir o preset selecionado, se houver
+        if (themeData.selectedPreset) {
+          updateData.selected_preset = themeData.selectedPreset;
+        } else {
+          updateData.selected_preset = null;
+        }
+      }
+      
+      console.log('Enviando atualização para o banco de dados:', updateData);
+      
+      // ÚNICO lugar que faz a atualização no banco de dados
       const { error: updateError } = await supabase
         .from('stores')
         .update(updateData)
         .eq('id', store.id);
-
+  
       if (updateError) throw updateError;
-
+  
+      console.log('Atualização concluída com sucesso');
+  
+      // Atualizar o formData com as novas informações
       setFormData(prev => ({
         ...prev,
-        ...updateData
+        ...Object.entries(updateData).reduce((acc, [key, value]) => {
+          // Converter chaves snake_case para camelCase
+          const camelKey = key.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase());
+          acc[camelKey as keyof StoreFormData] = value;
+          return acc;
+        }, {} as Partial<StoreFormData>)
       }));
       
+      // Limpar pendências
       setPendingChanges({});
+      
+      // Confirmar mudanças no themeStore apenas DEPOIS do salvamento bem-sucedido
+      if (themeStore.hasChanges()) {
+        themeStore.commitChanges();
+      }
+      
       onUpdate();
       return true;
     } catch (err: any) {
+      console.error('Erro ao salvar alterações:', err);
       setError(err.message);
       return false;
     } finally {
@@ -235,7 +295,7 @@ export function StoreCustomizationProvider({ children, store, onUpdate }: Provid
     formData,
     previewData,
     updatePreview,
-    stagePendingChanges: applyChanges, // renomeando função
+    stagePendingChanges: applyChanges, 
     loading,
     error,
     activeSection,

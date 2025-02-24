@@ -83,7 +83,7 @@ export function ColorPicker({
       
       <div className="flex items-center space-x-2">
         <button
-          type="button"
+          type="button" // Importante: definir como button para evitar submissão do formulário
           onClick={() => setShowPresets(!showPresets)}
           className="w-10 h-10 rounded-lg border border-gray-200 dark:border-gray-700 
             overflow-hidden shadow-sm hover:shadow-md transition-all duration-200
@@ -106,7 +106,7 @@ export function ColorPicker({
           
           {inputValue && (
             <button
-              type="button"
+              type="button" // Importante: definir como button para evitar submissão do formulário
               onClick={() => handleInputChange('')}
               className="absolute right-2 top-1/2 -translate-y-1/2 p-1 
                 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300
@@ -133,7 +133,7 @@ export function ColorPicker({
             {presets.map((preset, index) => (
               <button
                 key={index}
-                type="button"
+                type="button" // Importante: definir como button para evitar submissão do formulário
                 onClick={() => {
                   handleInputChange(preset);
                   setShowPresets(false);
