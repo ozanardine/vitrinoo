@@ -5,9 +5,15 @@ interface ProductTypeSelectorProps {
   value: 'simple' | 'variable' | 'kit' | 'manufactured' | 'service';
   onChange: (type: 'simple' | 'variable' | 'kit' | 'manufactured' | 'service') => void;
   disabled?: boolean;
+  showWarning?: boolean;
 }
 
-export function ProductTypeSelector({ value, onChange, disabled }: ProductTypeSelectorProps) {
+export const ProductTypeSelector = ({ 
+  value, 
+  onChange, 
+  disabled,
+  showWarning = true 
+}: ProductTypeSelectorProps) => {
   const types = [
     {
       id: 'simple',
@@ -41,6 +47,20 @@ export function ProductTypeSelector({ value, onChange, disabled }: ProductTypeSe
     }
   ] as const;
 
+  // Handler para confirmar mudança de tipo quando já existem dados
+  const handleTypeChange = (newType: typeof value) => {
+    // Se o tipo atual é diferente do novo tipo e showWarning está ativo
+    if (value !== newType && showWarning) {
+      // Confirmar com o usuário antes de mudar o tipo
+      const confirmed = window.confirm(
+        'Mudar o tipo do produto pode resultar na perda de alguns dados. Deseja continuar?'
+      );
+      if (!confirmed) return;
+    }
+    
+    onChange(newType);
+  };
+
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
       {types.map((type) => {
@@ -50,8 +70,9 @@ export function ProductTypeSelector({ value, onChange, disabled }: ProductTypeSe
         return (
           <button
             key={type.id}
-            onClick={() => onChange(type.id)}
+            onClick={() => handleTypeChange(type.id as typeof value)}
             disabled={disabled}
+            type="button" // Importante: evita submit acidental do form
             className={`p-4 rounded-lg border-2 text-left transition-colors ${
               isSelected
                 ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
@@ -76,4 +97,4 @@ export function ProductTypeSelector({ value, onChange, disabled }: ProductTypeSe
       })}
     </div>
   );
-}
+};

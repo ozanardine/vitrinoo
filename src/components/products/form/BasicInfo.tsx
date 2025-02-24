@@ -2,7 +2,14 @@ import { Search } from 'lucide-react';
 import { ProductTypeSelector } from '../ProductTypeSelector';
 
 interface BasicInfoProps {
-  form: any;
+  form: {
+    title: string;
+    brand: string;
+    sku: string;
+    price: number;
+    promotional_price: number | null;
+    category_id: string | null;
+  };
   setForm: (form: any) => void;
   productType: 'simple' | 'variable' | 'kit' | 'manufactured' | 'service';
   setProductType: (type: 'simple' | 'variable' | 'kit' | 'manufactured' | 'service') => void;
@@ -20,6 +27,17 @@ export function BasicInfo({
   onOpenCategoryModal,
   disabled
 }: BasicInfoProps) {
+  const hasFormData = (): boolean => {
+    return !!(
+      form.title ||
+      form.brand ||
+      form.sku ||
+      form.price ||
+      form.promotional_price ||
+      form.category_id
+    );
+  };
+
   return (
     <div className="space-y-6">
       <h3 className="text-lg font-medium">Informações Básicas</h3>
@@ -30,6 +48,7 @@ export function BasicInfo({
           value={productType}
           onChange={setProductType}
           disabled={disabled}
+          showWarning={hasFormData()}
         />
       </div>
 
