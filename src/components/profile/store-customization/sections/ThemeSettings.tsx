@@ -4,7 +4,6 @@ import { Alert } from '@mui/material';
 import { StoreHeader } from '../../../store/StoreHeader';
 import { useThemeStore } from '../../../../stores/useThemeStore';
 import { useStoreCustomization } from '../StoreCustomizationContext';
-import { ColorTheme } from '../../../../constants/theme';
 import { COLOR_PRESETS } from '../../../../constants/theme';
 import { ColorPicker } from '../forms/ColorPicker';
 import { ThemePresetSelector } from './theme/ThemePresetSelector';
@@ -72,7 +71,7 @@ export function ThemeSettings({ selectedPreset, onPresetChange }: ThemeSettingsP
   }, [themeState, updatePreview, validateColor]);
 
   // Handler para seleção de preset - CORRIGIDO
-  const handlePresetSelect = useCallback((presetId: string, colors: ColorTheme['colors']) => {
+  const handlePresetSelect = useCallback((presetId: string) => {
     try {
       // Aplicar o preset via ThemeStore - isso apenas marca como "sujo" mas não salva
       themeState.applyPreset(presetId);
@@ -133,17 +132,6 @@ export function ThemeSettings({ selectedPreset, onPresetChange }: ThemeSettingsP
               <li key={index}>{error.message}</li>
             ))}
           </ul>
-        </Alert>
-      )}
-
-      {themeState.hasChanges() && (
-        <Alert
-          severity="info"
-          sx={{ mb: 2 }}
-        >
-          <div className="font-medium">
-            Alterações de tema ainda não foram salvas. Clique em "Salvar Alterações" para confirmar.
-          </div>
         </Alert>
       )}
 

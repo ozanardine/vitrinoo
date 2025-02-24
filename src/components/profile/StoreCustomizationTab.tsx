@@ -152,28 +152,7 @@ export function StoreCustomizationTab({ store, onUpdate }: StoreCustomizationTab
   };
 
   const handleSectionChange = (context: StoreCustomizationContextType, sectionId: string) => {
-    // Se houver mudanças pendentes na seção atual, pergunta se quer descartar
-    if (context.hasPendingChanges(context.activeSection) || 
-        (context.activeSection === 'theme' && themeStore.hasChanges())) {
-      
-      const confirmChange = window.confirm(
-        'Existem alterações não salvas. Deseja descartar estas alterações?'
-      );
-
-      if (confirmChange) {
-        // Reverter mudanças contextuais
-        context.revertSectionChanges(context.activeSection);
-        
-        // Reverter mudanças do theme se estiver na seção de tema
-        if (context.activeSection === 'theme') {
-          themeStore.resetToOriginal();
-          setPendingPreset(selectedThemePreset);
-        }
-      } else {
-        return; // Cancelar troca de seção
-      }
-    }
-
+    // Simplesmente muda para a nova seção sem confirmação
     context.setActiveSection(sectionId);
   };
 

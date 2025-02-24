@@ -1,10 +1,11 @@
 import { useState } from 'react';
+import { Check } from 'lucide-react';
 import { COLOR_THEMES, ColorTheme } from '../../../../../constants/theme';
 import { useThemeStore } from '../../../../../stores/useThemeStore';
 
 interface ThemePresetSelectorProps {
   selectedPreset: string | null;
-  onSelect: (presetId: string, colors: ColorTheme['colors']) => void;
+  onSelect: (presetId: string) => void;
 }
 
 export function ThemePresetSelector({ selectedPreset, onSelect }: ThemePresetSelectorProps) {
@@ -25,96 +26,150 @@ export function ThemePresetSelector({ selectedPreset, onSelect }: ThemePresetSel
       themeState.headerBackground !== preset.colors.header.background
     );
   };
+
+  // Agrupa temas por categoria
+  const groupedThemes = Object.entries(COLOR_THEMES).reduce((acc, [key, theme]) => {
+    if (!acc[theme.category]) {
+      acc[theme.category] = [];
+    }
+    acc[theme.category].push({ key, theme });
+    return acc;
+  }, {} as Record<string, Array<{ key: string; theme: ColorTheme }>>);
   
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-      {Object.entries(COLOR_THEMES).map(([key, theme]) => {
-        const isSelected = selectedPreset === key;
-        const isModified = isPresetModified(key);
-        
-        return (
-          <button
-            key={key}
-            // Importante: adicionar type="button" para evitar que funcione como submit
-            type="button"
-            onClick={() => onSelect(key, theme.colors)}
-            onMouseEnter={() => setHoveredPreset(key)}
-            onMouseLeave={() => setHoveredPreset(null)}
-            className={`
-              p-4 rounded-lg border-2 transition-all relative
-              ${isSelected 
-                ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' 
-                : 'border-gray-200 dark:border-gray-700 hover:border-blue-500/50'
-              }
-            `}
-          >
-            <div className="flex items-center gap-3 mb-3">
-              <div 
-                className="w-8 h-8 rounded-full border-2 border-white shadow-sm"
-                style={{ backgroundColor: theme.colors.accent }}
-              />
-              <span className="font-medium">{theme.name}</span>
+    <div className="space-y-8">
+      {(['light', 'dark', 'branded'] as const).map((category) => (
+        <div key={category} className="space-y-4">
+          <h3 className="text-lg font-medium flex items-center gap-2">
+            {category === 'light' && 'Temas Claros'}
+            {category === 'dark' && 'Temas Escuros'}
+            {category === 'branded' && 'Temas Personalizados'}
+          </h3>
+          
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {groupedThemes[category]?.map(({ key, theme }) => {
+              const isSelected = selectedPreset === key;
+              const isModified = isPresetModified(key);
               
-              {isSelected && isModified && (
-                <span className="ml-auto text-xs text-yellow-600 dark:text-yellow-400 bg-yellow-100 dark:bg-yellow-900/30 px-2 py-0.5 rounded-full">
-                  Modificado
-                </span>
-              )}
-            </div>
-            <p className="text-sm text-gray-600 dark:text-gray-400">
-              {theme.description}
-            </p>
-            <div className="mt-3 flex flex-wrap gap-2">
-              {[
-                { key: 'primary', label: 'Primary' },
-                { key: 'secondary', label: 'Secondary' },
-                { key: 'accent', label: 'Accent' },
-                { key: 'surface', label: 'Surface' },
-                { key: 'border', label: 'Border' },
-                { key: 'muted', label: 'Muted' }
-              ].map(({ key: colorKey, label }) => {
-                // Pega o valor da cor do tema
-                const colorValue = typeof theme.colors[colorKey as keyof ColorTheme['colors']] === 'string' 
-                  ? theme.colors[colorKey as keyof ColorTheme['colors']] as string
-                  : (theme.colors[colorKey as keyof ColorTheme['colors']] as { background: string }).background;
-                
-                // Compara com o valor atual no store se for o preset selecionado
-                const isColorModified = isSelected && isModified && (
-                  (colorKey === 'primary' && themeState.primaryColor !== colorValue) ||
-                  (colorKey === 'secondary' && themeState.secondaryColor !== colorValue) ||
-                  (colorKey === 'accent' && themeState.accentColor !== colorValue) ||
-                  (colorKey === 'surface' && themeState.surfaceColor !== colorValue) ||
-                  (colorKey === 'border' && themeState.borderColor !== colorValue) ||
-                  (colorKey === 'muted' && themeState.mutedColor !== colorValue)
-                );
-                
-                return (
-                  <div
-                    key={colorKey}
-                    className={`w-6 h-6 rounded-full border-2 shadow-sm relative ${
-                      isColorModified ? 'border-yellow-500' : 'border-white'
-                    }`}
-                    style={{ backgroundColor: colorValue }}
-                    title={`${label}${isColorModified ? ' (modificado)' : ''}`}
+              return (
+                <div
+                  key={key}
+                  className={`
+                    group relative overflow-hidden rounded-lg transition-all duration-200
+                    ${isSelected ? 'ring-2 ring-blue-500 shadow-lg' : 'hover:ring-1 hover:ring-blue-500/50 hover:shadow-md'}
+                  `}
+                >
+                  <button
+                    type="button"
+                    onClick={() => onSelect(key)}
+                    onMouseEnter={() => setHoveredPreset(key)}
+                    onMouseLeave={() => setHoveredPreset(null)}
+                    className="w-full text-left"
                   >
-                    {isColorModified && (
-                      <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-yellow-500" />
+                    <div 
+                      className="p-6 space-y-4"
+                      style={{ 
+                        backgroundColor: theme.colors.primary,
+                        borderColor: theme.colors.border
+                      }}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="relative">
+                            <div 
+                              className="w-10 h-10 rounded-full border-2 border-white shadow-sm"
+                              style={{ backgroundColor: theme.colors.accent }}
+                            />
+                            {isSelected && (
+                              <div className="absolute -top-1 -right-1 w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center">
+                                <Check className="w-3 h-3 text-white" />
+                              </div>
+                            )}
+                          </div>
+                          <div>
+                            <h3 
+                              className="font-semibold text-lg"
+                              style={{ color: theme.colors.secondary }}
+                            >
+                              {theme.name}
+                            </h3>
+                            {isSelected && isModified && (
+                              <span 
+                                className="text-xs px-2 py-0.5 rounded-full"
+                                style={{
+                                  backgroundColor: `${theme.colors.accent}20`,
+                                  color: theme.colors.accent
+                                }}
+                              >
+                                Modificado
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      <p 
+                        className="text-sm"
+                        style={{ color: `${theme.colors.secondary}CC` }}
+                      >
+                        {theme.description}
+                      </p>
+
+                      <div className="flex flex-wrap gap-2">
+                        {[
+                          { key: 'primary' as const },
+                          { key: 'secondary' as const },
+                          { key: 'accent' as const },
+                          { key: 'surface' as const },
+                          { key: 'border' as const },
+                          { key: 'muted' as const }
+                        ].map(({ key: colorKey }) => {
+                          const color = theme.colors[colorKey];
+                          
+                          const isColorModified = isSelected && isModified && (
+                            (colorKey === 'primary' && themeState.primaryColor !== color) ||
+                            (colorKey === 'secondary' && themeState.secondaryColor !== color) ||
+                            (colorKey === 'accent' && themeState.accentColor !== color)
+                          );
+                          
+                          return (
+                            <div
+                              key={colorKey}
+                              className={`
+                                relative w-8 h-8 rounded-full border-2 shadow-sm transition-all duration-200
+                                ${isColorModified ? 'ring-2 ring-yellow-500' : 'border-white/30'}
+                                group-hover:scale-105
+                              `}
+                              style={{ backgroundColor: color }}
+                            />
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {hoveredPreset === key && (
+                      <div 
+                        className="absolute inset-0 flex items-center justify-center transition-opacity"
+                        style={{ backgroundColor: `${theme.colors.secondary}66` }}
+                      >
+                        <span 
+                          className="px-4 py-2 rounded-lg font-medium shadow-lg"
+                          style={{ 
+                            backgroundColor: theme.colors.surface,
+                            color: theme.colors.secondary
+                          }}
+                        >
+                          {isSelected ? 'Selecionado' : 'Selecionar Tema'}
+                        </span>
+                      </div>
                     )}
-                  </div>
-                );
-              })}
-            </div>
-            
-            {hoveredPreset === key && (
-              <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center rounded-lg">
-                <div className="text-white font-medium px-4 py-2 bg-blue-600 rounded-lg">
-                  {isSelected ? 'Selecionado' : 'Selecionar'} 
+                  </button>
                 </div>
-              </div>
-            )}
-          </button>
-        );
-      })}
+              );
+            })}
+          </div>
+        </div>
+      ))}
     </div>
   );
 }

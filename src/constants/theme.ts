@@ -59,8 +59,8 @@ export const COLOR_THEMES: Record<string, ColorTheme> = {
 
   warmElegant: {
     id: 'warmElegant',
-    category: 'light',
     name: 'Elegante',
+    category: 'light',
     colors: {
       primary: '#FFFBF5',
       secondary: '#431407',
@@ -74,6 +74,44 @@ export const COLOR_THEMES: Record<string, ColorTheme> = {
       }
     },
     description: 'Tons quentes e elegantes com toques terrosos'
+  },
+
+  freshMint: {
+    id: 'freshMint',
+    name: 'Fresh Mint',
+    category: 'light',
+    colors: {
+      primary: '#F0FDF4',
+      secondary: '#064E3B',
+      accent: '#059669',
+      surface: '#FFFFFF',
+      border: '#D1FAE5',
+      muted: '#047857',
+      header: {
+        background: '#ECFDF5',
+        text: '#064E3B'
+      }
+    },
+    description: 'Tons refrescantes de verde menta'
+  },
+
+  lavender: {
+    id: 'lavender',
+    name: 'Lavanda',
+    category: 'light',
+    colors: {
+      primary: '#F5F3FF',
+      secondary: '#5B21B6',
+      accent: '#7C3AED',
+      surface: '#FFFFFF',
+      border: '#DDD6FE',
+      muted: '#6D28D9',
+      header: {
+        background: '#EDE9FE',
+        text: '#5B21B6'
+      }
+    },
+    description: 'Suaves tons de lavanda e roxo'
   },
 
   // Dark Themes
@@ -132,6 +170,44 @@ export const COLOR_THEMES: Record<string, ColorTheme> = {
       }
     },
     description: 'Elegante com detalhes dourados'
+  },
+
+  darkForest: {
+    id: 'darkForest',
+    name: 'Dark Forest',
+    category: 'dark',
+    colors: {
+      primary: '#022C22',
+      secondary: '#ECFDF5',
+      accent: '#059669',
+      surface: '#064E3B',
+      border: '#065F46',
+      muted: '#A7F3D0',
+      header: {
+        background: '#011F16',
+        text: '#ECFDF5'
+      }
+    },
+    description: 'Tema escuro com tons profundos de verde'
+  },
+
+  darkOcean: {
+    id: 'darkOcean',
+    name: 'Dark Ocean',
+    category: 'dark',
+    colors: {
+      primary: '#0C4A6E',
+      secondary: '#F0F9FF',
+      accent: '#0EA5E9',
+      surface: '#075985',
+      border: '#0369A1',
+      muted: '#BAE6FD',
+      header: {
+        background: '#082F49',
+        text: '#F0F9FF'
+      }
+    },
+    description: 'Tema escuro com tons profundos de azul'
   },
 
   // Branded Themes
@@ -198,41 +274,42 @@ export const COLOR_PRESETS = {
   primary: [
     // Backgrounds claros
     '#FFFFFF', '#F8FAFC', '#FFFBF5', '#F1F5F2', '#F0FDFF', '#FAFAFA',
+    '#F0FDF4', '#F5F3FF',
     // Backgrounds escuros
-    '#0F172A', '#18181B', '#1C1917', '#020617', '#09090B', '#0C0A09'
+    '#0F172A', '#18181B', '#1C1917', '#022C22', '#0C4A6E', '#082F49'
   ],
   
   secondary: [
     // Texto em fundos claros
-    '#18181B', '#1E293B', '#431407', '#1B4332', '#164E63', '#18181B',
+    '#18181B', '#1E293B', '#431407', '#064E3B', '#5B21B6', '#164E63',
     // Texto em fundos escuros
-    '#F1F5F9', '#F4F4F5', '#FAFAF9', '#FFFFFF', '#F8FAFC', '#FAFAFA'
+    '#F1F5F9', '#F4F4F5', '#FAFAF9', '#ECFDF5', '#F0F9FF', '#FFFFFF'
   ],
   
   accent: [
     // Cores de destaque com bom contraste
-    '#2563EB', '#4F46E5', '#B45309', '#047857', '#0891B2', '#4338CA',
-    '#9333EA', '#CA8A04', '#BE185D', '#059669', '#EA580C', '#7C3AED'
+    '#2563EB', '#4F46E5', '#B45309', '#059669', '#7C3AED', '#0891B2',
+    '#3B82F6', '#9333EA', '#CA8A04', '#059669', '#0EA5E9', '#047857'
   ],
 
   surface: [
     // Superfícies elevadas claras
-    '#FFFFFF', '#F8FAFC', '#FFFBF5', '#F1F5F2', '#F0FDFF', '#FAFAFA',
+    '#FFFFFF', '#F8FAFC', '#FFFBF5', '#ECFDF5', '#EDE9FE', '#F0FDFF',
     // Superfícies elevadas escuras
-    '#1E293B', '#27272A', '#292524', '#1F2937', '#18181B', '#1C1917'
+    '#1E293B', '#27272A', '#292524', '#064E3B', '#075985', '#0C4A6E'
   ],
 
   border: [
     // Bordas para temas claros
-    '#CBD5E1', '#E4E4E7', '#FED7AA', '#D1E4D9', '#A5F3FC', '#E4E4E7',
+    '#CBD5E1', '#E4E4E7', '#FED7AA', '#D1FAE5', '#DDD6FE', '#A5F3FC',
     // Bordas para temas escuros
-    '#475569', '#52525B', '#57534E', '#374151', '#3F3F46', '#44403C'
+    '#475569', '#52525B', '#57534E', '#065F46', '#0369A1', '#082F49'
   ],
 
   muted: [
     // Texto secundário para temas claros
-    '#475569', '#475569', '#9A3412', '#2D6A4F', '#155E75', '#52525B',
+    '#475569', '#475569', '#9A3412', '#047857', '#6D28D9', '#155E75',
     // Texto secundário para temas escuros
-    '#94A3B8', '#A1A1AA', '#A8A29E', '#9CA3AF', '#A1A1AA', '#A8A29E'
+    '#94A3B8', '#A1A1AA', '#A8A29E', '#A7F3D0', '#BAE6FD', '#94A3B8'
   ]
 } as const;
