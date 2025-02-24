@@ -1,5 +1,4 @@
-import { Phone, Instagram, Facebook, Twitter, Youtube, Linkedin, MessageCircle, Mail, Globe, GitBranch as BrandTiktok } from 'lucide-react';
-import { getCountryCallingCode, AsYouType, CountryCode } from 'libphonenumber-js'
+import { AsYouType, CountryCode } from 'libphonenumber-js'
 
 // List of countries with calling codes
 export interface Country {
@@ -58,28 +57,43 @@ export async function fetchCountries(): Promise<Country[]> {
 }
 
 export function formatPhoneNumber(value: string, country: Country): string {
-  const formatter = new AsYouType(country.code as CountryCode)
-  return formatter.input(value)
+  // Remove non-numeric characters
+  const numbers = value.replace(/\D/g, '');
+  
+  // Use libphonenumber-js for proper formatting
+  const formatter = new AsYouType(country.code as CountryCode);
+  const formatted = formatter.input(`+${country.dialCode}${numbers}`);
+  
+  // Only return the formatted number if it's valid
+  if (!formatter.isValid()) {
+    // If invalid, return only the valid part of the number
+    const validPart = formatter.getNumber()?.formatNational() || '';
+    return validPart.replace(/\D/g, '');
+  }
+  
+  // Remove country code from the formatted number if present
+  return formatted.replace(new RegExp(`^\\+${country.dialCode}`), '').trim();
 }
 
 export function validatePhoneNumber(value: string, country: Country): boolean {
-  // Remove tudo que não for número
-  const numbers = value.replace(/\D/g, '');
+  // Remove non-numeric characters
+  const numbers = value.replace(/D/g, '');
   
-  // Verifica se tem o número mínimo de dígitos para o país
-  const minLength = (country.format || '').split('#').length - 1;
-  const maxLength = minLength + 2; // Permite até 2 dígitos extras para flexibilidade
+  // Use libphonenumber-js for validation
+  const formatter = new AsYouType(country.code as CountryCode);
+  formatter.input(`+${country.dialCode}${numbers}`);
   
-  return numbers.length >= minLength && numbers.length <= maxLength;
+  // Check if the number is valid for the country
+  return formatter.isValid() && numbers.length > 0 && formatter.getNumber()?.isValid() === true;
 }
 
 export function getPhoneNumberDisplay(value: string, country: Country): string {
   return `(+${country.dialCode}) ${value}`;
 }
 
-export function parsePhoneNumber(formattedNumber: string): { countryCode: string; number: string } | null {
+export function parsePhoneNumber(value: string): { countryCode: string; number: string } | null {
   // Remove tudo que não for número
-  const numbers = formattedNumber.replace(/\D/g, '');
+  const numbers = value.replace(/D/g, '');
   
   if (!numbers) return null;
 

@@ -80,6 +80,7 @@ export function LayoutSettings() {
     title: `Produto ${i + 1}`,
     description: 'Lorem ipsum dolor sit amet',
     price: 99.99,
+    promotional_price: i % 3 === 0 ? 79.99 : null, // Add promotional price to every third product
     brand: 'Marca Exemplo',
     tags: ['Tag 1', 'Tag 2'],
     images: [],
@@ -89,7 +90,6 @@ export function LayoutSettings() {
     status: true,
     sku: null,
     category_id: null,
-    promotional_price: null,
     components: [],
     attributes: {}
   }));
@@ -259,8 +259,13 @@ export function LayoutSettings() {
                 key={product.id}
                 product={product}
                 onClick={() => {}}
-                style={previewData.productCardStyle}
+                variant={previewData.productCardStyle}
                 view="grid"
+                primaryColor={previewData.primaryColor}
+                secondaryColor={previewData.secondaryColor}
+                accentColor={previewData.accentColor}
+                surfaceColor={previewData.surfaceColor}
+                fontFamily={previewData.bodyFont}
               />
             ))}
           </div>

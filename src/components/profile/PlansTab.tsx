@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Check, Loader2, AlertCircle } from 'lucide-react';
 import { Store } from '../../lib/types';
 import { createCheckoutSession, createPortalSession, Plan } from '../../lib/stripe';
-import { PLAN_LIMITS } from '../../lib/store';
+import { PlanType, getPlanLimits } from '../../lib/plans';
 
 interface PlansTabProps {
   store: Store;
@@ -19,17 +19,17 @@ const PLAN_FEATURES: PlanFeature[] = [
   {
     text: "Produtos",
     plans: ['gratuito', 'básico', 'plus'],
-    getLimit: (type: string) => type === 'free' ? '100' : type === 'basic' ? '1.000' : '10.000'
+    getLimit: (type: string) => getPlanLimits(type as PlanType).products.toLocaleString()
   },
   {
     text: "Categorias principais",
     plans: ['gratuito', 'básico', 'plus'],
-    getLimit: (type: string) => type === 'free' ? '10' : type === 'basic' ? '50' : '200'
+    getLimit: (type: string) => getPlanLimits(type as PlanType).categories.toLocaleString()
   },
   {
     text: "Imagens por produto",
     plans: ['gratuito', 'básico', 'plus'],
-    getLimit: (type: string) => type === 'free' ? '3' : type === 'basic' ? '5' : '10'
+    getLimit: (type: string) => getPlanLimits(type as PlanType).images_per_product.toString()
   },
   {
     text: "Link compartilhável",
@@ -54,12 +54,13 @@ const PLAN_FEATURES: PlanFeature[] = [
 ];
 
 const PlanFeatures = ({ plan }: { plan: Plan }) => {
-  const getPlanType = (plan: Plan) => {
-    switch (plan.metadata.plan_type) {
+  const getPlanType = (plan: Plan): 'gratuito' | 'básico' | 'plus' => {
+    const planType = plan.metadata.plan_type as PlanType;
+    switch (planType) {
       case 'free': return 'gratuito';
       case 'basic': return 'básico';
       case 'plus': return 'plus';
-      default: return plan.metadata.plan_type;
+      default: return 'gratuito';
     }
   };
 

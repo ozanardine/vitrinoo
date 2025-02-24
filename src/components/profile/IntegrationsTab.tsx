@@ -3,6 +3,7 @@ import { Link2, Check, AlertCircle, Loader2, AlertTriangle, ArrowRight } from 'l
 import { Store } from '../../lib/types';
 import { checkTinyIntegrationStatus, syncTinyProducts, disconnectTinyIntegration } from '../../lib/tiny';
 import { TinyConfigForm } from './TinyConfigForm';
+import { hasPlanFeature } from '../../lib/plans';
 
 interface IntegrationsTabProps {
   store: Store;
@@ -76,7 +77,7 @@ export function IntegrationsTab({ store }: IntegrationsTabProps) {
     }
   };
 
-  if (store.subscription.plan_type !== 'plus') {
+  if (!hasPlanFeature(store.subscription.plan_type, 'erp_integration')) {
     return (
       <div className="bg-yellow-50 dark:bg-yellow-900/50 border border-yellow-200 dark:border-yellow-800 rounded-lg p-6">
         <h3 className="text-lg font-semibold text-yellow-800 dark:text-yellow-200 mb-4">

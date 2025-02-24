@@ -3,7 +3,7 @@ import { Plus, FolderTree, ChevronRight, ChevronDown, Edit2, Trash2, AlertTriang
 import { Store } from '../../lib/types';
 import { supabase } from '../../lib/supabase';
 import { CategoryModal } from '../CategoryModal';
-import { PLAN_LIMITS } from '../../lib/store';
+import { PlanType, getPlanLimits } from '../../lib/plans';
 
 interface Category {
   id: string;
@@ -99,8 +99,8 @@ export function CategoriesTab({ store, onUpdate }: CategoriesTabProps) {
     setExpandedCategories(newExpanded);
   };
 
-  const currentPlanType = store.subscription.plan_type as keyof typeof PLAN_LIMITS;
-  const currentPlanLimits = PLAN_LIMITS[currentPlanType];
+  const currentPlanType = store.subscription.plan_type as PlanType;
+  const currentPlanLimits = getPlanLimits(currentPlanType);
 
   const renderCategory = (category: Category) => {
     const isExpanded = expandedCategories.has(category.id);

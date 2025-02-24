@@ -20,7 +20,7 @@ export const PLAN_LIMITS = {
     name: 'Gratuito',
     price: 0,
     metadata: {
-      plan_type: 'free',
+      plan_type: 'free' as const,
       imgur_enabled: true
     }
   },
@@ -31,7 +31,8 @@ export const PLAN_LIMITS = {
     name: 'Básico',
     price: 47,
     metadata: {
-      plan_type: 'basic'
+      plan_type: 'basic' as const,
+      imgur_enabled: false
     }
   },
   plus: {
@@ -41,7 +42,8 @@ export const PLAN_LIMITS = {
     name: 'Plus',
     price: 97,
     metadata: {
-      plan_type: 'plus'
+      plan_type: 'plus' as const,
+      imgur_enabled: false
     }
   }
 };

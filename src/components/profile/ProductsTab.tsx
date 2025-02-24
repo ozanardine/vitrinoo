@@ -5,7 +5,7 @@ import { supabase } from '../../lib/supabase';
 import { ProductModal } from '../ProductModal';
 import { ProductCard } from '../ProductCard';
 import { ProductDetailsModal } from '../ProductDetailsModal';
-import { PLAN_LIMITS } from '../../lib/store';
+import { PlanType, getPlanLimits, hasReachedLimit, getUsagePercentage } from '../../lib/plans';
 
 interface ProductsTabProps {
   store: Store;
@@ -147,8 +147,10 @@ export function ProductsTab({ store, onUpdate }: ProductsTabProps) {
     }
   };
 
-  const currentPlanType = store.subscription.plan_type as keyof typeof PLAN_LIMITS;
-  const currentPlanLimits = PLAN_LIMITS[currentPlanType];
+  const currentPlanType = store.subscription.plan_type as PlanType;
+  const currentPlanLimits = getPlanLimits(currentPlanType);
+  const productsUsagePercentage = getUsagePercentage(currentPlanType, 'products', products.length);
+  const isProductLimitReached = hasReachedLimit(currentPlanType, 'products', products.length);
 
   if (loading) {
     return (

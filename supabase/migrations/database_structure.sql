@@ -1094,10 +1094,10 @@ BEGIN
 
     -- Define o limite baseado no plano
     category_limit := CASE store_plan
-      WHEN 'free' THEN 5
-      WHEN 'basic' THEN 20
-      WHEN 'plus' THEN NULL -- Plano plus não tem limite
-      ELSE 5 -- Padrão para plano free
+      WHEN 'free' THEN 10
+      WHEN 'basic' THEN 50
+      WHEN 'plus' THEN 200
+      ELSE 10 -- Padrão para plano free
     END;
 
     -- Se houver limite, valida
