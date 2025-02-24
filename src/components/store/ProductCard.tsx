@@ -60,21 +60,28 @@ export function ProductCard({
 
   // Renderização dos badges
   const renderBadges = () => (
-    <div className="absolute top-2 right-2 flex gap-2">
+    <>
+      {/* Variable badge on the left */}
       {product.type === 'variable' && (
-        <div className="bg-blue-500 text-white px-2 py-1 rounded-full text-sm font-medium flex items-center gap-1">
-          {product.children?.length || 0} {(product.children?.length || 0) === 1 ? 'variação' : 'variações'}
+        <div className="absolute top-2 left-2">
+          <div className="bg-blue-500 text-white px-2 py-1 rounded-full text-sm font-medium flex items-center gap-1">
+            {product.children?.length || 0} {(product.children?.length || 0) === 1 ? 'variação' : 'variações'}
+          </div>
         </div>
       )}
+      
+      {/* Promotional badge on the right */}
       {product.promotional_price && (
-        <div 
-          className="px-2 py-1 rounded-full text-sm font-medium shadow-sm"
-          style={{ backgroundColor: accentColor, color: 'white' }}
-        >
-          {discountPercentage}% OFF
+        <div className="absolute top-2 right-2">
+          <div 
+            className="px-2 py-1 rounded-full text-sm font-medium shadow-sm"
+            style={{ backgroundColor: accentColor, color: 'white' }}
+          >
+            {discountPercentage}% OFF
+          </div>
         </div>
       )}
-    </div>
+    </>
   );
 
   // Componente Lista

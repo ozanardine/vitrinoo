@@ -296,7 +296,7 @@ export function ProductModal({
             .eq('parent_id', productId);
         }
       
-        // Preparar variações para inserção
+        // Preparar variações para inserção, replicando preços do produto pai quando necessário
         const variationsToInsert = variations.map(variation => ({
           ...variation,
           store_id: storeId,
@@ -305,6 +305,10 @@ export function ProductModal({
           variation_attributes: null, // Importante: deve ser null
           status: true,
           active: true,
+          // Se o preço da variação estiver zerado, usar o preço do produto pai
+          price: variation.price || form.price,
+          // Se o preço promocional da variação estiver null e o pai tiver preço promocional, usar o do pai
+          promotional_price: variation.promotional_price === null ? form.promotional_price : variation.promotional_price,
           title: `${form.title} - ${Object.values(variation.attributes).join(' / ')}`,
           description: form.description,
           brand: form.brand
