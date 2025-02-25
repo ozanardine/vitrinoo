@@ -4,6 +4,21 @@ import { corsHeaders } from '../_shared/cors.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.7';
 import Stripe from 'https://esm.sh/stripe@13.11.0';
 
+// Type for supported event types
+type SupportedEventType = 
+  | 'checkout.session.completed'
+  | 'checkout.session.async_payment_succeeded'
+  | 'checkout.session.async_payment_failed'
+  | 'customer.subscription.created'
+  | 'customer.subscription.updated'
+  | 'customer.subscription.deleted'
+  | 'customer.subscription.trial_will_end'
+  | 'invoice.payment_succeeded'
+  | 'invoice.payment_failed'
+  | 'invoice.finalized'
+  | 'payment_intent.succeeded'
+  | 'payment_intent.payment_failed';
+
 // Configurar CORS headers específicos para o Stripe
 const stripeWebhookHeaders = {
   ...corsHeaders,
@@ -1028,21 +1043,6 @@ async function handleInvoicePaymentSucceeded(event: Stripe.Event): Promise<void>
     throw error;
   }
 }
-
-// Tipos de eventos suportados
-type SupportedEventType = 
-  | 'checkout.session.completed'
-  | 'checkout.session.async_payment_succeeded'
-  | 'checkout.session.async_payment_failed'
-  | 'customer.subscription.created'
-  | 'customer.subscription.updated'
-  | 'customer.subscription.deleted'
-  | 'customer.subscription.trial_will_end'
-  | 'invoice.payment_succeeded'
-  | 'invoice.payment_failed'
-  | 'invoice.finalized'
-  | 'payment_intent.succeeded'
-  | 'payment_intent.payment_failed';
 
 // Função principal para processar evento com idempotência
 async function processEvent(event: Stripe.Event): Promise<void> {

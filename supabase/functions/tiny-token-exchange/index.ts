@@ -1,6 +1,22 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { rateLimit } from './rateLimit.ts';
 
+interface TokenResponse {
+  access_token: string;
+  refresh_token: string;
+  expires_in: number;
+  token_type: string;
+}
+
+interface TokenRequest {
+  code?: string;
+  clientId: string;
+  clientSecret: string;
+  redirectUri?: string;
+  grantType: 'authorization_code' | 'refresh_token';
+  refreshToken?: string;
+}
+
 const TINY_TOKEN_URL = 'https://accounts.tiny.com.br/realms/tiny/protocol/openid-connect/token';
 const FUNCTION_KEY = Deno.env.get('FUNCTION_KEY');
 
