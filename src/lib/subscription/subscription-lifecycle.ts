@@ -1,80 +1,158 @@
 /**
- * Sistema para gerenciamento do ciclo de vida de assinaturas
+ * @module subscription-lifecycle
+ * @description
+ * Sistema para gerenciamento do ciclo de vida de assinaturas do Stripe.
  * 
- * Responsável por:
- * - Gerenciar transições de estado da assinatura
- * - Detectar e responder a eventos importantes (renovação, cancelamento, etc)
- * - Coordenar notificações para o usuário
- * - Facilitar acesso a informações de assinatura em um formato padronizado
+ * Este módulo é responsável por:
+ * - Gerenciar transições de estado das assinaturas
+ * - Processar eventos de pagamento
+ * - Verificar elegibilidade para recursos específicos
+ * - Fornecer informações sobre assinaturas ativas
+ * - Gerar notificações para os usuários
+ * 
+ * Fluxo principal:
+ * 1. Criação de assinatura (checkout.session.completed)
+ * 2. Monitoramento de pagamentos (invoice.payment_succeeded/failed)
+ * 3. Gerenciamento de estados (active, past_due, etc)
+ * 4. Cancelamento/Renovação
  */
 
 import { supabase } from '../supabase';
 import { AppError, ErrorCategory, ErrorCode } from '../errors';
-import { PlanType, getPlanLimits } from '../plans-service';
+import { PlanType, getPlanLimits } from '../plans';
 
-// Estados possíveis para assinatura
+/**
+ * Estados possíveis para assinatura
+ * 
+ * @remarks
+ * Estes estados correspondem principalmente aos estados do Stripe,
+ * com algumas adições específicas da aplicação.
+ * 
+ * Fluxo típico dos estados:
+ * 1. trialing → active → canceled
+ * OU
+ * 2. trialing → active → past_due → unpaid → canceled
+ */
 export type SubscriptionStatus = 
-  | 'inactive'    // Sem assinatura ativa
-  | 'trialing'    // Período de teste 
-  | 'active'      // Assinatura ativa
-  | 'past_due'    // Pagamento atrasado
-  | 'unpaid'      // Pagamento não efetuado após período de carência
-  | 'canceled'    // Assinatura cancelada
-  | 'incomplete'  // Aguardando primeiro pagamento
-  | 'incomplete_expired'; // Primeiro pagamento falhou
+  /** Sem assinatura ativa */
+  | 'inactive'    
+  /** Período de teste em andamento */
+  | 'trialing'    
+  /** Assinatura ativa e paga */
+  | 'active'      
+  /** Pagamento atrasado, período de carência */
+  | 'past_due'    
+  /** Pagamento não efetuado após período de carência */
+  | 'unpaid'      
+  /** Assinatura cancelada */
+  | 'canceled'    
+  /** Aguardando primeiro pagamento */
+  | 'incomplete'  
+  /** Primeiro pagamento falhou */
+  | 'incomplete_expired';
 
-// Eventos possíveis no ciclo de vida
+/**
+ * Eventos possíveis no ciclo de vida
+ */
 export type SubscriptionEvent =
+  /** Assinatura criada */
   | 'subscription_created'
+  /** Assinatura atualizada */
   | 'subscription_updated'
+  /** Assinatura renovada automaticamente */
   | 'subscription_renewed'
+  /** Assinatura cancelada */
   | 'subscription_canceled'
+  /** Pagamento bem-sucedido */
   | 'payment_succeeded'
+  /** Falha no pagamento */
   | 'payment_failed'
+  /** Início do período de teste */
   | 'trial_started'
+  /** Alerta de fim próximo do período de teste */
   | 'trial_ending'
+  /** Fim do período de teste */
   | 'trial_ended'
+  /** Mudança de plano */
   | 'plan_changed'
+  /** Transição para pagamento atrasado */
   | 'past_due'
+  /** Transição para pagamento não efetuado */
   | 'unpaid';
 
-// Tipos de notificação para o usuário
+/**
+ * Tipos de notificação para o usuário
+ */
 export type NotificationType =
+  /** Pagamento realizado com sucesso */
   | 'payment_success'
+  /** Falha no pagamento */
   | 'payment_failed'
+  /** Pagamento atrasado */
   | 'payment_past_due'
+  /** Pagamento não efetuado */
   | 'payment_unpaid'
+  /** Assinatura cancelada */
   | 'subscription_canceled'
+  /** Assinatura criada */
   | 'subscription_created'
+  /** Assinatura renovada */
   | 'subscription_renewed'
+  /** Início do período de teste */
   | 'trial_started'
+  /** Alerta de fim próximo do período de teste */
   | 'trial_ending'
+  /** Fim do período de teste */
   | 'trial_ended'
+  /** Plano alterado */
   | 'plan_changed'
+  /** Cancelamento agendado para fim do período */
   | 'subscription_cancellation_scheduled'
+  /** Assinatura encerrada */
   | 'subscription_ended';
 
-// Detalhes de uma assinatura
+/**
+ * Detalhes de uma assinatura
+ */
 export interface SubscriptionDetails {
-  id: string;                      // ID da assinatura no Stripe
-  storeId: string;                 // ID da loja associada
-  status: SubscriptionStatus;      // Status atual
-  planType: PlanType;              // Tipo de plano
-  planName: string;                // Nome do plano
-  isActive: boolean;               // Se está ativa atualmente
-  createdAt: string;               // Data de criação
-  periodStart: string;             // Início do período atual
-  periodEnd: string;               // Fim do período atual
-  trialEnd: string | null;         // Fim do período de teste (se aplicável)
-  cancelAtPeriodEnd: boolean;      // Se será cancelada no fim do período
-  price: number;                   // Preço em centavos
-  currency: string;                // Moeda (default: BRL)
-  canceledAt: string | null;       // Data de cancelamento (se aplicável)
-  canceledReason: string | null;   // Motivo do cancelamento (se aplicável)
-  interval: 'month' | 'year';      // Intervalo de cobrança
-  daysUntilDue: number | null;     // Dias até o próximo pagamento
-  daysUntilTrialEnd: number | null;// Dias até o fim do período de teste
-  pausedAt: string | null;         // Data de pausa (se aplicável)
+  /** ID da assinatura no Stripe */
+  id: string;                      
+  /** ID da loja associada */
+  storeId: string;                 
+  /** Status atual */
+  status: SubscriptionStatus;      
+  /** Tipo de plano */
+  planType: PlanType;              
+  /** Nome do plano */
+  planName: string;                
+  /** Se está ativa atualmente */
+  isActive: boolean;               
+  /** Data de criação */
+  createdAt: string;               
+  /** Início do período atual */
+  periodStart: string;             
+  /** Fim do período atual */
+  periodEnd: string | null;        
+  /** Fim do período de teste (se aplicável) */
+  trialEnd: string | null;         
+  /** Se será cancelada no fim do período */
+  cancelAtPeriodEnd: boolean;      
+  /** Preço em centavos */
+  price: number;                   
+  /** Moeda (default: BRL) */
+  currency: string;                
+  /** Data de cancelamento (se aplicável) */
+  canceledAt: string | null;       
+  /** Motivo do cancelamento (se aplicável) */
+  canceledReason: string | null;   
+  /** Intervalo de cobrança */
+  interval: 'month' | 'year';      
+  /** Dias até o próximo pagamento */
+  daysUntilDue: number | null;     
+  /** Dias até o fim do período de teste */
+  daysUntilTrialEnd: number | null;
+  /** Data de pausa (se aplicável) */
+  pausedAt: string | null;         
 }
 
 /**
@@ -82,9 +160,14 @@ export interface SubscriptionDetails {
  * 
  * @param storeId ID da loja
  * @returns Detalhes da assinatura
+ * @throws AppError se ocorrer um erro no banco de dados
  */
 export async function getSubscriptionByStore(storeId: string): Promise<SubscriptionDetails | null> {
+  const startTime = Date.now();
+  
   try {
+    console.info(`[SUBSCRIPTION] Buscando assinatura para loja ${storeId}`);
+
     // Buscar o registro de assinatura na loja 
     const { data: subscription, error } = await supabase
       .from('subscriptions')
@@ -117,6 +200,7 @@ export async function getSubscriptionByStore(storeId: string): Promise<Subscript
 
     // Se não tiver assinatura, retorna null
     if (!subscription) {
+      console.info(`[SUBSCRIPTION] Nenhuma assinatura encontrada para loja ${storeId}`);
       return null;
     }
 
@@ -131,7 +215,10 @@ export async function getSubscriptionByStore(storeId: string): Promise<Subscript
         .maybeSingle();
 
       if (stripeError) {
-        console.error('Erro ao buscar detalhes do Stripe:', stripeError);
+        console.warn(
+          `[SUBSCRIPTION] Erro ao buscar detalhes do Stripe para assinatura ${subscription.stripe_subscription_id}`, 
+          stripeError
+        );
         // Continua mesmo com erro, usando apenas os dados da tabela subscriptions
       } else {
         stripeSubscription = stripeSub;
@@ -154,7 +241,7 @@ export async function getSubscriptionByStore(storeId: string): Promise<Subscript
     }
 
     // Organizar e retornar os detalhes
-    return {
+    const result: SubscriptionDetails = {
       id: subscription.stripe_subscription_id || subscription.id,
       storeId: subscription.store_id,
       status: (subscription.status as SubscriptionStatus) || 'inactive',
@@ -175,7 +262,20 @@ export async function getSubscriptionByStore(storeId: string): Promise<Subscript
       daysUntilTrialEnd,
       pausedAt: stripeSubscription?.metadata?.paused_at || null
     };
+    
+    // Registrar métrica de tempo para diagnóstico de performance
+    const duration = Date.now() - startTime;
+    console.debug(`[SUBSCRIPTION] Consulta de assinatura completada em ${duration}ms`);
+    
+    return result;
   } catch (error) {
+    const duration = Date.now() - startTime;
+    
+    console.error(
+      `[SUBSCRIPTION] Erro ao buscar assinatura para loja ${storeId} (${duration}ms)`, 
+      error instanceof Error ? error.message : String(error)
+    );
+    
     if (error instanceof AppError) {
       throw error;
     }
@@ -205,14 +305,20 @@ export async function getSubscriptionByStripeId(subscriptionId: string): Promise
       .maybeSingle();
 
     if (error || !subscription) {
-      console.error('Erro ou assinatura não encontrada:', error);
+      console.error(
+        `[SUBSCRIPTION] Assinatura ${subscriptionId} não encontrada`,
+        error
+      );
       return null;
     }
 
     // Reutilizar a função getSubscriptionByStore
     return getSubscriptionByStore(subscription.store_id);
   } catch (error) {
-    console.error('Erro ao buscar assinatura por ID do Stripe:', error);
+    console.error(
+      `[SUBSCRIPTION] Erro ao buscar assinatura por ID do Stripe ${subscriptionId}`,
+      error instanceof Error ? error.message : String(error)
+    );
     return null;
   }
 }
@@ -221,7 +327,7 @@ export async function getSubscriptionByStripeId(subscriptionId: string): Promise
  * Verifica se uma assinatura está em um estado específico
  * 
  * @param subscription Detalhes da assinatura
- * @param status Status a verificar
+ * @param status Status a verificar (único ou array)
  * @returns Se está no status especificado
  */
 export function isSubscriptionInStatus(
@@ -250,30 +356,46 @@ export async function isFeatureAvailable(
   subscription: SubscriptionDetails | null,
   feature: string
 ): Promise<boolean> {
-  // Se não tem assinatura, usa o plano gratuito
-  const planType = subscription?.planType || 'free';
+  console.debug(
+    `[SUBSCRIPTION] Verificando disponibilidade de recurso '${feature}' para assinatura`,
+    subscription?.id
+  );
+  
+  // Se não tem assinatura ou não está ativa, usa o plano gratuito
+  const planType = (subscription && subscription.isActive) ? subscription.planType : 'free';
   
   // Verificar se o plano tem o recurso (via metadados)
   const planLimits = await getPlanLimits(planType);
   
+  let isAvailable = false;
+  
   switch (feature) {
     case 'imgur_upload':
-      return planLimits.metadata.imgur_enabled || false;
+      isAvailable = !!planLimits.metadata.imgur_enabled;
+      break;
     case 'priority_support':
-      return planLimits.metadata.priority_support || false;
+      isAvailable = ['basic', 'plus'].includes(planType);
+      break;
     case 'erp_integration':
-      return planLimits.metadata.erp_integration || false;
+      isAvailable = planType === 'plus';
+      break;
     case 'ai_descriptions':
-      return planLimits.metadata.ai_features_enabled || false;
+      isAvailable = planType === 'plus';
+      break;
     case 'custom_domain':
-      return planLimits.metadata.custom_domain_enabled || false;
+      isAvailable = ['basic', 'plus'].includes(planType);
+      break;
     case 'api_access':
-      return planLimits.metadata.api_access || false;
+      isAvailable = planType === 'plus';
+      break;
     case 'analytics':
-      return planLimits.metadata.analytics_enabled || false;
+      isAvailable = ['basic', 'plus'].includes(planType);
+      break;
     default:
-      return false;
+      isAvailable = false;
   }
+  
+  return isAvailable;
 }
 
 /**
@@ -309,14 +431,253 @@ export async function createNotification(
       .single();
 
     if (error) {
-      console.error('Erro ao criar notificação:', error);
+      console.error(
+        `[SUBSCRIPTION] Erro ao criar notificação de tipo ${type} para usuário ${userId}`,
+        error
+      );
       return '';
     }
 
+    console.info(
+      `[SUBSCRIPTION] Notificação ${data.id} de tipo ${type} criada para usuário ${userId}`
+    );
+
     return data.id;
   } catch (error) {
-    console.error('Erro ao criar notificação:', error);
+    console.error(
+      `[SUBSCRIPTION] Erro ao criar notificação de tipo ${type} para usuário ${userId}`,
+      error instanceof Error ? error.message : String(error)
+    );
     return '';
+  }
+}
+
+/**
+ * Atualiza o status de uma assinatura
+ * 
+ * @param subscriptionId ID da assinatura
+ * @param newStatus Novo status
+ * @param userId ID do usuário (opcional, para notificações)
+ * @param metadata Metadados adicionais
+ * @returns Se a atualização foi bem-sucedida
+ */
+export async function updateSubscriptionStatus(
+  subscriptionId: string,
+  newStatus: SubscriptionStatus,
+  userId?: string,
+  metadata: Record<string, any> = {}
+): Promise<boolean> {
+  try {
+    // Buscar status atual para registro de transição
+    const { data: currentSub, error: fetchError } = await supabase
+      .from('subscriptions')
+      .select('status, store_id, plan_type, user_id')
+      .eq('stripe_subscription_id', subscriptionId)
+      .single();
+      
+    if (fetchError) {
+      throw new AppError({
+        code: ErrorCode.VALIDATION_ENTITY_NOT_FOUND,
+        category: ErrorCategory.VALIDATION,
+        message: 'Assinatura não encontrada',
+        originalError: fetchError
+      });
+    }
+    
+    const oldStatus = currentSub.status as SubscriptionStatus;
+    const storeId = currentSub.store_id;
+    const planType = currentSub.plan_type as PlanType;
+    const ownerUserId = userId || currentSub.user_id;
+    
+    // Não atualizar se não houve alteração
+    if (oldStatus === newStatus) {
+      console.info(
+        `[SUBSCRIPTION] Status já é ${newStatus} para assinatura ${subscriptionId}, nenhuma alteração necessária`
+      );
+      return true;
+    }
+    
+    console.info(
+      `[SUBSCRIPTION] Atualizando status de assinatura ${subscriptionId} de ${oldStatus} para ${newStatus}`
+    );
+    
+    // Atualizar status na tabela subscriptions
+    const { error: updateError } = await supabase
+      .from('subscriptions')
+      .update({
+        status: newStatus,
+        active: ['active', 'trialing'].includes(newStatus),
+        updated_at: new Date().toISOString(),
+        metadata: {
+          ...metadata,
+          previous_status: oldStatus,
+          transition_date: new Date().toISOString()
+        }
+      })
+      .eq('stripe_subscription_id', subscriptionId);
+      
+    if (updateError) {
+      throw updateError;
+    }
+    
+    // Atualizar status na tabela stripe_subscriptions
+    const { error: stripeSubError } = await supabase
+      .from('stripe_subscriptions')
+      .update({
+        status: newStatus,
+        updated_at: new Date().toISOString()
+      })
+      .eq('subscription_id', subscriptionId);
+      
+    if (stripeSubError) {
+      console.warn(
+        `[SUBSCRIPTION] Erro ao atualizar status na tabela stripe_subscriptions para ${subscriptionId}`,
+        stripeSubError.message
+      );
+      // Não falhar a operação principal por causa disso
+    }
+    
+    // Registrar na tabela de transições para histórico
+    const { error: transitionError } = await supabase
+      .from('subscription_transitions')
+      .insert({
+        subscription_id: subscriptionId,
+        from_status: oldStatus,
+        to_status: newStatus,
+        metadata,
+        created_at: new Date().toISOString()
+      });
+      
+    if (transitionError) {
+      console.warn(
+        `[SUBSCRIPTION] Erro ao registrar transição para ${subscriptionId}`,
+        transitionError.message
+      );
+      // Não falhar a operação principal por causa disso  
+    }
+    
+    // Criar notificação baseada na transição
+    await handleStatusChangeNotification(
+      subscriptionId,
+      oldStatus,
+      newStatus,
+      ownerUserId,
+      planType
+    );
+    
+    return true;
+  } catch (error) {
+    console.error(
+      `[SUBSCRIPTION] Erro ao atualizar status da assinatura ${subscriptionId} para ${newStatus}`,
+      error instanceof Error ? error.message : String(error)
+    );
+    
+    if (error instanceof AppError) {
+      throw error;
+    }
+    
+    throw new AppError({
+      code: ErrorCode.SERVER_DATABASE_ERROR,
+      category: ErrorCategory.SERVER,
+      message: 'Erro ao atualizar status da assinatura',
+      originalError: error
+    });
+  }
+}
+
+/**
+ * Cria notificações apropriadas após mudança de status
+ * 
+ * @param subscriptionId ID da assinatura
+ * @param oldStatus Status anterior
+ * @param newStatus Novo status
+ * @param userId ID do usuário
+ * @param planType Tipo do plano
+ */
+async function handleStatusChangeNotification(
+  subscriptionId: string,
+  oldStatus: SubscriptionStatus,
+  newStatus: SubscriptionStatus,
+  userId: string,
+  planType: PlanType
+): Promise<void> {
+  if (!userId) return;
+  
+  // Criar notificação apropriada
+  try {
+    // Determinar o tipo de notificação e mensagem
+    let notificationType: NotificationType;
+    let title: string;
+    let content: string;
+    
+    switch (newStatus) {
+      case 'active':
+        if (oldStatus === 'trialing') {
+          notificationType = 'trial_ended';
+          title = 'Período de avaliação concluído';
+          content = 'Seu período de avaliação foi concluído e sua assinatura foi ativada com sucesso.';
+        } else if (oldStatus === 'past_due' || oldStatus === 'unpaid') {
+          notificationType = 'payment_success';
+          title = 'Pagamento realizado com sucesso';
+          content = 'Seu pagamento foi processado e sua assinatura está ativa novamente.';
+        } else if (oldStatus === 'canceled' || oldStatus === 'inactive') {
+          notificationType = 'subscription_created';
+          title = 'Assinatura ativada';
+          content = `Sua assinatura do plano ${planNameForType(planType)} foi ativada com sucesso.`;
+        } else {
+          // Para outros casos, não precisa notificar
+          return;
+        }
+        break;
+        
+      case 'past_due':
+        notificationType = 'payment_past_due';
+        title = 'Pagamento pendente';
+        content = 'Seu pagamento está pendente. Por favor, atualize sua forma de pagamento para evitar a suspensão do serviço.';
+        break;
+        
+      case 'unpaid':
+        notificationType = 'payment_unpaid';
+        title = 'Pagamento não efetuado';
+        content = 'Não recebemos seu pagamento. Sua assinatura será suspensa em breve se o pagamento não for regularizado.';
+        break;
+        
+      case 'canceled':
+        notificationType = 'subscription_canceled';
+        title = 'Assinatura cancelada';
+        content = 'Sua assinatura foi cancelada. Esperamos vê-lo novamente em breve!';
+        break;
+        
+      case 'trialing':
+        notificationType = 'trial_started';
+        title = 'Período de avaliação iniciado';
+        content = `Seu período de avaliação do plano ${planNameForType(planType)} foi iniciado. Aproveite todos os recursos!`;
+        break;
+        
+      default:
+        // Outros estados não precisam de notificação
+        return;
+    }
+    
+    // Criar notificação
+    await createNotification(
+      userId,
+      notificationType,
+      title,
+      content,
+      {
+        subscriptionId,
+        oldStatus,
+        newStatus,
+        planType
+      }
+    );
+  } catch (error) {
+    console.error(
+      `[SUBSCRIPTION] Erro ao criar notificação para mudança de status ${oldStatus} -> ${newStatus}`,
+      error instanceof Error ? error.message : String(error)
+    );
+    // Não propagar o erro, apenas registrá-lo
   }
 }
 
@@ -571,4 +932,88 @@ export function isNewSubscription(
   const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
   
   return diffDays <= thresholdDays;
+}
+
+/**
+ * Retorna o nome amigável do plano com base no tipo
+ * 
+ * @param planType Tipo do plano
+ * @returns Nome amigável do plano
+ */
+function planNameForType(planType: PlanType): string {
+  switch (planType) {
+    case 'free':
+      return 'Gratuito';
+    case 'basic':
+      return 'Básico';
+    case 'plus':
+      return 'Plus';
+    default:
+      return 'Desconhecido';
+  }
+}
+
+/**
+ * Verifica se uma assinatura será renovada automaticamente
+ * 
+ * @param subscription Detalhes da assinatura
+ * @returns Se a assinatura será renovada
+ */
+export function willAutoRenew(subscription: SubscriptionDetails | null): boolean {
+  if (!subscription) {
+    return false;
+  }
+  
+  // Se o status não for ativo ou trial, não renova
+  if (!['active', 'trialing'].includes(subscription.status)) {
+    return false;
+  }
+  
+  // Se estiver configurada para cancelar no fim do período, não renova
+  if (subscription.cancelAtPeriodEnd) {
+    return false;
+  }
+  
+  return true;
+}
+
+/**
+ * Verifica se uma assinatura está com pagamento atrasado
+ * 
+ * @param subscription Detalhes da assinatura
+ * @returns Se o pagamento está atrasado
+ */
+export function isPaymentOverdue(subscription: SubscriptionDetails | null): boolean {
+  if (!subscription) {
+    return false;
+  }
+  
+  return ['past_due', 'unpaid'].includes(subscription.status);
+}
+
+/**
+ * Determina se uma loja pode usar um recurso específico com base
+ * no plano atual e no estado da assinatura
+ * 
+ * @param storeId ID da loja
+ * @param feature Nome do recurso a verificar
+ * @returns Se a loja pode usar o recurso
+ */
+export async function canStoreUseFeature(storeId: string, feature: string): Promise<boolean> {
+  // Obter assinatura da loja
+  const subscription = await getSubscriptionByStore(storeId);
+  
+  // Verificar se está ativa
+  const isActive = subscription && (
+    subscription.status === 'active' || 
+    subscription.status === 'trialing'
+  );
+  
+  // Se não estiver ativa, só pode usar features do plano gratuito
+  if (!isActive) {
+    return await isFeatureAvailable({ ...subscription, planType: 'free', isActive: false } as SubscriptionDetails, feature);
+  }
+  
+  // Verificar elegibilidade para o recurso
+  return await isFeatureAvailable(subscription, feature);
 }

@@ -1,8 +1,8 @@
 /**
  * Camada de serviço para gerenciamento de assinaturas
  */
-import { supabase } from './supabase';
-import { AppError, ErrorCategory, ErrorCode } from './errors';
+import { supabase } from '../supabase';
+import { AppError, ErrorCategory, ErrorCode } from '../errors';
 import { subscriptionLogger } from './subscription-logger';
 import { subscriptionMetrics } from './subscription-metrics';
 import { 
@@ -10,7 +10,7 @@ import {
   SubscriptionDetails, 
   NotificationType 
 } from './subscription-lifecycle';
-import { PlanType, getPlanLimits } from './plans';
+import { PlanType, getPlanLimits } from '../plans';
 
 export class SubscriptionService {
   /**

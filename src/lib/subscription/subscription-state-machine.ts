@@ -7,8 +7,8 @@
 import { SubscriptionStatus, SubscriptionDetails } from './subscription-lifecycle';
 import { subscriptionLogger } from './subscription-logger';
 import { SubscriptionService } from './subscription-service';
-import { DatabaseTransaction } from './database-transaction';
-import { AppError, ErrorCategory, ErrorCode } from './errors';
+import { DatabaseTransaction } from '../database-transaction';
+import { AppError, ErrorCategory, ErrorCode } from '../errors';
 
 // Tipos de eventos que podem provocar transições
 export enum SubscriptionTrigger {

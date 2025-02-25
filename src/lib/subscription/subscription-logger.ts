@@ -2,7 +2,7 @@
  * Sistema de logs estruturados para melhor rastreabilidade
  * das operações relacionadas a assinaturas
  */
-import { AppError } from './errors';
+import { AppError } from '../errors';
 
 type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 type LogContext = Record<string, any>;

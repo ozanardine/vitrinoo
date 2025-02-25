@@ -8,7 +8,7 @@
  * - Reconstrução do estado em qualquer ponto do tempo
  * - Análise retrospectiva de comportamento
  */
-import { supabase } from './supabase';
+import { supabase } from '../supabase';
 import { subscriptionLogger } from './subscription-logger';
 import { SubscriptionStatus, SubscriptionEvent } from './subscription-lifecycle';
 
