@@ -4,25 +4,23 @@ export const SOCIAL_NETWORKS = {
   phone: {
     label: 'Telefone',
     icon: Phone,
-    placeholder: 'Número de telefone',
+    placeholder: '(00) 0000-0000',
     type: 'phone',
-    urlTemplate: 'tel:+'
+    urlTemplate: 'tel:+55'
   },
   whatsapp: {
     label: 'WhatsApp',
     icon: MessageCircle,
-    placeholder: 'Número do WhatsApp',
+    placeholder: '(00) 00000-0000',
     type: 'phone',
-    urlTemplate: 'https://wa.me/'
+    urlTemplate: 'https://wa.me/55'
   },
   telegram: {
     label: 'Telegram',
     icon: MessageCircle,
-    placeholder: '@usuario ou número',
-    type: 'mixed',
-    urlTemplate: (value: string) => value.startsWith('@') ? 
-      `https://t.me/${value.substring(1)}` : 
-      `https://t.me/+${value.replace(/\D/g, '')}`
+    placeholder: '(00) 00000-0000',
+    type: 'phone',
+    urlTemplate: 'https://t.me/+55'
   },
   instagram: {
     label: 'Instagram',
@@ -82,36 +80,43 @@ export const SOCIAL_NETWORKS = {
   }
 } as const;
 
-export function generateSocialUrl(type: string, value: string, countryCode?: string): string {
-  const network = SOCIAL_NETWORKS[type as keyof typeof SOCIAL_NETWORKS];
+type SocialNetworkKey = keyof typeof SOCIAL_NETWORKS;
+type SocialNetworkType = typeof SOCIAL_NETWORKS[SocialNetworkKey];
+
+export function generateSocialUrl(type: string, value: string): string {
+  // Early return if type is not valid
+  if (!Object.keys(SOCIAL_NETWORKS).includes(type)) return value;
   
-  if (!network) return value;
+  // Safe assertion since we've checked type exists in SOCIAL_NETWORKS
+  const network = SOCIAL_NETWORKS[type as SocialNetworkKey] as SocialNetworkType;
 
   // Handle phone numbers
   if (network.type === 'phone') {
     const cleanNumber = value.replace(/\D/g, '');
-    return typeof network.urlTemplate === 'string' ? 
-      network.urlTemplate + cleanNumber :
-      network.urlTemplate(cleanNumber);
+    if (typeof network.urlTemplate === 'string') {
+      return network.urlTemplate + cleanNumber;
+    } else if (typeof network.urlTemplate === 'function') {
+      return network.urlTemplate(cleanNumber);
+    }
   }
 
   // Handle usernames
   if (network.type === 'username') {
     const username = value.startsWith('@') ? value.substring(1) : value;
-    return typeof network.urlTemplate === 'string' ? 
-      network.urlTemplate + username :
-      network.urlTemplate(username);
-  }
-
-  // Handle mixed (Telegram)
-  if (network.type === 'mixed') {
-    return typeof network.urlTemplate === 'string' ? 
-      network.urlTemplate + value :
-      network.urlTemplate(value);
+    if (typeof network.urlTemplate === 'string') {
+      return network.urlTemplate + username;
+    } else if (typeof network.urlTemplate === 'function') {
+      return network.urlTemplate(username);
+    }
   }
 
   // Handle email and website
-  return typeof network.urlTemplate === 'string' ? 
-    network.urlTemplate + value :
-    network.urlTemplate(value);
+  if (typeof network.urlTemplate === 'string') {
+    return network.urlTemplate + value;
+  } else if (typeof network.urlTemplate === 'function') {
+    return network.urlTemplate(value);
+  }
+
+  // Fallback
+  return value;
 }

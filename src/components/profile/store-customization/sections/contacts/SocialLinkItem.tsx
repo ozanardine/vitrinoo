@@ -1,17 +1,14 @@
 import React from 'react';
 import { X, Check } from 'lucide-react';
 import { SOCIAL_NETWORKS } from '../../../../../lib/constants';
-import PhoneInput from '../PhoneInput';
-import { countries } from '../../../../../lib/countries';
 
 interface SocialLinkProps {
   link: {
     type: string;
     url: string;
-    countryCode?: string;
   };
   index: number;
-  onUpdate: (index: number, value: string, countryCode?: string) => void;
+  onUpdate: (index: number, value: string) => void;
   onRemove: (index: number) => void;
   isValid: boolean;
   showError: boolean;
@@ -31,16 +28,6 @@ export function SocialLinkItem({
   if (!network) return null;
 
   const Icon = network.icon;
-  const isPhoneType = network.type === 'phone';
-  const isTelegram = link.type === 'telegram';
-
-  const handlePhoneChange = (value: string) => {
-    onUpdate(index, value, link.countryCode);
-  };
-
-  const handleCountryChange = (countryCode: string) => {
-    onUpdate(index, link.url, countryCode);
-  };
 
   return (
     <div className="space-y-2">
@@ -51,28 +38,15 @@ export function SocialLinkItem({
         
         <div className="flex-1">
           <div className="flex items-center space-x-2">
-            {isPhoneType ? (
-              <div className="flex-1">
-                <PhoneInput
-                  value={link.url}
-                  countryCode={link.countryCode || 'BR'}
-                  onChange={handlePhoneChange}
-                  onCountryChange={handleCountryChange}
-                  placeholder={network.placeholder}
-                  error={showError}
-                />
-              </div>
-            ) : (
-              <input
-                type={network.type === 'email' ? 'email' : 'text'}
-                value={link.url}
-                onChange={(e) => onUpdate(index, e.target.value)}
-                placeholder={network.placeholder}
-                className={`flex-1 p-2 border rounded dark:bg-gray-700 dark:border-gray-600 ${
-                  showError ? 'border-red-500' : ''
-                }`}
-              />
-            )}
+            <input
+              type={network.type === 'email' ? 'email' : 'text'}
+              value={link.url}
+              onChange={(e) => onUpdate(index, e.target.value)}
+              placeholder={network.placeholder}
+              className={`flex-1 p-2 border rounded dark:bg-gray-700 dark:border-gray-600 ${
+                showError ? 'border-red-500' : ''
+              }`}
+            />
             <button
               type="button"
               onClick={() => onRemove(index)}
