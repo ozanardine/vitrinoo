@@ -1,7 +1,10 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { ShoppingBag, Palette, Zap, Share2, Database, Settings, ArrowRight, Check } from 'lucide-react';
 import { useStore } from './lib/store';
 import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
+import { ToastContainer } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
+import { PaymentNotifications } from './components/payment/PaymentNotifications';
 
 function App() {
   const { theme } = useStore();
@@ -9,11 +12,13 @@ function App() {
   const location = useLocation();
   const [searchParams] = useSearchParams();
 
-  React.useEffect(() => {
+  // Aplicar tema
+  useEffect(() => {
     document.documentElement.classList.toggle('dark', theme === 'dark');
   }, [theme]);
 
-  React.useEffect(() => {
+  // Rolagem para seção específica
+  useEffect(() => {
     const section = searchParams.get('section');
     if (section) {
       const element = document.getElementById(section);
@@ -33,6 +38,23 @@ function App() {
 
   return (
     <>
+      {/* Configuração global do Toast */}
+      <ToastContainer
+        position="bottom-right"
+        autoClose={5000}
+        hideProgressBar={false}
+        newestOnTop
+        closeOnClick
+        rtl={false}
+        pauseOnFocusLoss
+        draggable
+        pauseOnHover
+        theme={theme === 'dark' ? 'dark' : 'light'}
+      />
+
+      {/* Componente para detectar e exibir notificações de pagamento */}
+      <PaymentNotifications />
+
       {/* Hero Section */}
       <section className="relative bg-gradient-to-b from-blue-50 to-white dark:from-gray-800 dark:to-gray-900 py-20">
         <div className="container mx-auto px-4">
@@ -44,12 +66,12 @@ function App() {
               Compartilhe seus produtos com o mundo através de um catálogo bonito e personalizável. 
               Integre com seu sistema ERP e gerencie tudo em um só lugar.
             </p>
-            <div className="flex justify-center space-x-4">
+            <div className="flex flex-wrap justify-center gap-4">
               <button
                 onClick={() => {
                   scrollToSection('features');
                 }}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-lg font-semibold"
+                className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-lg font-semibold transition-all"
               >
                 Começar Grátis
               </button>
@@ -57,7 +79,7 @@ function App() {
                 onClick={() => {
                   scrollToSection('features');
                 }}
-                className="border border-gray-300 dark:border-gray-600 hover:border-blue-600 dark:hover:border-blue-400 px-8 py-3 rounded-lg font-semibold"
+                className="border border-gray-300 dark:border-gray-600 hover:border-blue-600 dark:hover:border-blue-400 px-8 py-3 rounded-lg font-semibold transition-all"
               >
                 Ver Demo
               </button>
@@ -74,48 +96,48 @@ function App() {
             Todas as ferramentas que você precisa para criar um catálogo profissional e gerenciar seus produtos de forma eficiente
           </p>
           <div className="grid md:grid-cols-3 gap-8">
-            <div className="p-6 rounded-lg border border-gray-200 dark:border-gray-700">
-              <ShoppingBag className="w-12 h-12 text-blue-600 mb-4" />
+            <div className="p-6 rounded-lg border border-gray-200 dark:border-gray-700 transition-all hover:shadow-md group bg-white dark:bg-gray-800">
+              <ShoppingBag className="w-12 h-12 text-blue-600 mb-4 transition-transform group-hover:scale-110" />
               <h3 className="text-xl font-semibold mb-2">Gestão Avançada de Produtos</h3>
               <p className="text-gray-600 dark:text-gray-400">
                 Gerencie produtos simples, com variações, kits/combos e até mesmo produtos fabricados. Suporte a múltiplas imagens e descrições ricas.
               </p>
             </div>
             
-            <div className="p-6 rounded-lg border border-gray-200 dark:border-gray-700">
-              <Palette className="w-12 h-12 text-blue-600 mb-4" />
+            <div className="p-6 rounded-lg border border-gray-200 dark:border-gray-700 transition-all hover:shadow-md group bg-white dark:bg-gray-800">
+              <Palette className="w-12 h-12 text-blue-600 mb-4 transition-transform group-hover:scale-110" />
               <h3 className="text-xl font-semibold mb-2">Personalização Total</h3>
               <p className="text-gray-600 dark:text-gray-400">
                 Design totalmente personalizável com cores da sua marca, layouts flexíveis, fontes customizadas e estilos modernos para seus produtos.
               </p>
             </div>
             
-            <div className="p-6 rounded-lg border border-gray-200 dark:border-gray-700">
-              <Share2 className="w-12 h-12 text-blue-600 mb-4" />
+            <div className="p-6 rounded-lg border border-gray-200 dark:border-gray-700 transition-all hover:shadow-md group bg-white dark:bg-gray-800">
+              <Share2 className="w-12 h-12 text-blue-600 mb-4 transition-transform group-hover:scale-110" />
               <h3 className="text-xl font-semibold mb-2">Compartilhamento Profissional</h3>
               <p className="text-gray-600 dark:text-gray-400">
                 URL personalizada com seu domínio, integração com redes sociais e ferramentas de compartilhamento otimizadas para cada plataforma.
               </p>
             </div>
             
-            <div className="p-6 rounded-lg border border-gray-200 dark:border-gray-700">
-              <Database className="w-12 h-12 text-blue-600 mb-4" />
+            <div className="p-6 rounded-lg border border-gray-200 dark:border-gray-700 transition-all hover:shadow-md group bg-white dark:bg-gray-800">
+              <Database className="w-12 h-12 text-blue-600 mb-4 transition-transform group-hover:scale-110" />
               <h3 className="text-xl font-semibold mb-2">Integração ERP</h3>
               <p className="text-gray-600 dark:text-gray-400">
                 Em desenvolvimento: Integração com os principais sistemas de ERP do mercado. Lançamento previsto para Março/2024.
               </p>
             </div>
             
-            <div className="p-6 rounded-lg border border-gray-200 dark:border-gray-700">
-              <Zap className="w-12 h-12 text-blue-600 mb-4" />
+            <div className="p-6 rounded-lg border border-gray-200 dark:border-gray-700 transition-all hover:shadow-md group bg-white dark:bg-gray-800">
+              <Zap className="w-12 h-12 text-blue-600 mb-4 transition-transform group-hover:scale-110" />
               <h3 className="text-xl font-semibold mb-2">Inteligência Artificial</h3>
               <p className="text-gray-600 dark:text-gray-400">
                 Geração automática de descrições otimizadas para SEO, sugestões inteligentes de categorização e análise de dados.
               </p>
             </div>
             
-            <div className="p-6 rounded-lg border border-gray-200 dark:border-gray-700">
-              <Settings className="w-12 h-12 text-blue-600 mb-4" />
+            <div className="p-6 rounded-lg border border-gray-200 dark:border-gray-700 transition-all hover:shadow-md group bg-white dark:bg-gray-800">
+              <Settings className="w-12 h-12 text-blue-600 mb-4 transition-transform group-hover:scale-110" />
               <h3 className="text-xl font-semibold mb-2">Recursos Avançados</h3>
               <p className="text-gray-600 dark:text-gray-400">
                 Categorias ilimitadas, variações de produtos, controle de estoque, relatórios avançados e muito mais.
@@ -131,101 +153,110 @@ function App() {
           <h2 className="text-3xl font-bold text-center mb-12">Escolha o plano perfeito para seu negócio</h2>
           <div className="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto">
             {/* Free Plan */}
-            <div className="bg-white dark:bg-gray-900 rounded-lg shadow-lg p-8">
+            <div className="bg-white dark:bg-gray-900 rounded-lg shadow-lg p-8 transition-all hover:shadow-xl">
               <h3 className="text-2xl font-bold mb-4">Grátis</h3>
               <p className="text-4xl font-bold mb-6">R$ 0<span className="text-lg font-normal text-gray-600 dark:text-gray-400">/mês</span></p>
               <ul className="space-y-3 mb-8">
                 <li className="flex items-center">
-                  <span className="text-green-500 mr-2">✓</span>
+                  <Check className="w-5 h-5 text-green-500 mr-2" />
                   Até 100 produtos
                 </li>
                 <li className="flex items-center">
-                  <span className="text-green-500 mr-2">✓</span>
+                  <Check className="w-5 h-5 text-green-500 mr-2" />
                   Até 10 categorias
                 </li>
                 <li className="flex items-center">
-                  <span className="text-green-500 mr-2">✓</span>
+                  <Check className="w-5 h-5 text-green-500 mr-2" />
                   3 imagens por produto
                 </li>
                 <li className="flex items-center">
-                  <span className="text-green-500 mr-2">✓</span>
+                  <Check className="w-5 h-5 text-green-500 mr-2" />
                   Link compartilhável
                 </li>
               </ul>
-              <button className="w-full bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 px-4 py-2 rounded-lg">
+              <button 
+                onClick={() => navigate('/profile?tab=plans')}
+                className="w-full bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 px-4 py-2 rounded-lg transition-colors"
+              >
                 Começar Grátis
               </button>
             </div>
 
             {/* Basic Plan */}
-            <div className="bg-white dark:bg-gray-900 rounded-lg shadow-lg p-8 border-2 border-blue-500 relative">
-              <div className="absolute top-0 right-0 bg-blue-500 text-white px-3 py-1 rounded-bl-lg rounded-tr-lg">
+            <div className="bg-white dark:bg-gray-900 rounded-lg shadow-lg p-8 border-2 border-blue-500 relative z-10 transform scale-105 transition-all hover:shadow-xl">
+              <div className="absolute top-0 right-0 bg-blue-500 text-white px-3 py-1 rounded-bl-lg rounded-tr-lg font-medium">
                 Popular
               </div>
               <h3 className="text-2xl font-bold mb-4">Básico</h3>
               <p className="text-4xl font-bold mb-6">R$ 47<span className="text-lg font-normal text-gray-600 dark:text-gray-400">/mês</span></p>
               <ul className="space-y-3 mb-8">
                 <li className="flex items-center">
-                  <span className="text-green-500 mr-2">✓</span>
+                  <Check className="w-5 h-5 text-green-500 mr-2" />
                   Até 1.000 produtos
                 </li>
                 <li className="flex items-center">
-                  <span className="text-green-500 mr-2">✓</span>
+                  <Check className="w-5 h-5 text-green-500 mr-2" />
                   Até 50 categorias
                 </li>
                 <li className="flex items-center">
-                  <span className="text-green-500 mr-2">✓</span>
+                  <Check className="w-5 h-5 text-green-500 mr-2" />
                   5 imagens por produto
                 </li>
                 <li className="flex items-center">
-                  <span className="text-green-500 mr-2">✓</span>
+                  <Check className="w-5 h-5 text-green-500 mr-2" />
                   Domínio personalizado
                 </li>
                 <li className="flex items-center">
-                  <span className="text-green-500 mr-2">✓</span>
+                  <Check className="w-5 h-5 text-green-500 mr-2" />
                   Suporte prioritário
                 </li>
               </ul>
-              <button className="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg">
+              <button 
+                onClick={() => navigate('/profile?tab=plans')}
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
+              >
                 Começar Básico
               </button>
             </div>
 
             {/* Plus Plan */}
-            <div className="bg-white dark:bg-gray-900 rounded-lg shadow-lg p-8">
+            <div className="bg-white dark:bg-gray-900 rounded-lg shadow-lg p-8 transition-all hover:shadow-xl">
               <h3 className="text-2xl font-bold mb-4">Plus</h3>
               <p className="text-4xl font-bold mb-6">R$ 97<span className="text-lg font-normal text-gray-600 dark:text-gray-400">/mês</span></p>
               <ul className="space-y-3 mb-8">
                 <li className="flex items-center">
-                  <span className="text-green-500 mr-2">✓</span>
+                  <Check className="w-5 h-5 text-green-500 mr-2" />
                   Até 10.000 produtos
                 </li>
                 <li className="flex items-center">
-                  <span className="text-green-500 mr-2">✓</span>
+                  <Check className="w-5 h-5 text-green-500 mr-2" />
                   Até 200 categorias
                 </li>
                 <li className="flex items-center">
-                  <span className="text-green-500 mr-2">✓</span>
+                  <Check className="w-5 h-5 text-green-500 mr-2" />
                   10 imagens por produto
                 </li>
                 <li className="flex items-center">
-                  <span className="text-green-500 mr-2">✓</span>
+                  <Check className="w-5 h-5 text-green-500 mr-2" />
                   Integração ERP (em breve)
                 </li>
                 <li className="flex items-center">
-                  <span className="text-green-500 mr-2">✓</span>
+                  <Check className="w-5 h-5 text-green-500 mr-2" />
                   Acesso à API
                 </li>
                 <li className="flex items-center">
-                  <span className="text-green-500 mr-2">✓</span>
+                  <Check className="w-5 h-5 text-green-500 mr-2" />
                   Suporte premium
                 </li>
                 <li className="flex items-center">
-                  <span className="text-green-500 mr-2">✓</span>
+                  <Check className="w-5 h-5 text-green-500 mr-2" />
                   Análises avançadas
                 </li>
               </ul>
-              <button className="w-full bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 px-4 py-2 rounded-lg">
+              <button 
+                onClick={() => navigate('/profile?tab=plans')}
+                className="w-full bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 px-4 py-2 rounded-lg transition-colors"
+              >
                 Começar Plus
               </button>
             </div>
@@ -243,7 +274,7 @@ function App() {
             </p>
             
             <div className="grid md:grid-cols-2 gap-8 mb-12">
-              <div className="bg-white dark:bg-gray-800 p-6 rounded-lg border border-gray-200 dark:border-gray-700">
+              <div className="bg-white dark:bg-gray-800 p-6 rounded-lg border border-gray-200 dark:border-gray-700 transition-transform hover:scale-105">
                 <h3 className="text-xl font-bold mb-4 text-blue-600">Em Desenvolvimento</h3>
                 <ul className="space-y-4">
                   <li className="flex items-center gap-2">
@@ -253,7 +284,7 @@ function App() {
                 </ul>
               </div>
               
-              <div className="bg-white dark:bg-gray-800 p-6 rounded-lg border border-gray-200 dark:border-gray-700">
+              <div className="bg-white dark:bg-gray-800 p-6 rounded-lg border border-gray-200 dark:border-gray-700 transition-transform hover:scale-105">
                 <h3 className="text-xl font-bold mb-4 text-blue-600">Próximas Integrações</h3>
                 <ul className="space-y-4">
                   <li className="flex items-center gap-2">
@@ -272,7 +303,7 @@ function App() {
               </div>
             </div>
 
-            <div className="bg-yellow-50 dark:bg-yellow-900/20 p-6 rounded-lg border border-yellow-200 dark:border-yellow-800">
+            <div className="bg-yellow-50 dark:bg-yellow-900/20 p-6 rounded-lg border border-yellow-200 dark:border-yellow-800 transition-all hover:shadow-md">
               <h4 className="font-semibold text-blue-800 dark:text-blue-200 mb-2">
                 Integrações em Desenvolvimento
               </h4>

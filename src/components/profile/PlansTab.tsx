@@ -1,8 +1,10 @@
-import React, { useState } from 'react';
-import { Check, Loader2, AlertCircle } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Check, Loader2, AlertCircle, AlertTriangle, Info, X } from 'lucide-react';
 import { Store } from '../../lib/types';
-import { createCheckoutSession, createPortalSession, Plan } from '../../lib/stripe';
+import { createCheckoutSession, createPortalSession, Plan } from '../../lib/stripe-improved';
 import { PlanType, getPlanLimits } from '../../lib/plans';
+import { AppError, ErrorCategory } from '../../lib/errors';
+import { toast } from 'react-toastify';
 
 interface PlansTabProps {
   store: Store;
@@ -13,6 +15,13 @@ interface PlanFeature {
   text: string;
   plans: ('gratuito' | 'básico' | 'plus')[];
   getLimit?: (type: string) => string;
+}
+
+interface AlertState {
+  type: 'success' | 'error' | 'info' | 'warning';
+  message: string;
+  details?: string;
+  autoHide?: boolean;
 }
 
 const PLAN_FEATURES: PlanFeature[] = [
@@ -89,36 +98,149 @@ const PlanFeatures = ({ plan }: { plan: Plan }) => {
 
 export function PlansTab({ store, plans }: PlansTabProps) {
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [loadingPlanId, setLoadingPlanId] = useState<string | null>(null);
+  const [alert, setAlert] = useState<AlertState | null>(null);
   const [showTrialAlert, setShowTrialAlert] = useState(false);
+  const [processingState, setProcessingState] = useState<
+    'idle' | 'preparing' | 'redirecting' | 'processing'
+  >('idle');
+
+  // Limpar alertas após um tempo
+  useEffect(() => {
+    if (alert?.autoHide) {
+      const timer = setTimeout(() => {
+        setAlert(null);
+      }, 5000);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [alert]);
 
   const handleUpgrade = async (priceId: string) => {
+    // Se estiver em trial, perguntar antes
     if (store.subscription.status === 'trialing') {
       setShowTrialAlert(true);
       return;
     }
 
     try {
+      // Atualizar estado de loading e identificar qual plano está sendo processado
       setLoading(true);
-      setError(null);
-      await createCheckoutSession(priceId, store.id);
-    } catch (error: any) {
-      console.error('Erro ao iniciar upgrade:', error);
-      setError(error.message);
+      setLoadingPlanId(priceId);
+      setProcessingState('preparing');
+      setAlert(null);
+      
+      // Mostrar toast durante o processo
+      const loadingToast = toast.loading('Preparando checkout...');
+      
+      // Chamar API com timeout
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('Timeout')), 15000);
+      });
+      
+      const sessionPromise = createCheckoutSession(priceId, store.id);
+      
+      // Race entre timeout e resposta real
+      await Promise.race([sessionPromise, timeoutPromise]);
+      
+      // Atualizar estado antes do redirecionamento
+      toast.update(loadingToast, { 
+        render: 'Redirecionando para o checkout...', 
+        type: 'info',
+        isLoading: true
+      });
+      
+      setProcessingState('redirecting');
+      
+      // Continuar com o processamento (isso vai redirecionar via stripe-improved.ts)
+      await sessionPromise;
+      
+      // Limpar toast após sucesso
+      toast.dismiss(loadingToast);
+
+    } catch (error) {
+      // Converter para AppError se necessário
+      const appError = error instanceof AppError ? error : new AppError({
+        category: ErrorCategory.PAYMENT,
+        message: error instanceof Error ? error.message : 'Erro desconhecido',
+        originalError: error
+      });
+      
+      // Mostrar erro no console
+      console.error('Erro ao iniciar upgrade:', appError);
+      
+      // Atualizar UI com erro
+      setAlert({
+        type: 'error',
+        message: appError.message,
+        details: appError.category === ErrorCategory.PAYMENT 
+          ? 'Problema com o processamento do pagamento' 
+          : 'Não foi possível iniciar o processo de pagamento'
+      });
+      
+      // Mostrar toast de erro
+      toast.error(appError.message);
     } finally {
       setLoading(false);
+      setLoadingPlanId(null);
+      setProcessingState('idle');
     }
   };
 
   const handleManageSubscription = async () => {
     try {
       setLoading(true);
-      await createPortalSession();
-    } catch (error: any) {
-      console.error('Erro ao acessar portal:', error);
-      alert(error.message);
+      setProcessingState('preparing');
+      setAlert(null);
+      
+      // Mostrar toast durante o processo
+      const loadingToast = toast.loading('Acessando portal de pagamento...');
+      
+      // Chamar portal com timeout
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('Timeout')), 15000);
+      });
+      
+      const portalPromise = createPortalSession();
+      
+      // Race entre timeout e resposta real
+      await Promise.race([portalPromise, timeoutPromise]);
+      
+      // Atualizar estado antes do redirecionamento
+      toast.update(loadingToast, { 
+        render: 'Redirecionando para o portal...', 
+        type: 'info',
+        isLoading: true
+      });
+      
+      setProcessingState('redirecting');
+      
+      // Continuar com o processamento (isso vai redirecionar)
+      await portalPromise;
+      
+      // Limpar toast após sucesso
+      toast.dismiss(loadingToast);
+      
+    } catch (error) {
+      // Converter para AppError
+      const appError = error instanceof AppError ? error : new AppError({
+        category: ErrorCategory.PAYMENT,
+        message: error instanceof Error ? error.message : 'Erro desconhecido',
+        originalError: error
+      });
+      
+      console.error('Erro ao acessar portal:', appError);
+      
+      setAlert({
+        type: 'error',
+        message: appError.message,
+        details: 'Problema ao acessar o portal de pagamento'
+      });
+      
+      toast.error(appError.message);
     } finally {
       setLoading(false);
+      setProcessingState('idle');
     }
   };
 
@@ -143,18 +265,50 @@ export function PlansTab({ store, plans }: PlansTabProps) {
     });
   };
 
+  // Renderizar ícone de alerta apropriado
+  const renderAlertIcon = () => {
+    switch(alert?.type) {
+      case 'success': return <Check className="w-5 h-5 flex-shrink-0" />;
+      case 'error': return <AlertCircle className="w-5 h-5 flex-shrink-0" />;
+      case 'warning': return <AlertTriangle className="w-5 h-5 flex-shrink-0" />;
+      case 'info': return <Info className="w-5 h-5 flex-shrink-0" />;
+      default: return null;
+    }
+  };
+
   return (
     <div className="space-y-8">
-      {error && (
-        <div className="p-4 bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-100 rounded-lg flex items-center gap-2">
-          <AlertCircle className="w-5 h-5 flex-shrink-0" />
-          <span>{error}</span>
+      {/* Alertas */}
+      {alert && (
+        <div className={`p-4 rounded-lg flex items-start space-x-3 ${
+          alert.type === 'success' 
+            ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-100 border border-green-200 dark:border-green-800' 
+            : alert.type === 'error'
+            ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-100 border border-red-200 dark:border-red-800'
+            : alert.type === 'warning'
+            ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-100 border border-yellow-200 dark:border-yellow-800'
+            : 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-100 border border-blue-200 dark:border-blue-800'
+        }`}>
+          {renderAlertIcon()}
+          <div className="flex-1">
+            <span className="font-medium">{alert.message}</span>
+            {alert.details && (
+              <p className="text-sm mt-1 opacity-80">{alert.details}</p>
+            )}
+          </div>
+          <button 
+            onClick={() => setAlert(null)}
+            className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+          >
+            <X className="w-4 h-4" />
+          </button>
         </div>
       )}
 
+      {/* Modal de confirmação para usuários em trial */}
       {showTrialAlert && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 transition-opacity duration-200">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full shadow-xl transform transition-transform duration-300 scale-100">
             <h3 className="text-xl font-semibold mb-4">Você está no período de demonstração</h3>
             <p className="text-gray-600 dark:text-gray-400 mb-6">
               Você já está usando todos os recursos do plano Plus gratuitamente durante o período de demonstração.
@@ -163,7 +317,7 @@ export function PlansTab({ store, plans }: PlansTabProps) {
             <div className="flex justify-end">
               <button
                 onClick={() => setShowTrialAlert(false)}
-                className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+                className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition"
               >
                 Entendi
               </button>
@@ -179,19 +333,21 @@ export function PlansTab({ store, plans }: PlansTabProps) {
         </p>
       </div>
 
+      {/* Cards de Planos */}
       <div className="grid md:grid-cols-3 gap-8">
         {Array.isArray(plans) && sortPlans(plans)
           .filter(plan => !plan.metadata.is_trial)
           .map((plan) => {
             const isCurrentPlan = store.subscription.plan_type === plan.metadata.plan_type;
+            const isLoading = loading && loadingPlanId === plan.price?.id;
 
             return (
               <div
                 key={`plan-${plan.price?.id || plan.metadata.plan_type}`}
-                className={`rounded-lg border ${
+                className={`rounded-lg border transition-all duration-300 ${
                   isCurrentPlan
                     ? 'border-blue-500 shadow-lg'
-                    : 'border-gray-200 dark:border-gray-700'
+                    : 'border-gray-200 dark:border-gray-700 hover:shadow-md'
                 } bg-white dark:bg-gray-800 overflow-hidden`}
               >
                 {isCurrentPlan && (
@@ -214,28 +370,42 @@ export function PlansTab({ store, plans }: PlansTabProps) {
                   {isCurrentPlan ? (
                     <button
                       onClick={handleManageSubscription}
-                      className={`w-full py-2 px-4 border rounded-lg font-medium disabled:opacity-50 ${
+                      disabled={loading || processingState !== 'idle'}
+                      className={`w-full py-2 px-4 border rounded-lg font-medium transition-all ${
                         store.subscription.status === 'trialing'
-                          ? 'border-green-500 text-green-500 hover:bg-green-50 dark:hover:bg-green-900'
-                          : 'border-blue-500 text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900'
-                      }`}
-                      disabled={loading}
+                          ? 'border-green-500 text-green-500 hover:bg-green-50 dark:hover:bg-green-900/20'
+                          : 'border-blue-500 text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20'
+                      } ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
                     >
-                      {loading ? 'Processando...' : store.subscription.status === 'trialing' 
+                      {loading ? (
+                        <div className="flex items-center justify-center gap-2">
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          <span>Processando...</span>
+                        </div>
+                      ) : store.subscription.status === 'trialing' 
                         ? 'Plano de Demonstração Ativo' 
                         : 'Gerenciar Assinatura'}
                     </button>
                   ) : (
                     <button
                       onClick={() => handleUpgrade(plan.price?.id)}
-                      disabled={!plan.price?.id || loading || plan.price.amount === 0}
-                      className={`w-full py-2 px-4 rounded-lg font-medium transition-colors ${
+                      disabled={!plan.price?.id || loading || plan.price.amount === 0 || processingState !== 'idle'}
+                      className={`w-full py-2 px-4 rounded-lg font-medium transition-all ${
                         !plan.price?.amount || plan.price.amount === 0
                           ? 'bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600'
                           : 'bg-blue-600 hover:bg-blue-700 text-white'
                       } disabled:opacity-50 disabled:cursor-not-allowed`}
                     >
-                      {loading ? 'Processando...' : (!plan.price?.amount || plan.price.amount === 0) 
+                      {isLoading ? (
+                        <div className="flex items-center justify-center gap-2">
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          <span>
+                            {processingState === 'preparing' ? 'Preparando...' : 
+                             processingState === 'redirecting' ? 'Redirecionando...' : 
+                             'Processando...'}
+                          </span>
+                        </div>
+                      ) : (!plan.price?.amount || plan.price.amount === 0) 
                         ? 'Começar Grátis' 
                         : 'Fazer Upgrade'}
                     </button>
@@ -254,11 +424,17 @@ export function PlansTab({ store, plans }: PlansTabProps) {
         </p>
       </div>
 
-      {loading && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white dark:bg-gray-800 p-4 rounded-lg flex items-center space-x-3">
-            <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
-            <span>Processando...</span>
+      {/* Overlay de carregamento global */}
+      {loading && processingState === 'redirecting' && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 backdrop-blur-sm">
+          <div className="bg-white dark:bg-gray-800 p-6 rounded-lg flex flex-col items-center space-y-4 max-w-sm text-center">
+            <Loader2 className="w-10 h-10 animate-spin text-blue-600" />
+            <div>
+              <h3 className="text-lg font-semibold mb-2">Redirecionando para pagamento</h3>
+              <p className="text-gray-600 dark:text-gray-400">
+                Você será redirecionado para a página de pagamento em instantes...
+              </p>
+            </div>
           </div>
         </div>
       )}

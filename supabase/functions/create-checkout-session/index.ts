@@ -8,15 +8,84 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS'
 };
 
-const stripe = new Stripe(Deno.env.get('STRIPE_SECRET_KEY') || '', {
+// Códigos de erro padronizados
+const ERROR_CODES = {
+  AUTHENTICATION: 'AUTH_ERROR',
+  VALIDATION: 'VALIDATION_ERROR',
+  STRIPE: 'STRIPE_ERROR',
+  DATABASE: 'DATABASE_ERROR',
+  UNKNOWN: 'UNKNOWN_ERROR',
+};
+
+/**
+ * Estrutura padronizada para respostas de erro
+ */
+interface ErrorResponse {
+  error: string;
+  code: string;
+  details?: any;
+  requestId?: string;
+}
+
+/**
+ * Inicialização do Stripe com validação
+ */
+const stripeKey = Deno.env.get('STRIPE_SECRET_KEY');
+if (!stripeKey) {
+  console.error('STRIPE_SECRET_KEY não configurada');
+  throw new Error('Configuração de ambiente incompleta');
+}
+
+const stripe = new Stripe(stripeKey, {
   apiVersion: '2023-10-16',
+  typescript: true,
 });
 
-const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
-const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
+/**
+ * Inicialização do Supabase com validação
+ */
+const supabaseUrl = Deno.env.get('SUPABASE_URL');
+const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+
+if (!supabaseUrl || !supabaseServiceKey) {
+  console.error('Variáveis de ambiente do Supabase não configuradas');
+  throw new Error('Configuração de ambiente incompleta');
+}
+
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
+/**
+ * Gera um ID de requisição único para rastreamento
+ */
+function generateRequestId(): string {
+  return `req_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+}
+
+/**
+ * Formata uma resposta de erro padronizada
+ */
+function formatErrorResponse(message: string, code: string, details?: any): ErrorResponse {
+  const requestId = generateRequestId();
+  
+  // Logar o erro para referência
+  console.error(`[${requestId}] [${code}] ${message}`, details);
+  
+  return {
+    error: message,
+    code,
+    details,
+    requestId
+  };
+}
+
+/**
+ * Handler principal da função
+ */
 serve(async (req) => {
+  const requestId = generateRequestId();
+  console.log(`[${requestId}] Processando requisição`);
+  
+  // Tratamento de OPTIONS para CORS
   if (req.method === 'OPTIONS') {
     return new Response(null, {
       status: 204,
@@ -25,48 +94,130 @@ serve(async (req) => {
   }
 
   try {
-    const { priceId, storeId } = await req.json();
-    console.log('Creating checkout session:', { priceId, storeId });
-
-    if (!priceId || !storeId) {
-      throw new Error('ID do plano e ID da loja são obrigatórios');
+    // Validar conteúdo da requisição
+    if (req.method !== 'POST') {
+      return new Response(
+        JSON.stringify(formatErrorResponse(
+          'Método não suportado', 
+          ERROR_CODES.VALIDATION,
+          { method: req.method }
+        )),
+        { 
+          status: 405,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        }
+      );
     }
 
-    // Log da chave Stripe sendo usada (parcial)
-    const stripeKey = Deno.env.get('STRIPE_SECRET_KEY') || '';
-    console.log('Using Stripe key:', `${stripeKey.slice(0, 8)}...`);
-
-    // Verificar price no Stripe
+    // Parse do corpo da requisição
+    let requestBody;
     try {
-      const price = await stripe.prices.retrieve(priceId);
-      console.log('Retrieved price:', { 
+      requestBody = await req.json();
+    } catch (e) {
+      return new Response(
+        JSON.stringify(formatErrorResponse(
+          'Corpo da requisição inválido', 
+          ERROR_CODES.VALIDATION
+        )),
+        { 
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        }
+      );
+    }
+
+    const { priceId, storeId } = requestBody;
+    console.log(`[${requestId}] Criando checkout session:`, { priceId, storeId });
+
+    // Validar parâmetros obrigatórios
+    if (!priceId || !storeId) {
+      return new Response(
+        JSON.stringify(formatErrorResponse(
+          'ID do plano e ID da loja são obrigatórios',
+          ERROR_CODES.VALIDATION,
+          { priceId, storeId }
+        )),
+        { 
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        }
+      );
+    }
+
+    // Validar autorização
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader) {
+      return new Response(
+        JSON.stringify(formatErrorResponse(
+          'Não autorizado',
+          ERROR_CODES.AUTHENTICATION
+        )),
+        { 
+          status: 401,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        }
+      );
+    }
+
+    // Verificar token JWT
+    const token = authHeader.replace('Bearer ', '');
+    const { data: { user }, error: userError } = await supabase.auth.getUser(token);
+
+    if (userError || !user) {
+      console.error(`[${requestId}] Erro de autenticação:`, userError);
+      return new Response(
+        JSON.stringify(formatErrorResponse(
+          'Usuário não autenticado',
+          ERROR_CODES.AUTHENTICATION,
+          { details: userError?.message }
+        )),
+        { 
+          status: 401,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        }
+      );
+    }
+
+    // Verificar preço no Stripe com tratamento de erro adequado
+    let price;
+    try {
+      price = await stripe.prices.retrieve(priceId);
+      
+      console.log(`[${requestId}] Preço recuperado:`, { 
         id: price.id, 
         active: price.active,
         type: price.type
       });
 
       if (!price.active) {
-        throw new Error('Plano não está ativo');
+        return new Response(
+          JSON.stringify(formatErrorResponse(
+            'Plano não está ativo',
+            ERROR_CODES.VALIDATION,
+            { priceId }
+          )),
+          { 
+            status: 400,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          }
+        );
       }
     } catch (error) {
-      console.error('Error retrieving price from Stripe:', error);
-      throw new Error('Plano não encontrado ou inativo no Stripe');
+      console.error(`[${requestId}] Erro ao recuperar preço:`, error);
+      return new Response(
+        JSON.stringify(formatErrorResponse(
+          'Plano não encontrado ou inativo',
+          ERROR_CODES.STRIPE,
+          { error: error.message }
+        )),
+        { 
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        }
+      );
     }
 
-    const authHeader = req.headers.get('Authorization');
-    if (!authHeader) {
-      throw new Error('Não autorizado');
-    }
-
-    const token = authHeader.replace('Bearer ', '');
-    const { data: { user }, error: userError } = await supabase.auth.getUser(token);
-
-    if (userError || !user) {
-      console.error('User error:', userError);
-      throw new Error('Usuário não autenticado');
-    }
-
-    // Verificar loja
+    // Verificar se a loja pertence ao usuário
     const { data: store, error: storeError } = await supabase
       .from('stores')
       .select(`
@@ -85,108 +236,204 @@ serve(async (req) => {
       .single();
 
     if (storeError) {
-      console.error('Store error:', storeError);
-      throw new Error('Loja não encontrada ou não pertence ao usuário');
+      console.error(`[${requestId}] Erro ao buscar loja:`, storeError);
+      return new Response(
+        JSON.stringify(formatErrorResponse(
+          'Loja não encontrada ou não pertence ao usuário',
+          ERROR_CODES.DATABASE,
+          { storeId, userId: user.id }
+        )),
+        { 
+          status: 404,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        }
+      );
     }
 
-    // Verificar customer
-    let { data: customer } = await supabase
+    // Verificar ou criar registro de cliente no Stripe
+    const { data: customer } = await supabase
       .from('stripe_customers')
       .select('customer_id')
       .eq('user_id', user.id)
       .single();
 
+    let customerId;
+
     if (!customer) {
-      console.log('Creating new Stripe customer for user:', user.id);
+      console.log(`[${requestId}] Criando novo cliente Stripe para usuário:`, user.id);
       
-      const stripeCustomer = await stripe.customers.create({
-        email: user.email,
-        metadata: {
-          user_id: user.id
+      try {
+        const stripeCustomer = await stripe.customers.create({
+          email: user.email,
+          metadata: {
+            user_id: user.id
+          }
+        });
+
+        const { data: newCustomer, error: customerError } = await supabase
+          .from('stripe_customers')
+          .insert({
+            user_id: user.id,
+            customer_id: stripeCustomer.id,
+            email: user.email,
+            created_at: new Date().toISOString()
+          })
+          .select()
+          .single();
+
+        if (customerError) {
+          console.error(`[${requestId}] Erro ao criar cliente:`, customerError);
+          throw new Error('Erro ao criar cliente');
         }
-      });
 
-      const { data: newCustomer, error: customerError } = await supabase
-        .from('stripe_customers')
-        .insert({
-          user_id: user.id,
-          customer_id: stripeCustomer.id,
-          email: user.email
-        })
-        .select()
-        .single();
-
-      if (customerError) {
-        console.error('Customer creation error:', customerError);
-        throw new Error('Erro ao criar cliente');
+        customerId = stripeCustomer.id;
+      } catch (error) {
+        console.error(`[${requestId}] Erro ao criar cliente Stripe:`, error);
+        return new Response(
+          JSON.stringify(formatErrorResponse(
+            'Erro ao criar cliente',
+            ERROR_CODES.STRIPE,
+            { error: error.message }
+          )),
+          { 
+            status: 500,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          }
+        );
       }
-
-      customer = newCustomer;
+    } else {
+      customerId = customer.customer_id;
     }
 
-    // Verificar subscription existente
+    // Verificar se já existe uma assinatura, redirecionando para o portal se houver
     const currentSubscription = store.subscriptions?.[0]?.stripe_subscriptions?.subscription_id;
     if (currentSubscription) {
-      console.log('Creating portal session for existing subscription:', currentSubscription);
+      console.log(`[${requestId}] Criando portal para assinatura existente:`, currentSubscription);
       
-      const session = await stripe.billingPortal.sessions.create({
-        customer: customer.customer_id,
-        return_url: `${req.headers.get('origin')}/profile`,
+      try {
+        const session = await stripe.billingPortal.sessions.create({
+          customer: customerId,
+          return_url: `${req.headers.get('origin')}/profile`,
+        });
+
+        return new Response(
+          JSON.stringify({ url: session.url }),
+          { 
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            status: 200
+          }
+        );
+      } catch (error) {
+        console.error(`[${requestId}] Erro ao criar sessão de portal:`, error);
+        return new Response(
+          JSON.stringify(formatErrorResponse(
+            'Erro ao criar sessão do portal',
+            ERROR_CODES.STRIPE,
+            { error: error.message }
+          )),
+          { 
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            status: 500
+          }
+        );
+      }
+    }
+
+    // Criar checkout session com idempotência
+    console.log(`[${requestId}] Criando nova checkout session`);
+    const idempotencyKey = `checkout_${storeId}_${priceId}_${Date.now()}`;
+    
+    try {
+      const session = await stripe.checkout.sessions.create({
+        customer: customerId,
+        line_items: [{ price: priceId, quantity: 1 }],
+        mode: 'subscription',
+        success_url: `${req.headers.get('origin')}/profile?session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${req.headers.get('origin')}/profile`,
+        allow_promotion_codes: true,
+        metadata: {
+          store_id: storeId,
+          request_id: requestId
+        },
+        payment_method_types: ['card'],
+        billing_address_collection: 'required',
+        customer_update: {
+          address: 'auto',
+          name: 'auto'
+        }
+      }, {
+        idempotencyKey
+      });
+
+      console.log(`[${requestId}] Session criada com sucesso:`, { 
+        id: session.id,
+        url: session.url,
+        status: session.status
+      });
+
+      // Registra log da sessão criada
+      await supabase.from('stripe_checkout_logs').insert({
+        checkout_session_id: session.id,
+        user_id: user.id,
+        store_id: storeId,
+        price_id: priceId,
+        created_at: new Date().toISOString(),
+        status: 'created',
+        request_id: requestId
       });
 
       return new Response(
-        JSON.stringify({ url: session.url }),
+        JSON.stringify({ 
+          id: session.id,
+          url: session.url,
+          success: true 
+        }),
         { 
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
           status: 200
         }
       );
+    } catch (error) {
+      console.error(`[${requestId}] Erro ao criar checkout session:`, error);
+      
+      // Registrar o erro no banco de dados para análise
+      await supabase.from('stripe_checkout_logs').insert({
+        user_id: user.id,
+        store_id: storeId,
+        price_id: priceId,
+        created_at: new Date().toISOString(),
+        status: 'error',
+        error_message: error.message,
+        request_id: requestId
+      });
+      
+      return new Response(
+        JSON.stringify(formatErrorResponse(
+          'Erro ao criar sessão de checkout',
+          ERROR_CODES.STRIPE,
+          { 
+            error: error.message,
+            stripeError: error.type || error.code
+          }
+        )),
+        { 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 500
+        }
+      );
     }
-
-    // Criar checkout session
-    console.log('Creating new checkout session');
-    const session = await stripe.checkout.sessions.create({
-      customer: customer.customer_id,
-      line_items: [{ price: priceId, quantity: 1 }],
-      mode: 'subscription',
-      success_url: `${req.headers.get('origin')}/profile?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${req.headers.get('origin')}/profile`,
-      allow_promotion_codes: true,
-      metadata: {
-        store_id: storeId
-      },
-      payment_method_types: ['card'],
-      billing_address_collection: 'required',
-      customer_update: {
-        address: 'auto',
-        name: 'auto'
-      }
-    });
-
-    console.log('Checkout session created:', { 
-      id: session.id,
-      url: session.url,
-      status: session.status
-    });
-
-    return new Response(
-      JSON.stringify({ id: session.id }),
-      { 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 200
-      }
-    );
-  } catch (error: any) {
-    console.error('Function error:', error);
+  } catch (error) {
+    console.error(`[${requestId}] Erro não tratado:`, error);
     
     return new Response(
-      JSON.stringify({ 
-        error: error.message || 'Internal server error',
-        details: error instanceof Error ? error.stack : undefined
-      }),
+      JSON.stringify(formatErrorResponse(
+        'Erro interno do servidor',
+        ERROR_CODES.UNKNOWN,
+        { error: error.message }
+      )),
       { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 400
+        status: 500
       }
     );
   }
