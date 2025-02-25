@@ -8,9 +8,9 @@
  * - Facilitar acesso a informações de assinatura em um formato padronizado
  */
 
-import { supabase } from './supabase';
-import { AppError, ErrorCategory, ErrorCode } from './errors';
-import { PlanType, getPlanLimits } from './plans-service';
+import { supabase } from '../supabase';
+import { AppError, ErrorCategory, ErrorCode } from '../errors';
+import { PlanType, getPlanLimits } from '../plans-service';
 
 // Estados possíveis para assinatura
 export type SubscriptionStatus = 
