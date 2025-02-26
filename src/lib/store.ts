@@ -13,37 +13,59 @@ interface StoreState {
 
 // Plan limits configuration
 export const PLAN_LIMITS = {
-  free: {
-    products: 100,
-    categories: 10,
-    images_per_product: 3,
-    name: 'Gratuito',
-    price: 0,
-    metadata: {
-      plan_type: 'free' as const,
-      imgur_enabled: true
-    }
-  },
-  basic: {
+  starter: {
     products: 1000,
     categories: 50,
     images_per_product: 5,
-    name: 'Básico',
-    price: 47,
+    name: "Starter",
+    price: 4900,
     metadata: {
-      plan_type: 'basic' as const,
-      imgur_enabled: false
+      plan_type: 'starter',
+      imgur_enabled: true,
+      priority_support: false,
+      erp_integration: false,
+      ai_features_enabled: false,
+      custom_domain_enabled: true,
+      api_access: false,
+      analytics_enabled: true
     }
   },
-  plus: {
-    products: 10000,
-    categories: 200,
-    images_per_product: 10,
-    name: 'Plus',
-    price: 97,
+  
+  // Plano Pro (novo intermediário)
+  pro: {
+    products: 5000,
+    categories: 100,
+    images_per_product: 8,
+    name: "Pro",
+    price: 9900,
     metadata: {
-      plan_type: 'plus' as const,
-      imgur_enabled: false
+      plan_type: 'pro',
+      imgur_enabled: true,
+      priority_support: true,
+      erp_integration: false,
+      ai_features_enabled: true,
+      custom_domain_enabled: true,
+      api_access: false,
+      analytics_enabled: true
+    }
+  },
+  
+  // Plano Enterprise (antigo Plus)
+  enterprise: {
+    products: 15000,
+    categories: 300,
+    images_per_product: 15,
+    name: "Enterprise",
+    price: 19900,
+    metadata: {
+      plan_type: 'enterprise',
+      imgur_enabled: true,
+      priority_support: true,
+      erp_integration: true,
+      ai_features_enabled: true,
+      custom_domain_enabled: true,
+      api_access: true,
+      analytics_enabled: true
     }
   }
 };

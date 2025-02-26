@@ -13,7 +13,7 @@ interface PlansTabProps {
 
 interface PlanFeature {
   text: string;
-  plans: ('gratuito' | 'básico' | 'plus')[];
+  plans: ('starter' | 'pro' | 'enterprise')[];
   getLimit?: (type: string) => string;
 }
 
@@ -27,50 +27,61 @@ interface AlertState {
 const PLAN_FEATURES: PlanFeature[] = [
   {
     text: "Produtos",
-    plans: ['gratuito', 'básico', 'plus'],
+    plans: ['starter', 'pro', 'enterprise'],
     getLimit: (type: string) => getPlanLimits(type as PlanType).products.toLocaleString()
   },
   {
     text: "Categorias principais",
-    plans: ['gratuito', 'básico', 'plus'],
+    plans: ['starter', 'pro', 'enterprise'],
     getLimit: (type: string) => getPlanLimits(type as PlanType).categories.toLocaleString()
   },
   {
     text: "Imagens por produto",
-    plans: ['gratuito', 'básico', 'plus'],
+    plans: ['starter', 'pro', 'enterprise'],
     getLimit: (type: string) => getPlanLimits(type as PlanType).images_per_product.toString()
   },
   {
     text: "Link compartilhável",
-    plans: ['gratuito', 'básico', 'plus']
+    plans: ['starter', 'pro', 'enterprise']
   },
   {
     text: "Upload de imagens",
-    plans: ['gratuito', 'básico', 'plus']
+    plans: ['starter', 'pro', 'enterprise']
+  },
+  {
+    text: "Domínio personalizado",
+    plans: ['starter', 'pro', 'enterprise']
+  },
+  {
+    text: "Analytics básico",
+    plans: ['starter', 'pro', 'enterprise']
   },
   {
     text: "Suporte prioritário",
-    plans: ['básico', 'plus']
-  },
-  {
-    text: "Integração com ERP",
-    plans: ['plus']
+    plans: ['pro', 'enterprise']
   },
   {
     text: "Geração de descrições com IA",
-    plans: ['plus']
+    plans: ['pro', 'enterprise']
+  },
+  {
+    text: "Analytics avançado",
+    plans: ['pro', 'enterprise']
+  },
+  {
+    text: "Integração com ERP",
+    plans: ['enterprise']
+  },
+  {
+    text: "Acesso à API",
+    plans: ['enterprise']
   }
 ];
 
 const PlanFeatures = ({ plan }: { plan: Plan }) => {
-  const getPlanType = (plan: Plan): 'gratuito' | 'básico' | 'plus' => {
+  const getPlanType = (plan: Plan): 'starter' | 'pro' | 'enterprise' => {
     const planType = plan.metadata.plan_type as PlanType;
-    switch (planType) {
-      case 'free': return 'gratuito';
-      case 'basic': return 'básico';
-      case 'plus': return 'plus';
-      default: return 'gratuito';
-    }
+    return planType;
   };
 
   const planType = getPlanType(plan);
@@ -253,14 +264,14 @@ export function PlansTab({ store, plans }: PlansTabProps) {
 
   const sortPlans = (plans: Plan[]) => {
     const planOrder = {
-      'free': 0,
-      'basic': 1,
-      'plus': 2
+      'starter': 0,
+      'pro': 1,
+      'enterprise': 2
     };
 
     return plans.sort((a, b) => {
-      const aOrder = planOrder[a.metadata.plan_type];
-      const bOrder = planOrder[b.metadata.plan_type];
+      const aOrder = planOrder[a.metadata.plan_type as keyof typeof planOrder] || 0;
+      const bOrder = planOrder[b.metadata.plan_type as keyof typeof planOrder] || 0;
       return aOrder - bOrder;
     });
   };
@@ -311,7 +322,7 @@ export function PlansTab({ store, plans }: PlansTabProps) {
           <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full shadow-xl transform transition-transform duration-300 scale-100">
             <h3 className="text-xl font-semibold mb-4">Você está no período de demonstração</h3>
             <p className="text-gray-600 dark:text-gray-400 mb-6">
-              Você já está usando todos os recursos do plano Plus gratuitamente durante o período de demonstração.
+              Você já está usando todos os recursos do plano Enterprise gratuitamente durante o período de demonstração.
               Após o término do período de demonstração, você poderá escolher um plano para continuar.
             </p>
             <div className="flex justify-end">
@@ -340,6 +351,9 @@ export function PlansTab({ store, plans }: PlansTabProps) {
           .map((plan) => {
             const isCurrentPlan = store.subscription.plan_type === plan.metadata.plan_type;
             const isLoading = loading && loadingPlanId === plan.price?.id;
+            
+            // Destacar o plano intermediário (Pro)
+            const isPro = plan.metadata.plan_type === 'pro';
 
             return (
               <div
@@ -347,9 +361,16 @@ export function PlansTab({ store, plans }: PlansTabProps) {
                 className={`rounded-lg border transition-all duration-300 ${
                   isCurrentPlan
                     ? 'border-blue-500 shadow-lg'
+                    : isPro
+                    ? 'border-blue-400 shadow-md scale-105'
                     : 'border-gray-200 dark:border-gray-700 hover:shadow-md'
-                } bg-white dark:bg-gray-800 overflow-hidden`}
+                } bg-white dark:bg-gray-800 overflow-hidden relative`}
               >
+                {isPro && !isCurrentPlan && (
+                  <div className="absolute top-0 right-0 bg-blue-500 text-white px-3 py-1 rounded-bl-lg rounded-tr-lg font-medium">
+                    Recomendado
+                  </div>
+                )}
                 {isCurrentPlan && (
                   <div className="bg-blue-500 text-white text-center py-2 text-sm font-medium">
                     Plano Atual
@@ -359,7 +380,7 @@ export function PlansTab({ store, plans }: PlansTabProps) {
                 <div className="p-6">
                   <h3 className="text-2xl font-bold mb-2">{plan.name}</h3>
                   <p className="text-4xl font-bold mb-6">
-                    {plan.price?.amount ? formatPrice(plan.price.amount / 100) : 'Grátis'}
+                    {plan.price?.amount ? formatPrice(plan.price.amount / 100) : 'Consulte'}
                     <span className="text-lg font-normal text-gray-600 dark:text-gray-400">
                       /mês
                     </span>
@@ -389,11 +410,11 @@ export function PlansTab({ store, plans }: PlansTabProps) {
                   ) : (
                     <button
                       onClick={() => handleUpgrade(plan.price?.id)}
-                      disabled={!plan.price?.id || loading || plan.price.amount === 0 || processingState !== 'idle'}
+                      disabled={!plan.price?.id || loading || processingState !== 'idle'}
                       className={`w-full py-2 px-4 rounded-lg font-medium transition-all ${
-                        !plan.price?.amount || plan.price.amount === 0
-                          ? 'bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600'
-                          : 'bg-blue-600 hover:bg-blue-700 text-white'
+                        isPro
+                          ? 'bg-blue-600 hover:bg-blue-700 text-white'
+                          : 'bg-blue-500 hover:bg-blue-600 text-white'
                       } disabled:opacity-50 disabled:cursor-not-allowed`}
                     >
                       {isLoading ? (
@@ -405,9 +426,7 @@ export function PlansTab({ store, plans }: PlansTabProps) {
                              'Processando...'}
                           </span>
                         </div>
-                      ) : (!plan.price?.amount || plan.price.amount === 0) 
-                        ? 'Começar Grátis' 
-                        : 'Fazer Upgrade'}
+                      ) : 'Assinar Agora'}
                     </button>
                   )}
                 </div>

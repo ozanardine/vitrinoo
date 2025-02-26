@@ -152,43 +152,10 @@ function App() {
         <div className="container mx-auto px-4">
           <h2 className="text-3xl font-bold text-center mb-12">Escolha o plano perfeito para seu negócio</h2>
           <div className="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto">
-            {/* Free Plan */}
+            {/* Starter Plan */}
             <div className="bg-white dark:bg-gray-900 rounded-lg shadow-lg p-8 transition-all hover:shadow-xl">
-              <h3 className="text-2xl font-bold mb-4">Grátis</h3>
-              <p className="text-4xl font-bold mb-6">R$ 0<span className="text-lg font-normal text-gray-600 dark:text-gray-400">/mês</span></p>
-              <ul className="space-y-3 mb-8">
-                <li className="flex items-center">
-                  <Check className="w-5 h-5 text-green-500 mr-2" />
-                  Até 100 produtos
-                </li>
-                <li className="flex items-center">
-                  <Check className="w-5 h-5 text-green-500 mr-2" />
-                  Até 10 categorias
-                </li>
-                <li className="flex items-center">
-                  <Check className="w-5 h-5 text-green-500 mr-2" />
-                  3 imagens por produto
-                </li>
-                <li className="flex items-center">
-                  <Check className="w-5 h-5 text-green-500 mr-2" />
-                  Link compartilhável
-                </li>
-              </ul>
-              <button 
-                onClick={() => navigate('/profile?tab=plans')}
-                className="w-full bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 px-4 py-2 rounded-lg transition-colors"
-              >
-                Começar Grátis
-              </button>
-            </div>
-
-            {/* Basic Plan */}
-            <div className="bg-white dark:bg-gray-900 rounded-lg shadow-lg p-8 border-2 border-blue-500 relative z-10 transform scale-105 transition-all hover:shadow-xl">
-              <div className="absolute top-0 right-0 bg-blue-500 text-white px-3 py-1 rounded-bl-lg rounded-tr-lg font-medium">
-                Popular
-              </div>
-              <h3 className="text-2xl font-bold mb-4">Básico</h3>
-              <p className="text-4xl font-bold mb-6">R$ 47<span className="text-lg font-normal text-gray-600 dark:text-gray-400">/mês</span></p>
+              <h3 className="text-2xl font-bold mb-4">Starter</h3>
+              <p className="text-4xl font-bold mb-6">R$ 49<span className="text-lg font-normal text-gray-600 dark:text-gray-400">/mês</span></p>
               <ul className="space-y-3 mb-8">
                 <li className="flex items-center">
                   <Check className="w-5 h-5 text-green-500 mr-2" />
@@ -208,37 +175,82 @@ function App() {
                 </li>
                 <li className="flex items-center">
                   <Check className="w-5 h-5 text-green-500 mr-2" />
+                  Analytics básico
+                </li>
+              </ul>
+              <button 
+                onClick={() => navigate('/profile?tab=plans')}
+                className="w-full bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg transition-colors"
+              >
+                Começar Agora
+              </button>
+            </div>
+
+            {/* Pro Plan */}
+            <div className="bg-white dark:bg-gray-900 rounded-lg shadow-lg p-8 border-2 border-blue-500 relative z-10 transform scale-105 transition-all hover:shadow-xl">
+              <div className="absolute top-0 right-0 bg-blue-500 text-white px-3 py-1 rounded-bl-lg rounded-tr-lg font-medium">
+                Recomendado
+              </div>
+              <h3 className="text-2xl font-bold mb-4">Pro</h3>
+              <p className="text-4xl font-bold mb-6">R$ 99<span className="text-lg font-normal text-gray-600 dark:text-gray-400">/mês</span></p>
+              <ul className="space-y-3 mb-8">
+                <li className="flex items-center">
+                  <Check className="w-5 h-5 text-green-500 mr-2" />
+                  Até 5.000 produtos
+                </li>
+                <li className="flex items-center">
+                  <Check className="w-5 h-5 text-green-500 mr-2" />
+                  Até 100 categorias
+                </li>
+                <li className="flex items-center">
+                  <Check className="w-5 h-5 text-green-500 mr-2" />
+                  8 imagens por produto
+                </li>
+                <li className="flex items-center">
+                  <Check className="w-5 h-5 text-green-500 mr-2" />
+                  Domínio personalizado
+                </li>
+                <li className="flex items-center">
+                  <Check className="w-5 h-5 text-green-500 mr-2" />
                   Suporte prioritário
+                </li>
+                <li className="flex items-center">
+                  <Check className="w-5 h-5 text-green-500 mr-2" />
+                  Geração de descrições com IA
+                </li>
+                <li className="flex items-center">
+                  <Check className="w-5 h-5 text-green-500 mr-2" />
+                  Analytics avançado
                 </li>
               </ul>
               <button 
                 onClick={() => navigate('/profile?tab=plans')}
                 className="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
               >
-                Começar Básico
+                Escolher Pro
               </button>
             </div>
 
-            {/* Plus Plan */}
+            {/* Enterprise Plan */}
             <div className="bg-white dark:bg-gray-900 rounded-lg shadow-lg p-8 transition-all hover:shadow-xl">
-              <h3 className="text-2xl font-bold mb-4">Plus</h3>
-              <p className="text-4xl font-bold mb-6">R$ 97<span className="text-lg font-normal text-gray-600 dark:text-gray-400">/mês</span></p>
+              <h3 className="text-2xl font-bold mb-4">Enterprise</h3>
+              <p className="text-4xl font-bold mb-6">R$ 199<span className="text-lg font-normal text-gray-600 dark:text-gray-400">/mês</span></p>
               <ul className="space-y-3 mb-8">
                 <li className="flex items-center">
                   <Check className="w-5 h-5 text-green-500 mr-2" />
-                  Até 10.000 produtos
+                  Até 15.000 produtos
                 </li>
                 <li className="flex items-center">
                   <Check className="w-5 h-5 text-green-500 mr-2" />
-                  Até 200 categorias
+                  Até 300 categorias
                 </li>
                 <li className="flex items-center">
                   <Check className="w-5 h-5 text-green-500 mr-2" />
-                  10 imagens por produto
+                  15 imagens por produto
                 </li>
                 <li className="flex items-center">
                   <Check className="w-5 h-5 text-green-500 mr-2" />
-                  Integração ERP (em breve)
+                  Integração ERP
                 </li>
                 <li className="flex items-center">
                   <Check className="w-5 h-5 text-green-500 mr-2" />
@@ -246,18 +258,18 @@ function App() {
                 </li>
                 <li className="flex items-center">
                   <Check className="w-5 h-5 text-green-500 mr-2" />
-                  Suporte premium
+                  Suporte prioritário
                 </li>
                 <li className="flex items-center">
                   <Check className="w-5 h-5 text-green-500 mr-2" />
-                  Análises avançadas
+                  Todos os recursos Pro incluídos
                 </li>
               </ul>
               <button 
                 onClick={() => navigate('/profile?tab=plans')}
-                className="w-full bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 px-4 py-2 rounded-lg transition-colors"
+                className="w-full bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg transition-colors"
               >
-                Começar Plus
+                Escolher Enterprise
               </button>
             </div>
           </div>
