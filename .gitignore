@@ -16,6 +16,8 @@ deno.lock
 
 docs
 
+migrations
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

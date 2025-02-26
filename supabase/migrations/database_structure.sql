@@ -95,6 +95,17 @@ CREATE TYPE "public"."component_type" AS ENUM (
 ALTER TYPE "public"."component_type" OWNER TO "postgres";
 
 
+CREATE TYPE "public"."downgrade_status" AS ENUM (
+    'pending',
+    'completed',
+    'failed',
+    'partial'
+);
+
+
+ALTER TYPE "public"."downgrade_status" OWNER TO "postgres";
+
+
 CREATE TYPE "public"."product_type" AS ENUM (
     'simple',
     'variable',
@@ -327,6 +338,89 @@ $$;
 
 
 ALTER FUNCTION "public"."check_erp_integration"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."check_plan_downgrade_excess"("p_store_id" "uuid", "p_to_plan" "text") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    AS $$
+DECLARE
+    v_current_plan text;
+    v_product_limit integer;
+    v_category_limit integer;
+    v_image_limit integer;
+    v_excess jsonb := '{}'::jsonb;
+    v_product_count integer;
+    v_category_count integer;
+    v_images_excess jsonb := '[]'::jsonb;
+BEGIN
+    -- Obter plano atual
+    SELECT plan_type INTO v_current_plan
+    FROM subscriptions
+    WHERE store_id = p_store_id
+    AND active = true
+    ORDER BY created_at DESC
+    LIMIT 1;
+    
+    -- Se não encontrou plano ou o plano é igual, retornar vazio
+    IF v_current_plan IS NULL OR v_current_plan = p_to_plan THEN
+        RETURN '{}'::jsonb;
+    END IF;
+    
+    -- Obter limites do novo plano
+    SELECT 
+        (get_plan_limits(p_to_plan)->>'products')::integer,
+        (get_plan_limits(p_to_plan)->>'categories')::integer,
+        (get_plan_limits(p_to_plan)->>'images_per_product')::integer
+    INTO v_product_limit, v_category_limit, v_image_limit;
+    
+    -- Verificar excesso de produtos
+    SELECT COUNT(*) INTO v_product_count 
+    FROM products 
+    WHERE store_id = p_store_id 
+    AND parent_id IS NULL; -- Contar apenas produtos pai
+    
+    IF v_product_count > v_product_limit THEN
+        v_excess := jsonb_set(v_excess, '{products}', jsonb_build_object(
+            'count', v_product_count,
+            'limit', v_product_limit,
+            'excess', v_product_count - v_product_limit
+        ));
+    END IF;
+    
+    -- Verificar excesso de categorias
+    SELECT COUNT(*) INTO v_category_count 
+    FROM categories 
+    WHERE store_id = p_store_id
+    AND parent_id IS NULL; -- Contar apenas categorias principais
+    
+    IF v_category_count > v_category_limit THEN
+        v_excess := jsonb_set(v_excess, '{categories}', jsonb_build_object(
+            'count', v_category_count,
+            'limit', v_category_limit,
+            'excess', v_category_count - v_category_limit
+        ));
+    END IF;
+    
+    -- Verificar produtos com excesso de imagens
+    SELECT jsonb_agg(p)
+    INTO v_images_excess
+    FROM (
+        SELECT id, title, array_length(images, 1) as image_count
+        FROM products
+        WHERE store_id = p_store_id
+        AND array_length(images, 1) > v_image_limit
+    ) p;
+    
+    IF v_images_excess IS NOT NULL AND jsonb_array_length(v_images_excess) > 0 THEN
+        v_excess := jsonb_set(v_excess, '{images}', v_images_excess);
+    END IF;
+    
+    RETURN v_excess;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."check_plan_downgrade_excess"("p_store_id" "uuid", "p_to_plan" "text") OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."check_trial_expiration"() RETURNS "void"
@@ -630,6 +724,44 @@ COMMENT ON FUNCTION "public"."get_store_subscription"("store_id" "uuid") IS 'Ret
 
 
 
+CREATE OR REPLACE FUNCTION "public"."handle_expired_excess_items"() RETURNS "trigger"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    AS $$
+BEGIN
+    -- Se um item expirado está sendo arquivado permanentemente
+    IF NEW.status = 'archived' AND OLD.status = 'pending' AND NEW.expires_at <= now() THEN
+        -- Notificar o usuário
+        INSERT INTO notifications (
+            user_id,
+            type,
+            title,
+            content,
+            read,
+            metadata,
+            created_at
+        ) VALUES (
+            (SELECT user_id FROM stores WHERE id = NEW.store_id),
+            'excess_item_archived',
+            'Item arquivado permanentemente',
+            'Um item arquivado durante o downgrade de plano foi movido para o arquivo permanente.',
+            false,
+            jsonb_build_object(
+                'item_id', NEW.id,
+                'resource_type', NEW.resource_type,
+                'resource_id', NEW.resource_id
+            ),
+            now()
+        );
+    END IF;
+    
+    RETURN NEW;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."handle_expired_excess_items"() OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."log_subscription_change"() RETURNS "trigger"
     LANGUAGE "plpgsql"
     AS $$
@@ -669,6 +801,443 @@ $$;
 ALTER FUNCTION "public"."log_subscription_change"() OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."notify_plan_downgrade"() RETURNS "trigger"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    AS $$
+DECLARE
+    v_store_id uuid;
+    v_user_id uuid;
+    v_from_plan text;
+    v_to_plan text;
+    v_excess_count integer;
+BEGIN
+    -- Obter informações
+    v_store_id := NEW.store_id;
+    v_from_plan := NEW.from_plan;
+    v_to_plan := NEW.to_plan;
+    
+    -- Obter usuário da loja
+    SELECT user_id INTO v_user_id
+    FROM stores
+    WHERE id = v_store_id;
+    
+    -- Contar itens em excesso
+    SELECT COUNT(*) INTO v_excess_count
+    FROM plan_downgrade_excess
+    WHERE store_id = v_store_id
+    AND status = 'pending'
+    AND previous_plan = v_from_plan
+    AND new_plan = v_to_plan;
+    
+    -- Se o downgrade foi concluído e há itens em excesso, criar notificação
+    IF NEW.status = 'completed' AND v_excess_count > 0 THEN
+        -- Inserir notificação para o usuário
+        INSERT INTO notifications (
+            user_id,
+            type,
+            title,
+            content,
+            read,
+            metadata,
+            created_at
+        ) VALUES (
+            v_user_id,
+            'plan_downgrade',
+            'Downgrade de plano realizado',
+            'Seu plano foi alterado de ' || v_from_plan || ' para ' || v_to_plan || '. Alguns itens foram arquivados devido aos limites do novo plano.',
+            false,
+            jsonb_build_object(
+                'excess_count', v_excess_count,
+                'from_plan', v_from_plan,
+                'to_plan', v_to_plan,
+                'operation_id', NEW.id
+            ),
+            now()
+        );
+    END IF;
+    
+    RETURN NEW;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."notify_plan_downgrade"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."process_plan_downgrade"("p_store_id" "uuid", "p_to_plan" "text", "p_handle_excess" "text" DEFAULT 'archive'::"text", "p_initiated_by" "uuid" DEFAULT NULL::"uuid") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    AS $$
+DECLARE
+    v_operation_id uuid;
+    v_current_plan text;
+    v_excess jsonb;
+    v_product_limit integer;
+    v_category_limit integer;
+    v_image_limit integer;
+    v_processed_items jsonb := '{}'::jsonb;
+    v_product_ids uuid[];
+    v_category_ids uuid[];
+    v_image_updates jsonb[];
+    v_sub_id uuid;
+BEGIN
+    -- Iniciar uma operação de downgrade
+    INSERT INTO plan_downgrade_operations (
+        store_id,
+        from_plan,
+        to_plan,
+        status,
+        initiated_by
+    )
+    VALUES (
+        p_store_id,
+        (SELECT plan_type FROM subscriptions WHERE store_id = p_store_id AND active = true LIMIT 1),
+        p_to_plan,
+        'pending',
+        COALESCE(p_initiated_by, auth.uid())
+    )
+    RETURNING id INTO v_operation_id;
+    
+    -- Obter ID da assinatura
+    SELECT id INTO v_sub_id
+    FROM subscriptions
+    WHERE store_id = p_store_id AND active = true
+    LIMIT 1;
+    
+    -- Atualizar operação com ID da assinatura
+    UPDATE plan_downgrade_operations
+    SET subscription_id = v_sub_id
+    WHERE id = v_operation_id;
+    
+    -- Verificar excessos
+    v_excess := check_plan_downgrade_excess(p_store_id, p_to_plan);
+    
+    -- Se não há excessos, realizar downgrade direto
+    IF v_excess = '{}'::jsonb THEN
+        -- Atualizar assinatura
+        UPDATE subscriptions
+        SET plan_type = p_to_plan,
+            updated_at = now()
+        WHERE store_id = p_store_id AND active = true;
+        
+        -- Atualizar loja
+        UPDATE stores
+        SET plan_type = p_to_plan,
+            updated_at = now()
+        WHERE id = p_store_id;
+        
+        -- Finalizar operação
+        UPDATE plan_downgrade_operations
+        SET status = 'completed',
+            completed_at = now(),
+            metadata = jsonb_build_object('excess', false)
+        WHERE id = v_operation_id;
+        
+        RETURN jsonb_build_object(
+            'success', true,
+            'operation_id', v_operation_id,
+            'excess', false
+        );
+    END IF;
+    
+    -- Obter limites do novo plano
+    SELECT 
+        (get_plan_limits(p_to_plan)->>'products')::integer,
+        (get_plan_limits(p_to_plan)->>'categories')::integer,
+        (get_plan_limits(p_to_plan)->>'images_per_product')::integer
+    INTO v_product_limit, v_category_limit, v_image_limit;
+    
+    -- Tratar excesso de produtos
+    IF v_excess ? 'products' THEN
+        -- Selecionar produtos excedentes (os mais antigos primeiro)
+        SELECT array_agg(id) INTO v_product_ids
+        FROM (
+            SELECT id
+            FROM products
+            WHERE store_id = p_store_id
+            AND parent_id IS NULL
+            ORDER BY created_at DESC
+            LIMIT (v_excess->'products'->>'excess')::integer
+        ) p;
+        
+        -- Processar produtos excedentes
+        IF p_handle_excess = 'archive' THEN
+            -- Mover para tabela de excesso
+            INSERT INTO plan_downgrade_excess (
+                store_id,
+                resource_type,
+                resource_id,
+                previous_plan,
+                new_plan,
+                expires_at,
+                status
+            )
+            SELECT 
+                p_store_id,
+                'product',
+                id,
+                (SELECT plan_type FROM subscriptions WHERE store_id = p_store_id AND active = true LIMIT 1),
+                p_to_plan,
+                now() + interval '30 days',
+                'pending'
+            FROM products
+            WHERE id = ANY(v_product_ids);
+            
+            -- Desativar produtos (não excluir)
+            UPDATE products
+            SET status = false,
+                updated_at = now()
+            WHERE id = ANY(v_product_ids);
+            
+            v_processed_items := jsonb_set(v_processed_items, '{products}', jsonb_build_object(
+                'action', 'archived',
+                'count', array_length(v_product_ids, 1)
+            ));
+            
+        ELSIF p_handle_excess = 'delete' THEN
+            -- Registrar exclusão
+            INSERT INTO plan_downgrade_excess (
+                store_id,
+                resource_type,
+                resource_id,
+                previous_plan,
+                new_plan,
+                status
+            )
+            SELECT 
+                p_store_id,
+                'product',
+                id,
+                (SELECT plan_type FROM subscriptions WHERE store_id = p_store_id AND active = true LIMIT 1),
+                p_to_plan,
+                'deleted'
+            FROM products
+            WHERE id = ANY(v_product_ids);
+            
+            -- Excluir produtos
+            DELETE FROM products
+            WHERE id = ANY(v_product_ids);
+            
+            v_processed_items := jsonb_set(v_processed_items, '{products}', jsonb_build_object(
+                'action', 'deleted',
+                'count', array_length(v_product_ids, 1)
+            ));
+        END IF;
+    END IF;
+    
+    -- Tratar excesso de categorias
+    IF v_excess ? 'categories' THEN
+        -- Selecionar categorias excedentes (as mais recentes primeiro)
+        SELECT array_agg(id) INTO v_category_ids
+        FROM (
+            SELECT id
+            FROM categories
+            WHERE store_id = p_store_id
+            AND parent_id IS NULL
+            ORDER BY created_at DESC
+            LIMIT (v_excess->'categories'->>'excess')::integer
+        ) c;
+        
+        -- Processar categorias excedentes
+        IF p_handle_excess = 'archive' THEN
+            -- Mover para tabela de excesso
+            INSERT INTO plan_downgrade_excess (
+                store_id,
+                resource_type,
+                resource_id,
+                previous_plan,
+                new_plan,
+                expires_at,
+                status
+            )
+            SELECT 
+                p_store_id,
+                'category',
+                id,
+                (SELECT plan_type FROM subscriptions WHERE store_id = p_store_id AND active = true LIMIT 1),
+                p_to_plan,
+                now() + interval '30 days',
+                'pending'
+            FROM categories
+            WHERE id = ANY(v_category_ids);
+            
+            -- Desativar categorias
+            UPDATE categories
+            SET status = false,
+                updated_at = now()
+            WHERE id = ANY(v_category_ids);
+            
+            v_processed_items := jsonb_set(v_processed_items, '{categories}', jsonb_build_object(
+                'action', 'archived',
+                'count', array_length(v_category_ids, 1)
+            ));
+            
+        ELSIF p_handle_excess = 'delete' THEN
+            -- Registrar exclusão
+            INSERT INTO plan_downgrade_excess (
+                store_id,
+                resource_type,
+                resource_id,
+                previous_plan,
+                new_plan,
+                status
+            )
+            SELECT 
+                p_store_id,
+                'category',
+                id,
+                (SELECT plan_type FROM subscriptions WHERE store_id = p_store_id AND active = true LIMIT 1),
+                p_to_plan,
+                'deleted'
+            FROM categories
+            WHERE id = ANY(v_category_ids);
+            
+            -- Excluir categorias
+            DELETE FROM categories
+            WHERE id = ANY(v_category_ids);
+            
+            v_processed_items := jsonb_set(v_processed_items, '{categories}', jsonb_build_object(
+                'action', 'deleted',
+                'count', array_length(v_category_ids, 1)
+            ));
+        END IF;
+    END IF;
+    
+    -- Tratar imagens excedentes
+    IF v_excess ? 'images' THEN
+        -- Processar produtos com excesso de imagens
+        FOR i IN 0..jsonb_array_length(v_excess->'images')-1 LOOP
+            DECLARE
+                v_product_id uuid := (v_excess->'images'->i->>'id')::uuid;
+                v_image_count integer := (v_excess->'images'->i->>'image_count')::integer;
+                v_excess_images text[];
+                v_remaining_images text[];
+            BEGIN
+                -- Obter imagens atuais
+                SELECT images INTO v_excess_images
+                FROM products
+                WHERE id = v_product_id;
+                
+                -- Separar imagens para manter e remover
+                v_remaining_images := v_excess_images[:v_image_limit];
+                v_excess_images := v_excess_images[v_image_limit+1:];
+                
+                -- Registrar imagens excedentes
+                INSERT INTO plan_downgrade_excess (
+                    store_id,
+                    resource_type,
+                    resource_id,
+                    previous_plan,
+                    new_plan,
+                    expires_at,
+                    status,
+                    metadata
+                ) VALUES (
+                    p_store_id,
+                    'product_images',
+                    v_product_id,
+                    (SELECT plan_type FROM subscriptions WHERE store_id = p_store_id AND active = true LIMIT 1),
+                    p_to_plan,
+                    now() + interval '30 days',
+                    CASE WHEN p_handle_excess = 'delete' THEN 'deleted' ELSE 'pending' END,
+                    jsonb_build_object(
+                        'removed_images', v_excess_images,
+                        'original_count', v_image_count,
+                        'removed_count', array_length(v_excess_images, 1)
+                    )
+                );
+                
+                -- Atualizar produto com imagens restantes
+                UPDATE products
+                SET images = v_remaining_images,
+                    updated_at = now()
+                WHERE id = v_product_id;
+                
+                -- Adicionar às estatísticas
+                v_image_updates := array_append(v_image_updates, jsonb_build_object(
+                    'product_id', v_product_id,
+                    'removed_count', array_length(v_excess_images, 1),
+                    'remaining_count', array_length(v_remaining_images, 1)
+                ));
+            END;
+        END LOOP;
+        
+        v_processed_items := jsonb_set(v_processed_items, '{images}', to_jsonb(v_image_updates));
+    END IF;
+    
+    -- Atualizar plano da assinatura
+    UPDATE subscriptions
+    SET plan_type = p_to_plan,
+        updated_at = now()
+    WHERE store_id = p_store_id AND active = true;
+    
+    -- Atualizar plano da loja
+    UPDATE stores
+    SET plan_type = p_to_plan,
+        updated_at = now()
+    WHERE id = p_store_id;
+    
+    -- Registrar transição de plano
+    INSERT INTO subscription_history (
+        subscription_id,
+        previous_plan,
+        new_plan,
+        previous_status,
+        new_status,
+        reason,
+        metadata
+    ) VALUES (
+        v_sub_id,
+        (SELECT plan_type FROM subscriptions WHERE id = v_sub_id),
+        p_to_plan,
+        (SELECT status FROM subscriptions WHERE id = v_sub_id),
+        (SELECT status FROM subscriptions WHERE id = v_sub_id),
+        'downgrade',
+        jsonb_build_object(
+            'excess_handled', p_handle_excess,
+            'processed_items', v_processed_items
+        )
+    );
+    
+    -- Finalizar operação
+    UPDATE plan_downgrade_operations
+    SET status = 'completed',
+        completed_at = now(),
+        metadata = jsonb_build_object(
+            'excess', true,
+            'processed_items', v_processed_items
+        )
+    WHERE id = v_operation_id;
+    
+    RETURN jsonb_build_object(
+        'success', true,
+        'operation_id', v_operation_id,
+        'excess', true,
+        'processed_items', v_processed_items
+    );
+    
+EXCEPTION WHEN OTHERS THEN
+    -- Registrar falha
+    UPDATE plan_downgrade_operations
+    SET status = 'failed',
+        completed_at = now(),
+        metadata = jsonb_build_object(
+            'error', SQLERRM,
+            'error_detail', SQLSTATE
+        )
+    WHERE id = v_operation_id;
+    
+    RETURN jsonb_build_object(
+        'success', false,
+        'operation_id', v_operation_id,
+        'error', SQLERRM
+    );
+END;
+$$;
+
+
+ALTER FUNCTION "public"."process_plan_downgrade"("p_store_id" "uuid", "p_to_plan" "text", "p_handle_excess" "text", "p_initiated_by" "uuid") OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."reorder_categories"("p_store_id" "uuid", "p_category_ids" "uuid"[]) RETURNS "void"
     LANGUAGE "plpgsql"
     AS $$
@@ -688,6 +1257,132 @@ $$;
 
 
 ALTER FUNCTION "public"."reorder_categories"("p_store_id" "uuid", "p_category_ids" "uuid"[]) OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."restore_downgrade_excess_item"("p_excess_id" "uuid", "p_user_id" "uuid" DEFAULT NULL::"uuid") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    AS $$
+DECLARE
+    v_store_id uuid;
+    v_resource_type text;
+    v_resource_id uuid;
+    v_status text;
+    v_result jsonb;
+BEGIN
+    -- Verificar se o item existe e pertence ao usuário
+    SELECT 
+        store_id, resource_type, resource_id, status
+    INTO 
+        v_store_id, v_resource_type, v_resource_id, v_status
+    FROM plan_downgrade_excess
+    WHERE id = p_excess_id
+    AND (
+        EXISTS (
+            SELECT 1 FROM stores WHERE id = store_id AND user_id = COALESCE(p_user_id, auth.uid())
+        ) OR 
+        auth.role() = 'service_role'
+    );
+    
+    -- Verificar se o item foi encontrado
+    IF v_store_id IS NULL THEN
+        RETURN jsonb_build_object(
+            'success', false,
+            'error', 'Item não encontrado ou sem permissão'
+        );
+    END IF;
+    
+    -- Verificar se já foi restaurado
+    IF v_status = 'restored' THEN
+        RETURN jsonb_build_object(
+            'success', false,
+            'error', 'Item já foi restaurado'
+        );
+    END IF;
+    
+    -- Se foi deletado, não pode ser restaurado
+    IF v_status = 'deleted' THEN
+        RETURN jsonb_build_object(
+            'success', false,
+            'error', 'Item foi excluído e não pode ser restaurado'
+        );
+    END IF;
+    
+    -- Processar restauração baseado no tipo
+    IF v_resource_type = 'product' THEN
+        -- Reativar produto
+        UPDATE products
+        SET status = true,
+            updated_at = now()
+        WHERE id = v_resource_id;
+        
+        v_result := jsonb_build_object(
+            'type', 'product',
+            'id', v_resource_id
+        );
+        
+    ELSIF v_resource_type = 'category' THEN
+        -- Reativar categoria
+        UPDATE categories
+        SET status = true,
+            updated_at = now()
+        WHERE id = v_resource_id;
+        
+        v_result := jsonb_build_object(
+            'type', 'category',
+            'id', v_resource_id
+        );
+        
+    ELSIF v_resource_type = 'product_images' THEN
+        -- Restaurar imagens
+        DECLARE
+            v_excess_record plan_downgrade_excess;
+            v_current_images text[];
+            v_restored_images text[];
+        BEGIN
+            -- Obter dados do item de excesso
+            SELECT * INTO v_excess_record
+            FROM plan_downgrade_excess
+            WHERE id = p_excess_id;
+            
+            -- Obter imagens atuais do produto
+            SELECT images INTO v_current_images
+            FROM products
+            WHERE id = v_resource_id;
+            
+            -- Adicionar imagens excedentes de volta
+            v_restored_images := v_excess_record.metadata->'removed_images';
+            v_current_images := array_cat(v_current_images, v_restored_images);
+            
+            -- Atualizar produto
+            UPDATE products
+            SET images = v_current_images,
+                updated_at = now()
+            WHERE id = v_resource_id;
+            
+            v_result := jsonb_build_object(
+                'type', 'product_images',
+                'product_id', v_resource_id,
+                'restored_count', jsonb_array_length(v_excess_record.metadata->'removed_images'),
+                'total_count', array_length(v_current_images, 1)
+            );
+        END;
+    END IF;
+    
+    -- Atualizar status do item
+    UPDATE plan_downgrade_excess
+    SET status = 'restored',
+        updated_at = now()
+    WHERE id = p_excess_id;
+    
+    RETURN jsonb_build_object(
+        'success', true,
+        'item', v_result
+    );
+END;
+$$;
+
+
+ALTER FUNCTION "public"."restore_downgrade_excess_item"("p_excess_id" "uuid", "p_user_id" "uuid") OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."schedule_subscription_sync"() RETURNS "void"
@@ -1077,8 +1772,7 @@ ALTER FUNCTION "public"."update_updated_at_column"() OWNER TO "postgres";
 
 CREATE OR REPLACE FUNCTION "public"."validate_category_limit"() RETURNS "trigger"
     LANGUAGE "plpgsql"
-    AS $$
-DECLARE
+    AS $$DECLARE
   store_plan text;
   category_limit integer;
   current_count integer;
@@ -1111,8 +1805,7 @@ BEGIN
   END IF;
 
   RETURN NEW;
-END;
-$$;
+END;$$;
 
 
 ALTER FUNCTION "public"."validate_category_limit"() OWNER TO "postgres";
@@ -2126,6 +2819,40 @@ ALTER SEQUENCE "public"."function_logs_id_seq" OWNED BY "public"."function_logs"
 
 
 
+CREATE TABLE IF NOT EXISTS "public"."plan_downgrade_excess" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "store_id" "uuid",
+    "resource_type" "text" NOT NULL,
+    "resource_id" "uuid" NOT NULL,
+    "previous_plan" "text" NOT NULL,
+    "new_plan" "text" NOT NULL,
+    "created_at" timestamp with time zone DEFAULT "now"(),
+    "expires_at" timestamp with time zone,
+    "status" "text" DEFAULT 'pending'::"text",
+    CONSTRAINT "plan_downgrade_excess_status_check" CHECK (("status" = ANY (ARRAY['pending'::"text", 'archived'::"text", 'restored'::"text", 'deleted'::"text"])))
+);
+
+
+ALTER TABLE "public"."plan_downgrade_excess" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "public"."plan_downgrade_operations" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "store_id" "uuid",
+    "subscription_id" "uuid",
+    "from_plan" "text" NOT NULL,
+    "to_plan" "text" NOT NULL,
+    "initiated_at" timestamp with time zone DEFAULT "now"(),
+    "completed_at" timestamp with time zone,
+    "status" "public"."downgrade_status" DEFAULT 'pending'::"public"."downgrade_status",
+    "metadata" "jsonb" DEFAULT '{}'::"jsonb",
+    "initiated_by" "uuid"
+);
+
+
+ALTER TABLE "public"."plan_downgrade_operations" OWNER TO "postgres";
+
+
 CREATE TABLE IF NOT EXISTS "public"."product_attributes" (
     "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
     "store_id" "uuid",
@@ -2695,6 +3422,16 @@ ALTER TABLE ONLY "public"."function_logs"
 
 
 
+ALTER TABLE ONLY "public"."plan_downgrade_excess"
+    ADD CONSTRAINT "plan_downgrade_excess_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."plan_downgrade_operations"
+    ADD CONSTRAINT "plan_downgrade_operations_pkey" PRIMARY KEY ("id");
+
+
+
 ALTER TABLE ONLY "public"."product_attributes"
     ADD CONSTRAINT "product_attributes_pkey" PRIMARY KEY ("id");
 
@@ -3021,6 +3758,26 @@ CREATE INDEX "idx_function_keys_name" ON "public"."function_keys" USING "btree" 
 
 
 
+CREATE INDEX "idx_plan_downgrade_excess_resource" ON "public"."plan_downgrade_excess" USING "btree" ("resource_type", "resource_id");
+
+
+
+CREATE INDEX "idx_plan_downgrade_excess_status" ON "public"."plan_downgrade_excess" USING "btree" ("status");
+
+
+
+CREATE INDEX "idx_plan_downgrade_excess_store" ON "public"."plan_downgrade_excess" USING "btree" ("store_id");
+
+
+
+CREATE INDEX "idx_plan_downgrade_operations_status" ON "public"."plan_downgrade_operations" USING "btree" ("status");
+
+
+
+CREATE INDEX "idx_plan_downgrade_operations_store" ON "public"."plan_downgrade_operations" USING "btree" ("store_id");
+
+
+
 CREATE INDEX "idx_product_attributes_store_id" ON "public"."product_attributes" USING "btree" ("store_id");
 
 
@@ -3213,6 +3970,14 @@ CREATE OR REPLACE TRIGGER "set_category_order" BEFORE INSERT ON "public"."catego
 
 
 
+CREATE OR REPLACE TRIGGER "trigger_handle_expired_excess_items" AFTER UPDATE OF "status" ON "public"."plan_downgrade_excess" FOR EACH ROW EXECUTE FUNCTION "public"."handle_expired_excess_items"();
+
+
+
+CREATE OR REPLACE TRIGGER "trigger_notify_plan_downgrade" AFTER UPDATE OF "status" ON "public"."plan_downgrade_operations" FOR EACH ROW WHEN ((("new"."status" = 'completed'::"public"."downgrade_status") AND ("old"."status" = 'pending'::"public"."downgrade_status"))) EXECUTE FUNCTION "public"."notify_plan_downgrade"();
+
+
+
 CREATE OR REPLACE TRIGGER "update_erp_integrations_updated_at" BEFORE UPDATE ON "public"."erp_integrations" FOR EACH ROW EXECUTE FUNCTION "public"."update_updated_at_column"();
 
 
@@ -3340,6 +4105,21 @@ ALTER TABLE ONLY "public"."categories"
 
 ALTER TABLE ONLY "public"."erp_integrations"
     ADD CONSTRAINT "erp_integrations_store_id_fkey" FOREIGN KEY ("store_id") REFERENCES "public"."stores"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."plan_downgrade_excess"
+    ADD CONSTRAINT "plan_downgrade_excess_store_id_fkey" FOREIGN KEY ("store_id") REFERENCES "public"."stores"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."plan_downgrade_operations"
+    ADD CONSTRAINT "plan_downgrade_operations_initiated_by_fkey" FOREIGN KEY ("initiated_by") REFERENCES "auth"."users"("id");
+
+
+
+ALTER TABLE ONLY "public"."plan_downgrade_operations"
+    ADD CONSTRAINT "plan_downgrade_operations_store_id_fkey" FOREIGN KEY ("store_id") REFERENCES "public"."stores"("id") ON DELETE CASCADE;
 
 
 
@@ -3515,6 +4295,10 @@ CREATE POLICY "Allow public read access" ON "public"."stores" FOR SELECT USING (
 
 
 
+CREATE POLICY "Apenas service_role pode ver todos os logs" ON "public"."stripe_webhook_logs" FOR SELECT TO "service_role" USING (true);
+
+
+
 CREATE POLICY "Manage ERP integrations for own stores" ON "public"."erp_integrations" TO "authenticated" USING (("store_id" IN ( SELECT "stores"."id"
    FROM "public"."stores"
   WHERE ("stores"."user_id" = "auth"."uid"())))) WITH CHECK (("store_id" IN ( SELECT "stores"."id"
@@ -3544,6 +4328,18 @@ CREATE POLICY "Public can view product attributes" ON "public"."product_attribut
 
 
 CREATE POLICY "Public can view product components" ON "public"."product_components" FOR SELECT TO "anon" USING (true);
+
+
+
+CREATE POLICY "Service role can manage downgrade operations" ON "public"."plan_downgrade_operations" TO "service_role" USING (true);
+
+
+
+CREATE POLICY "Service role can manage excess items" ON "public"."plan_downgrade_excess" TO "service_role" USING (true);
+
+
+
+CREATE POLICY "Service role pode gerenciar histórico" ON "public"."subscription_history" TO "service_role" USING (true);
 
 
 
@@ -3649,6 +4445,18 @@ CREATE POLICY "Users can update their store's integrations" ON "public"."erp_int
 
 
 
+CREATE POLICY "Users can view their downgrade operations" ON "public"."plan_downgrade_operations" FOR SELECT TO "authenticated" USING (("store_id" IN ( SELECT "stores"."id"
+   FROM "public"."stores"
+  WHERE ("stores"."user_id" = "auth"."uid"()))));
+
+
+
+CREATE POLICY "Users can view their excess items" ON "public"."plan_downgrade_excess" FOR SELECT TO "authenticated" USING (("store_id" IN ( SELECT "stores"."id"
+   FROM "public"."stores"
+  WHERE ("stores"."user_id" = "auth"."uid"()))));
+
+
+
 CREATE POLICY "Users can view their store's attributes" ON "public"."product_attributes" FOR SELECT TO "authenticated" USING ((EXISTS ( SELECT 1
    FROM "public"."stores" "s"
   WHERE (("s"."id" = "product_attributes"."store_id") AND ("s"."user_id" = "auth"."uid"())))));
@@ -3673,6 +4481,13 @@ CREATE POLICY "Usuários podem ver histórico de suas assinaturas" ON "public"."
   WHERE ("subscriptions"."store_id" IN ( SELECT "stores"."id"
            FROM "public"."stores"
           WHERE ("stores"."user_id" = "auth"."uid"()))))));
+
+
+
+CREATE POLICY "Usuários podem ver logs de suas próprias assinaturas" ON "public"."stripe_webhook_logs" FOR SELECT TO "authenticated" USING ((EXISTS ( SELECT 1
+   FROM ("public"."stripe_subscriptions" "ss"
+     JOIN "public"."stores" "s" ON (("s"."id" = "ss"."store_id")))
+  WHERE (("s"."user_id" = "auth"."uid"()) AND ("stripe_webhook_logs"."event_type" ~~ 'customer.subscription.%'::"text") AND (("ss"."metadata" ->> 'subscription_id'::"text") = "ss"."subscription_id")))));
 
 
 
@@ -3711,6 +4526,12 @@ ALTER TABLE "public"."erp_integrations" ENABLE ROW LEVEL SECURITY;
 
 
 ALTER TABLE "public"."function_keys" ENABLE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "public"."plan_downgrade_excess" ENABLE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "public"."plan_downgrade_operations" ENABLE ROW LEVEL SECURITY;
 
 
 ALTER TABLE "public"."product_attributes" ENABLE ROW LEVEL SECURITY;
@@ -3833,6 +4654,12 @@ GRANT ALL ON FUNCTION "public"."check_erp_integration"() TO "service_role";
 
 
 
+GRANT ALL ON FUNCTION "public"."check_plan_downgrade_excess"("p_store_id" "uuid", "p_to_plan" "text") TO "anon";
+GRANT ALL ON FUNCTION "public"."check_plan_downgrade_excess"("p_store_id" "uuid", "p_to_plan" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."check_plan_downgrade_excess"("p_store_id" "uuid", "p_to_plan" "text") TO "service_role";
+
+
+
 GRANT ALL ON FUNCTION "public"."check_trial_expiration"() TO "anon";
 GRANT ALL ON FUNCTION "public"."check_trial_expiration"() TO "authenticated";
 GRANT ALL ON FUNCTION "public"."check_trial_expiration"() TO "service_role";
@@ -3893,15 +4720,41 @@ GRANT ALL ON FUNCTION "public"."get_store_subscription"("store_id" "uuid") TO "s
 
 
 
+GRANT ALL ON FUNCTION "public"."handle_expired_excess_items"() TO "anon";
+GRANT ALL ON FUNCTION "public"."handle_expired_excess_items"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."handle_expired_excess_items"() TO "service_role";
+
+
+
 GRANT ALL ON FUNCTION "public"."log_subscription_change"() TO "anon";
 GRANT ALL ON FUNCTION "public"."log_subscription_change"() TO "authenticated";
 GRANT ALL ON FUNCTION "public"."log_subscription_change"() TO "service_role";
 
 
 
+GRANT ALL ON FUNCTION "public"."notify_plan_downgrade"() TO "anon";
+GRANT ALL ON FUNCTION "public"."notify_plan_downgrade"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."notify_plan_downgrade"() TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."process_plan_downgrade"("p_store_id" "uuid", "p_to_plan" "text", "p_handle_excess" "text", "p_initiated_by" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."process_plan_downgrade"("p_store_id" "uuid", "p_to_plan" "text", "p_handle_excess" "text", "p_initiated_by" "uuid") TO "anon";
+GRANT ALL ON FUNCTION "public"."process_plan_downgrade"("p_store_id" "uuid", "p_to_plan" "text", "p_handle_excess" "text", "p_initiated_by" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."process_plan_downgrade"("p_store_id" "uuid", "p_to_plan" "text", "p_handle_excess" "text", "p_initiated_by" "uuid") TO "service_role";
+
+
+
 GRANT ALL ON FUNCTION "public"."reorder_categories"("p_store_id" "uuid", "p_category_ids" "uuid"[]) TO "anon";
 GRANT ALL ON FUNCTION "public"."reorder_categories"("p_store_id" "uuid", "p_category_ids" "uuid"[]) TO "authenticated";
 GRANT ALL ON FUNCTION "public"."reorder_categories"("p_store_id" "uuid", "p_category_ids" "uuid"[]) TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."restore_downgrade_excess_item"("p_excess_id" "uuid", "p_user_id" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."restore_downgrade_excess_item"("p_excess_id" "uuid", "p_user_id" "uuid") TO "anon";
+GRANT ALL ON FUNCTION "public"."restore_downgrade_excess_item"("p_excess_id" "uuid", "p_user_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."restore_downgrade_excess_item"("p_excess_id" "uuid", "p_user_id" "uuid") TO "service_role";
 
 
 
@@ -4186,6 +5039,18 @@ GRANT ALL ON TABLE "public"."function_logs" TO "service_role";
 GRANT ALL ON SEQUENCE "public"."function_logs_id_seq" TO "anon";
 GRANT ALL ON SEQUENCE "public"."function_logs_id_seq" TO "authenticated";
 GRANT ALL ON SEQUENCE "public"."function_logs_id_seq" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."plan_downgrade_excess" TO "anon";
+GRANT ALL ON TABLE "public"."plan_downgrade_excess" TO "authenticated";
+GRANT ALL ON TABLE "public"."plan_downgrade_excess" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."plan_downgrade_operations" TO "anon";
+GRANT ALL ON TABLE "public"."plan_downgrade_operations" TO "authenticated";
+GRANT ALL ON TABLE "public"."plan_downgrade_operations" TO "service_role";
 
 
 
