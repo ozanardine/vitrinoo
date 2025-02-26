@@ -167,12 +167,6 @@ async function handleCheckoutSessionCompleted(event: Stripe.Event): Promise<void
   const session = event.data.object as Stripe.Checkout.Session;
   const eventId = event.id;
   
-  console.log('Processing checkout session:', {
-    id: session.id,
-    customer: session.customer,
-    payment_status: session.payment_status
-  });
-
   // Registrar início do processamento
   const logId = await logWebhookEvent(eventId, event.type, 'processing', {
     sessionId: session.id,
@@ -276,7 +270,7 @@ async function handleCheckoutSessionCompleted(event: Stripe.Event): Promise<void
     }
 
     // 2. Salvar ou atualizar a subscription na tabela de subscriptions
-    const planType = (planInfo.metadata?.plan_type || 'free') as string;
+    const planType = (planInfo.metadata?.plan_type || 'starter') as string;
     
     const { error: storeSubError } = await supabase
       .from('subscriptions')
@@ -373,14 +367,6 @@ async function handleCheckoutSessionCompleted(event: Stripe.Event): Promise<void
       { sessionId: session.id },
       error instanceof Error ? error.message : 'Erro desconhecido'
     );
-    
-    // Reportar o erro para serviço de monitoramento (simulado)
-    console.error('MONITORING ERROR:', {
-      eventId,
-      eventType: event.type,
-      error: error instanceof Error ? error.message : 'Erro desconhecido',
-      sessionId: session.id
-    });
     
     // Re-throw para tratamento externo
     throw error;

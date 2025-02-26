@@ -346,14 +346,14 @@ serve(async (req) => {
     // Criar checkout session com idempotência
     console.log(`[${requestId}] Criando nova checkout session`);
     const idempotencyKey = `checkout_${storeId}_${priceId}_${Date.now()}`;
-    
+
     try {
       const session = await stripe.checkout.sessions.create({
         customer: customerId,
         line_items: [{ price: priceId, quantity: 1 }],
         mode: 'subscription',
-        success_url: `${req.headers.get('origin')}/profile?session_id={CHECKOUT_SESSION_ID}`,
-        cancel_url: `${req.headers.get('origin')}/profile`,
+        success_url: `${req.headers.get('origin')}/profile?session_id={CHECKOUT_SESSION_ID}&plan_activated=true`,
+        cancel_url: `${req.headers.get('origin')}/profile?payment_cancelled=true`,
         allow_promotion_codes: true,
         metadata: {
           store_id: storeId,
@@ -364,6 +364,14 @@ serve(async (req) => {
         customer_update: {
           address: 'auto',
           name: 'auto'
+        },
+        subscription_data: {
+          // Não fornecemos trial_period_days aqui, pois o usuário já teve um trial automático
+          metadata: {
+            store_id: storeId,
+            created_via: 'checkout_session',
+            is_conversion_from_trial: isTrialActive ? 'true' : 'false'
+          }
         }
       }, {
         idempotencyKey
@@ -383,7 +391,11 @@ serve(async (req) => {
         price_id: priceId,
         created_at: new Date().toISOString(),
         status: 'created',
-        request_id: requestId
+        request_id: requestId,
+        metadata: {
+          is_conversion_from_trial: isTrialActive ? 'true' : 'false',
+          origin: req.headers.get('origin') || 'unknown'
+        }
       });
 
       return new Response(
@@ -426,19 +438,4 @@ serve(async (req) => {
         }
       );
     }
-  } catch (error) {
-    console.error(`[${requestId}] Erro não tratado:`, error);
-    
-    return new Response(
-      JSON.stringify(formatErrorResponse(
-        'Erro interno do servidor',
-        ERROR_CODES.UNKNOWN,
-        { error: error.message }
-      )),
-      { 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 500
-      }
-    );
-  }
 });
