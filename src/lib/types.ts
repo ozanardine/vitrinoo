@@ -94,7 +94,7 @@ export interface Store {
 
   // Informações da assinatura
   subscription: {
-    plan_type: 'free' | 'basic' | 'plus';
+    plan_type: 'starter' | 'pro' | 'enterprise';
     active: boolean;
     status: string;
     trial_ends_at: string | null;

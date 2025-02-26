@@ -7,4 +7,5 @@
 .env.local
 .env.*.local
 
-migrations
+database_roles.sql
+database_structure.sql

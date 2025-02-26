@@ -16,7 +16,8 @@ deno.lock
 
 docs
 
-migrations
+database_roles.sql
+database_structure.sql
 
 # Editor directories and files
 .vscode/*

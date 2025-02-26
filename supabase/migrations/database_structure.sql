@@ -106,6 +106,28 @@ CREATE TYPE "public"."downgrade_status" AS ENUM (
 ALTER TYPE "public"."downgrade_status" OWNER TO "postgres";
 
 
+CREATE TYPE "public"."notification_type" AS ENUM (
+    'payment_success',
+    'payment_failed',
+    'payment_past_due',
+    'payment_unpaid',
+    'subscription_canceled',
+    'subscription_created',
+    'subscription_renewed',
+    'trial_started',
+    'trial_ending',
+    'trial_ended',
+    'plan_changed',
+    'system_message',
+    'feature_update',
+    'store_visit_milestone',
+    'product_view_milestone'
+);
+
+
+ALTER TYPE "public"."notification_type" OWNER TO "postgres";
+
+
 CREATE TYPE "public"."product_type" AS ENUM (
     'simple',
     'variable',
@@ -281,6 +303,18 @@ ALTER FUNCTION "auth"."uid"() OWNER TO "supabase_auth_admin";
 
 COMMENT ON FUNCTION "auth"."uid"() IS 'Deprecated. Use auth.jwt() -> ''sub'' instead.';
 
+
+
+CREATE OR REPLACE FUNCTION "public"."admin_delete_user"("user_id" "uuid") RETURNS "void"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    AS $$
+BEGIN
+  DELETE FROM auth.users WHERE id = user_id;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."admin_delete_user"("user_id" "uuid") OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."auto_sync_subscription_plans"() RETURNS "trigger"
@@ -467,6 +501,87 @@ $$;
 ALTER FUNCTION "public"."check_trial_expiration"() OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."cleanup_unused_images"("p_store_id" "uuid") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    AS $$
+DECLARE
+    v_used_images text[];
+    v_orphaned_count integer;
+    v_result jsonb;
+BEGIN
+    -- Verificar permissão
+    IF NOT (EXISTS (
+        SELECT 1 FROM stores 
+        WHERE id = p_store_id AND user_id = auth.uid()
+    ) OR auth.role() = 'service_role') THEN
+        RAISE EXCEPTION 'Permissão negada';
+    END IF;
+    
+    -- Coletar todas as imagens em uso nesta loja
+    WITH all_product_images AS (
+        SELECT unnest(images) AS image_url
+        FROM products
+        WHERE store_id = p_store_id
+        AND images IS NOT NULL
+        AND array_length(images, 1) > 0
+    ),
+    store_images AS (
+        SELECT logo_url AS image_url FROM stores WHERE id = p_store_id AND logo_url IS NOT NULL
+        UNION ALL
+        SELECT header_image AS image_url FROM stores WHERE id = p_store_id AND header_image IS NOT NULL
+    )
+    SELECT array_agg(DISTINCT image_url) INTO v_used_images
+    FROM (
+        SELECT image_url FROM all_product_images
+        UNION ALL
+        SELECT image_url FROM store_images
+    ) all_images;
+    
+    -- Registrar imagens órfãs (implementação simplificada - a lógica real dependeria
+    -- de como imagens são armazenadas no seu sistema)
+    INSERT INTO orphaned_images (
+        store_id,
+        url,
+        detected_at,
+        status
+    )
+    SELECT
+        p_store_id,
+        url,
+        now(),
+        'detected'
+    FROM store_image_uploads
+    WHERE store_id = p_store_id
+    AND url NOT IN (SELECT unnest(v_used_images))
+    AND created_at < now() - interval '1 day'
+    RETURNING COUNT(*) INTO v_orphaned_count;
+    
+    -- Construir resultado
+    v_result := jsonb_build_object(
+        'used_images_count', array_length(v_used_images, 1),
+        'orphaned_images_count', v_orphaned_count
+    );
+    
+    RETURN v_result;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."cleanup_unused_images"("p_store_id" "uuid") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."count_unread_notifications"() RETURNS integer
+    LANGUAGE "sql"
+    AS $$
+    SELECT COUNT(*) FROM "public"."notifications"
+    WHERE "user_id" = auth.uid()
+    AND "read" = false;
+$$;
+
+
+ALTER FUNCTION "public"."count_unread_notifications"() OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."create_trial_subscription"() RETURNS "trigger"
     LANGUAGE "plpgsql" SECURITY DEFINER
     AS $$
@@ -516,6 +631,39 @@ COMMENT ON FUNCTION "public"."create_trial_subscription"() IS 'Cria assinatura d
 
 
 
+CREATE OR REPLACE FUNCTION "public"."create_user_notification"("p_user_id" "uuid", "p_type" "public"."notification_type", "p_title" "text", "p_content" "text", "p_metadata" "jsonb" DEFAULT NULL::"jsonb") RETURNS "uuid"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    AS $$
+DECLARE
+    v_id uuid;
+BEGIN
+    INSERT INTO "public"."notifications" (
+        "user_id",
+        "type",
+        "title",
+        "content",
+        "read",
+        "metadata",
+        "created_at"
+    ) VALUES (
+        p_user_id,
+        p_type,
+        p_title,
+        p_content,
+        false,
+        COALESCE(p_metadata, '{}'::jsonb),
+        now()
+    )
+    RETURNING id INTO v_id;
+    
+    RETURN v_id;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."create_user_notification"("p_user_id" "uuid", "p_type" "public"."notification_type", "p_title" "text", "p_content" "text", "p_metadata" "jsonb") OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."generate_function_key"() RETURNS "text"
     LANGUAGE "plpgsql"
     AS $$
@@ -535,6 +683,72 @@ $$;
 
 
 ALTER FUNCTION "public"."generate_function_key"() OWNER TO "postgres";
+
+SET default_tablespace = '';
+
+SET default_table_access_method = "heap";
+
+
+CREATE TABLE IF NOT EXISTS "public"."store_themes" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "name" "text" NOT NULL,
+    "category" "text" NOT NULL,
+    "colors" "jsonb" NOT NULL,
+    "is_default" boolean DEFAULT false,
+    "created_at" timestamp with time zone DEFAULT "now"(),
+    CONSTRAINT "store_themes_category_check" CHECK (("category" = ANY (ARRAY['light'::"text", 'dark'::"text", 'branded'::"text"])))
+);
+
+
+ALTER TABLE "public"."store_themes" OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."get_available_themes"() RETURNS SETOF "public"."store_themes"
+    LANGUAGE "sql" SECURITY DEFINER
+    AS $$
+    SELECT * FROM "public"."store_themes" ORDER BY "category", "name";
+$$;
+
+
+ALTER FUNCTION "public"."get_available_themes"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."get_cached_category_tree"("p_store_id" "uuid") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    AS $$
+DECLARE
+    v_cache record;
+    v_tree jsonb;
+BEGIN
+    -- Tentar obter do cache
+    SELECT * INTO v_cache 
+    FROM category_tree_cache
+    WHERE store_id = p_store_id
+    AND last_updated > now() - interval '1 hour';
+    
+    -- Se existe cache recente, retornar
+    IF FOUND THEN
+        RETURN v_cache.tree_data;
+    END IF;
+    
+    -- Caso contrário, reconstruir e salvar
+    v_tree := get_category_tree(p_store_id);
+    
+    -- Atualizar ou inserir no cache
+    INSERT INTO category_tree_cache (store_id, tree_data)
+    VALUES (p_store_id, v_tree)
+    ON CONFLICT (store_id) 
+    DO UPDATE SET 
+        tree_data = EXCLUDED.tree_data,
+        last_updated = now(),
+        version = category_tree_cache.version + 1;
+    
+    RETURN v_tree;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."get_cached_category_tree"("p_store_id" "uuid") OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."get_category_full_path"("category_id_param" "uuid") RETURNS TABLE("id" "uuid", "name" "text", "level" integer)
@@ -592,6 +806,142 @@ $$;
 ALTER FUNCTION "public"."get_category_path"("category_id" "uuid") OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."get_category_tree"("p_store_id" "uuid") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    AS $$
+DECLARE
+    v_result jsonb;
+BEGIN
+    WITH RECURSIVE category_tree AS (
+        -- Consulta inicial (categorias raiz)
+        SELECT 
+            id, 
+            name, 
+            slug, 
+            parent_id
+        FROM categories
+        WHERE store_id = p_store_id AND parent_id IS NULL
+        
+        UNION ALL
+        
+        -- Consulta recursiva para encontrar categorias filhas
+        SELECT 
+            c.id, 
+            c.name, 
+            c.slug, 
+            c.parent_id
+        FROM categories c
+        JOIN category_tree ct ON ct.id = c.parent_id
+        WHERE c.store_id = p_store_id
+    ),
+    tree_json AS (
+        -- Montar estrutura JSON para categorias sem filhas
+        SELECT 
+            id,
+            jsonb_build_object(
+                'id', id,
+                'name', name,
+                'slug', slug,
+                'parent_id', parent_id,
+                'children', '[]'::jsonb
+            ) AS node,
+            parent_id
+        FROM category_tree
+    ),
+    tree_with_children AS (
+        -- Versão inicial (categorias sem filhas)
+        SELECT 
+            id,
+            node,
+            parent_id
+        FROM tree_json
+        
+        UNION ALL
+        
+        -- Juntar iterativamente com os pais para construir a hierarquia
+        SELECT 
+            p.id,
+            jsonb_set(
+                p.node,
+                '{children}',
+                COALESCE(
+                    (SELECT jsonb_agg(c.node)
+                     FROM tree_with_children c
+                     WHERE c.parent_id = p.id),
+                    '[]'::jsonb
+                )
+            ) AS node,
+            p.parent_id
+        FROM tree_json p
+        WHERE EXISTS (
+            SELECT 1 FROM tree_json c WHERE c.parent_id = p.id
+        )
+        AND NOT EXISTS (
+            SELECT 1 FROM tree_with_children t WHERE t.id = p.id
+            AND jsonb_array_length(t.node->'children') > 0
+        )
+    )
+    -- Selecionar apenas categorias raiz com toda a hierarquia montada
+    SELECT jsonb_agg(node)
+    INTO v_result
+    FROM (
+        SELECT DISTINCT ON (id) node
+        FROM tree_with_children
+        WHERE parent_id IS NULL
+        ORDER BY id, jsonb_array_length(node->'children') DESC
+    ) root_categories;
+    
+    RETURN COALESCE(v_result, '[]'::jsonb);
+END;
+$$;
+
+
+ALTER FUNCTION "public"."get_category_tree"("p_store_id" "uuid") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."get_formatted_social_links"("p_store_id" "uuid") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    AS $$
+DECLARE
+    v_result jsonb;
+BEGIN
+    SELECT 
+        jsonb_agg(
+            jsonb_build_object(
+                'type', sl.network_id,
+                'url', 
+                    CASE
+                        WHEN snt.format_type = 'phone' THEN 
+                            snt.url_template || regexp_replace(sl.value, '[^0-9]', '', 'g')
+                        WHEN snt.format_type = 'username' THEN 
+                            snt.url_template || regexp_replace(sl.value, '^@', '', 'g')
+                        ELSE 
+                            snt.url_template || sl.value
+                    END,
+                'displayValue', sl.value,
+                'icon', snt.icon,
+                'label', snt.label
+            )
+        ) INTO v_result
+    FROM 
+        "public"."store_social_links" sl
+    JOIN 
+        "public"."social_network_types" snt ON sl.network_id = snt.id
+    WHERE 
+        sl.store_id = p_store_id
+        AND sl.active = true
+        AND snt.active = true
+    ORDER BY 
+        sl.display_order, snt.display_order;
+    
+    RETURN COALESCE(v_result, '[]'::jsonb);
+END;
+$$;
+
+
+ALTER FUNCTION "public"."get_formatted_social_links"("p_store_id" "uuid") OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."get_plan_limits"("plan_type" "text") RETURNS "jsonb"
     LANGUAGE "plpgsql" IMMUTABLE
     AS $$
@@ -647,6 +997,72 @@ $$;
 
 
 ALTER FUNCTION "public"."get_plan_type_from_name"("product_name" "text") OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "public"."products" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "store_id" "uuid",
+    "title" "text" NOT NULL,
+    "description" "text",
+    "price" numeric(10,2) NOT NULL,
+    "sku" "text",
+    "active" boolean DEFAULT true,
+    "created_at" timestamp with time zone DEFAULT "now"(),
+    "updated_at" timestamp with time zone DEFAULT "now"(),
+    "promotional_price" numeric(10,2),
+    "tags" "text"[] DEFAULT '{}'::"text"[] NOT NULL,
+    "category_id" "uuid",
+    "brand" "text" DEFAULT ''::"text" NOT NULL,
+    "images" "text"[] DEFAULT '{}'::"text"[] NOT NULL,
+    "meta_title" "text",
+    "meta_description" "text",
+    "status" boolean DEFAULT true NOT NULL,
+    "parent_id" "uuid",
+    "attributes" "jsonb" DEFAULT '{}'::"jsonb",
+    "variation_attributes" "text"[] DEFAULT '{}'::"text"[],
+    "duration" interval,
+    "availability" "jsonb" DEFAULT '{}'::"jsonb",
+    "service_location" "text",
+    "service_modality" "public"."service_modality",
+    "type" "public"."product_type" DEFAULT 'simple'::"public"."product_type" NOT NULL,
+    "meta_keywords" "text"[],
+    "meta_image" "text",
+    CONSTRAINT "check_price_positive" CHECK (("price" >= (0)::numeric)),
+    CONSTRAINT "check_promotional_price" CHECK ((("promotional_price" IS NULL) OR ("promotional_price" < "price"))),
+    CONSTRAINT "check_service_fields" CHECK (((("type" = 'service'::"public"."product_type") AND ("service_modality" IS NOT NULL)) OR ("type" <> 'service'::"public"."product_type"))),
+    CONSTRAINT "check_variation_attributes" CHECK (((("parent_id" IS NOT NULL) AND ("variation_attributes" IS NULL)) OR ("parent_id" IS NULL)))
+);
+
+
+ALTER TABLE "public"."products" OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."get_products_with_variations"("p_store_id" "uuid", "p_limit" integer DEFAULT 100, "p_offset" integer DEFAULT 0) RETURNS SETOF "public"."products"
+    LANGUAGE "sql" SECURITY DEFINER
+    AS $$
+    -- Consulta principal para produtos pai
+    WITH parent_products AS (
+        SELECT *
+        FROM "public"."products"
+        WHERE "store_id" = p_store_id
+        AND "parent_id" IS NULL
+        ORDER BY "created_at" DESC
+        LIMIT p_limit
+        OFFSET p_offset
+    )
+    -- Retornar produtos com suas variações via consulta lateral
+    SELECT p.*
+    FROM parent_products p
+    LEFT JOIN LATERAL (
+        -- Esta subconsulta atualiza o campo children do produto
+        SELECT json_agg(v.*) AS children
+        FROM "public"."products" v
+        WHERE v.parent_id = p.id
+    ) variations ON true;
+$$;
+
+
+ALTER FUNCTION "public"."get_products_with_variations"("p_store_id" "uuid", "p_limit" integer, "p_offset" integer) OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."get_root_categories_count"("store_id_param" "uuid") RETURNS integer
@@ -724,6 +1140,55 @@ COMMENT ON FUNCTION "public"."get_store_subscription"("store_id" "uuid") IS 'Ret
 
 
 
+CREATE TABLE IF NOT EXISTS "public"."notifications" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "user_id" "uuid" NOT NULL,
+    "type" "public"."notification_type" NOT NULL,
+    "title" "text" NOT NULL,
+    "content" "text" NOT NULL,
+    "read" boolean DEFAULT false,
+    "read_at" timestamp with time zone,
+    "metadata" "jsonb" DEFAULT '{}'::"jsonb",
+    "created_at" timestamp with time zone DEFAULT "now"()
+);
+
+
+ALTER TABLE "public"."notifications" OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."get_unread_notifications"() RETURNS SETOF "public"."notifications"
+    LANGUAGE "sql"
+    AS $$
+    SELECT * FROM "public"."notifications"
+    WHERE "user_id" = auth.uid()
+    AND "read" = false
+    ORDER BY "created_at" DESC;
+$$;
+
+
+ALTER FUNCTION "public"."get_unread_notifications"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."get_user_app_theme"("p_user_id" "uuid" DEFAULT "auth"."uid"()) RETURNS "text"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    AS $$
+DECLARE
+    v_theme text;
+BEGIN
+    -- Obter tema global
+    SELECT theme INTO v_theme
+    FROM "public"."app_settings"
+    WHERE user_id = p_user_id;
+    
+    -- Valor padrão se não houver preferência salva
+    RETURN COALESCE(v_theme, 'light');
+END;
+$$;
+
+
+ALTER FUNCTION "public"."get_user_app_theme"("p_user_id" "uuid") OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."handle_expired_excess_items"() RETURNS "trigger"
     LANGUAGE "plpgsql" SECURITY DEFINER
     AS $$
@@ -760,6 +1225,46 @@ $$;
 
 
 ALTER FUNCTION "public"."handle_expired_excess_items"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."handle_new_user"() RETURNS "trigger"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    AS $$
+BEGIN
+    INSERT INTO "public"."user_profiles" (id, full_name)
+    VALUES (NEW.id, NEW.raw_user_meta_data->>'full_name');
+    
+    RETURN NEW;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."handle_new_user"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."invalidate_category_cache"() RETURNS "trigger"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    AS $$
+BEGIN
+    -- Incrementar a versão do cache (para operações READ)
+    UPDATE category_tree_cache
+    SET version = version + 1
+    WHERE store_id = NEW.store_id OR store_id = OLD.store_id;
+    
+    -- Agendar reconstrução do cache
+    PERFORM pg_notify(
+        'rebuild_category_cache', 
+        json_build_object(
+            'store_id', COALESCE(NEW.store_id, OLD.store_id)::text
+        )::text
+    );
+    
+    RETURN NULL;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."invalidate_category_cache"() OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."log_subscription_change"() RETURNS "trigger"
@@ -799,6 +1304,331 @@ $$;
 
 
 ALTER FUNCTION "public"."log_subscription_change"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."manage_product_with_variations"("p_store_id" "uuid", "p_product" "jsonb", "p_variations" "jsonb" DEFAULT NULL::"jsonb") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    AS $$
+DECLARE
+    v_product_id uuid;
+    v_current_plan text;
+    v_product_limit integer;
+    v_image_limit integer;
+    v_product_count integer;
+    v_is_update boolean;
+    v_result jsonb;
+BEGIN
+    -- Verificar permissão
+    IF NOT EXISTS (
+        SELECT 1 FROM stores 
+        WHERE id = p_store_id AND user_id = auth.uid()
+    ) THEN
+        RAISE EXCEPTION 'Permissão negada';
+    END IF;
+    
+    -- Obter limites do plano atual
+    SELECT plan_type INTO v_current_plan
+    FROM subscriptions
+    WHERE store_id = p_store_id AND active = true
+    ORDER BY created_at DESC 
+    LIMIT 1;
+    
+    -- Definir limites baseados no plano
+    SELECT 
+        (get_plan_limits(v_current_plan)->>'products')::integer,
+        (get_plan_limits(v_current_plan)->>'images_per_product')::integer
+    INTO v_product_limit, v_image_limit;
+    
+    -- Verificar se é atualização ou criação
+    v_is_update := p_product->>'id' IS NOT NULL;
+    v_product_id := (p_product->>'id')::uuid;
+    
+    -- Validar limites apenas para novos produtos
+    IF NOT v_is_update THEN
+        -- Contar produtos existentes
+        SELECT COUNT(*) INTO v_product_count
+        FROM products
+        WHERE store_id = p_store_id
+        AND parent_id IS NULL;
+        
+        -- Verificar se atingiu limite
+        IF v_product_count >= v_product_limit THEN
+            RETURN jsonb_build_object(
+                'success', false,
+                'error', 'Limite de produtos atingido para o plano atual',
+                'limit', v_product_limit,
+                'current', v_product_count
+            );
+        END IF;
+    END IF;
+    
+    -- Validar número de imagens
+    IF jsonb_array_length(p_product->'images') > v_image_limit THEN
+        RETURN jsonb_build_object(
+            'success', false,
+            'error', 'Número de imagens excede o limite para o plano atual',
+            'limit', v_image_limit,
+            'current', jsonb_array_length(p_product->'images')
+        );
+    END IF;
+    
+    -- Criar ou atualizar produto principal
+    IF v_is_update THEN
+        -- Atualizar produto existente
+        UPDATE products
+        SET 
+            title = p_product->>'title',
+            description = p_product->>'description',
+            brand = p_product->>'brand',
+            sku = p_product->>'sku',
+            price = (p_product->>'price')::numeric,
+            promotional_price = NULLIF(p_product->>'promotional_price', '')::numeric,
+            category_id = NULLIF(p_product->>'category_id', '')::uuid,
+            images = COALESCE(array(SELECT jsonb_array_elements_text(p_product->'images')), ARRAY[]::text[]),
+            tags = COALESCE(array(SELECT jsonb_array_elements_text(p_product->'tags')), ARRAY[]::text[]),
+            status = COALESCE((p_product->>'status')::boolean, true),
+            type = p_product->>'type',
+            variation_attributes = CASE 
+                WHEN p_product->>'type' = 'variable' 
+                THEN COALESCE(array(SELECT jsonb_array_elements_text(p_product->'variation_attributes')), ARRAY[]::text[])
+                ELSE NULL
+            END,
+            attributes = COALESCE(p_product->'attributes', '{}'::jsonb),
+            duration = p_product->>'duration',
+            availability = COALESCE(p_product->'availability', '{}'::jsonb),
+            service_location = p_product->>'service_location',
+            service_modality = p_product->>'service_modality',
+            updated_at = now()
+        WHERE id = v_product_id
+        AND store_id = p_store_id;
+    ELSE
+        -- Criar novo produto
+        INSERT INTO products (
+            store_id,
+            title,
+            description,
+            brand,
+            sku,
+            price,
+            promotional_price,
+            category_id,
+            images,
+            tags,
+            status,
+            type,
+            variation_attributes,
+            attributes,
+            duration,
+            availability,
+            service_location,
+            service_modality
+        ) VALUES (
+            p_store_id,
+            p_product->>'title',
+            p_product->>'description',
+            p_product->>'brand',
+            p_product->>'sku',
+            (p_product->>'price')::numeric,
+            NULLIF(p_product->>'promotional_price', '')::numeric,
+            NULLIF(p_product->>'category_id', '')::uuid,
+            COALESCE(array(SELECT jsonb_array_elements_text(p_product->'images')), ARRAY[]::text[]),
+            COALESCE(array(SELECT jsonb_array_elements_text(p_product->'tags')), ARRAY[]::text[]),
+            COALESCE((p_product->>'status')::boolean, true),
+            p_product->>'type',
+            CASE 
+                WHEN p_product->>'type' = 'variable' 
+                THEN COALESCE(array(SELECT jsonb_array_elements_text(p_product->'variation_attributes')), ARRAY[]::text[])
+                ELSE NULL
+            END,
+            COALESCE(p_product->'attributes', '{}'::jsonb),
+            p_product->>'duration',
+            COALESCE(p_product->'availability', '{}'::jsonb),
+            p_product->>'service_location',
+            p_product->>'service_modality'
+        )
+        RETURNING id INTO v_product_id;
+    END IF;
+    
+    -- Processar variações se for produto variável
+    IF p_product->>'type' = 'variable' AND p_variations IS NOT NULL AND jsonb_array_length(p_variations) > 0 THEN
+        -- Remover variações existentes se for atualização
+        IF v_is_update THEN
+            DELETE FROM products 
+            WHERE parent_id = v_product_id;
+        END IF;
+        
+        -- Inserir novas variações
+        FOR i IN 0..jsonb_array_length(p_variations)-1 LOOP
+            DECLARE
+                v_variation jsonb := p_variations->i;
+                v_variation_id uuid;
+            BEGIN
+                INSERT INTO products (
+                    store_id,
+                    parent_id,
+                    title,
+                    description,
+                    brand,
+                    sku,
+                    price,
+                    promotional_price,
+                    images,
+                    status,
+                    type,
+                    attributes
+                ) VALUES (
+                    p_store_id,
+                    v_product_id,
+                    (p_product->>'title') || ' - ' || (
+                        SELECT string_agg(value, ' / ')
+                        FROM jsonb_each_text(v_variation->'attributes')
+                    ),
+                    p_product->>'description',
+                    p_product->>'brand',
+                    v_variation->>'sku',
+                    COALESCE((v_variation->>'price')::numeric, (p_product->>'price')::numeric),
+                    CASE
+                        WHEN (v_variation->>'promotional_price') IS NOT NULL AND (v_variation->>'promotional_price') != ''
+                        THEN (v_variation->>'promotional_price')::numeric
+                        ELSE NULLIF(p_product->>'promotional_price', '')::numeric
+                    END,
+                    COALESCE(array(SELECT jsonb_array_elements_text(v_variation->'images')), ARRAY[]::text[]),
+                    true,
+                    'simple',
+                    COALESCE(v_variation->'attributes', '{}'::jsonb)
+                )
+                RETURNING id INTO v_variation_id;
+            END;
+        END LOOP;
+    END IF;
+    
+    -- Retornar resultado bem-sucedido
+    v_result := jsonb_build_object(
+        'success', true,
+        'product_id', v_product_id,
+        'message', CASE 
+            WHEN v_is_update THEN 'Produto atualizado com sucesso'
+            ELSE 'Produto criado com sucesso'
+        END
+    );
+    
+    RETURN v_result;
+EXCEPTION
+    WHEN check_violation THEN
+        RETURN jsonb_build_object(
+            'success', false,
+            'error', 'Um ou mais campos têm valores inválidos: ' || SQLERRM
+        );
+    WHEN others THEN
+        RETURN jsonb_build_object(
+            'success', false,
+            'error', SQLERRM
+        );
+END;
+$$;
+
+
+ALTER FUNCTION "public"."manage_product_with_variations"("p_store_id" "uuid", "p_product" "jsonb", "p_variations" "jsonb") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."mark_notifications_read"("p_notification_ids" "uuid"[] DEFAULT NULL::"uuid"[]) RETURNS integer
+    LANGUAGE "plpgsql"
+    AS $$
+DECLARE
+    v_count integer;
+BEGIN
+    IF p_notification_ids IS NULL THEN
+        -- Marcar todas como lidas
+        UPDATE "public"."notifications"
+        SET "read" = true,
+            "read_at" = now()
+        WHERE "user_id" = auth.uid()
+        AND "read" = false
+        RETURNING COUNT(*) INTO v_count;
+    ELSE
+        -- Marcar notificações específicas como lidas
+        UPDATE "public"."notifications"
+        SET "read" = true,
+            "read_at" = now()
+        WHERE "id" = ANY(p_notification_ids)
+        AND "user_id" = auth.uid()
+        RETURNING COUNT(*) INTO v_count;
+    END IF;
+    
+    RETURN v_count;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."mark_notifications_read"("p_notification_ids" "uuid"[]) OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."migrate_store_theme_settings"() RETURNS "void"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    AS $$
+BEGIN
+    INSERT INTO "public"."store_theme_settings" (
+        "store_id",
+        "primary_color",
+        "secondary_color",
+        "accent_color",
+        "background",
+        "header_background",
+        "surface_color",
+        "border_color",
+        "muted_color",
+        "header_style",
+        "header_height",
+        "header_image",
+        "header_gradient",
+        "header_overlay_opacity",
+        "header_alignment",
+        "header_visibility",
+        "logo_size",
+        "title_size",
+        "description_size",
+        "title_font",
+        "body_font",
+        "product_card_style",
+        "grid_columns",
+        "grid_gap",
+        "container_width",
+        "selected_preset"
+    )
+    SELECT
+        "id",
+        "primary_color",
+        "secondary_color",
+        "accent_color",
+        "background",
+        "header_background",
+        "surface_color",
+        "border_color",
+        COALESCE("muted_color", '#6b7280'),
+        COALESCE("header_style", 'solid'),
+        COALESCE("header_height", '200px'),
+        "header_image",
+        "header_gradient",
+        COALESCE("header_overlay_opacity", '0.5'),
+        COALESCE("header_alignment", 'center'),
+        COALESCE("header_visibility", '{"logo": true, "title": true, "description": true, "socialLinks": true}'),
+        COALESCE("logo_size", '48px'),
+        COALESCE("title_size", '36px'),
+        COALESCE("description_size", '16px'),
+        COALESCE("title_font", 'Inter'),
+        COALESCE("body_font", 'Inter'),
+        COALESCE("product_card_style", 'default'),
+        COALESCE("grid_columns", '4'),
+        COALESCE("grid_gap", '24'),
+        COALESCE("container_width", '1200px'),
+        "selected_preset"
+    FROM "public"."stores"
+    ON CONFLICT DO NOTHING;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."migrate_store_theme_settings"() OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."notify_plan_downgrade"() RETURNS "trigger"
@@ -1238,6 +2068,50 @@ $$;
 ALTER FUNCTION "public"."process_plan_downgrade"("p_store_id" "uuid", "p_to_plan" "text", "p_handle_excess" "text", "p_initiated_by" "uuid") OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."record_store_view"("p_store_id" "uuid", "p_page" "text", "p_session_id" "text", "p_user_agent" "text" DEFAULT NULL::"text", "p_referrer" "text" DEFAULT NULL::"text") RETURNS "uuid"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    AS $$
+DECLARE
+    v_id uuid;
+    v_device_type text;
+BEGIN
+    -- Detectar tipo de dispositivo com base no user agent
+    IF p_user_agent ILIKE '%mobile%' OR p_user_agent ILIKE '%android%' OR p_user_agent ILIKE '%iphone%' THEN
+        v_device_type := 'mobile';
+    ELSIF p_user_agent ILIKE '%tablet%' OR p_user_agent ILIKE '%ipad%' THEN
+        v_device_type := 'tablet';
+    ELSE
+        v_device_type := 'desktop';
+    END IF;
+    
+    -- Inserir visualização
+    INSERT INTO "public"."store_views" (
+        "store_id",
+        "user_id",
+        "session_id",
+        "referrer_source",
+        "user_agent",
+        "device_type",
+        "page"
+    ) VALUES (
+        p_store_id,
+        auth.uid(),
+        p_session_id,
+        p_referrer,
+        p_user_agent,
+        v_device_type,
+        p_page
+    )
+    RETURNING id INTO v_id;
+    
+    RETURN v_id;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."record_store_view"("p_store_id" "uuid", "p_page" "text", "p_session_id" "text", "p_user_agent" "text", "p_referrer" "text") OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."reorder_categories"("p_store_id" "uuid", "p_category_ids" "uuid"[]) RETURNS "void"
     LANGUAGE "plpgsql"
     AS $$
@@ -1385,6 +2259,169 @@ $$;
 ALTER FUNCTION "public"."restore_downgrade_excess_item"("p_excess_id" "uuid", "p_user_id" "uuid") OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."save_store_customization"("p_store_id" "uuid", "p_customization" "jsonb") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    AS $$
+DECLARE
+    v_user_id uuid;
+    v_updated_store stores;
+    v_result jsonb;
+BEGIN
+    -- Verificar permissão
+    SELECT user_id INTO v_user_id 
+    FROM stores 
+    WHERE id = p_store_id;
+    
+    IF v_user_id != auth.uid() AND auth.role() != 'service_role' THEN
+        RAISE EXCEPTION 'Permissão negada';
+    END IF;
+    
+    -- Extrair e validar campos
+    -- Este bloco depende da estrutura exata do jsonb de customização
+    DECLARE
+        v_name text := p_customization->>'name';
+        v_slug text := p_customization->>'slug';
+        v_description text := p_customization->>'description';
+        v_logo_url text := p_customization->>'logoUrl';
+        v_primary_color text := p_customization->>'primaryColor';
+        v_secondary_color text := p_customization->>'secondaryColor';
+        v_accent_color text := p_customization->>'accentColor';
+        v_header_background text := p_customization->>'headerBackground';
+        v_background text := p_customization->>'background';
+        v_surface_color text := p_customization->>'surfaceColor';
+        v_border_color text := p_customization->>'borderColor';
+        v_header_style text := p_customization->>'headerStyle';
+        v_header_height text := p_customization->>'headerHeight';
+        v_header_image text := p_customization->>'headerImage';
+        v_header_gradient text := p_customization->>'headerGradient';
+        v_header_overlay_opacity text := p_customization->>'headerOverlayOpacity';
+        v_header_alignment text := p_customization->>'headerAlignment';
+        v_header_visibility jsonb := p_customization->'headerVisibility';
+        v_logo_size text := p_customization->>'logoSize';
+        v_title_size text := p_customization->>'titleSize';
+        v_description_size text := p_customization->>'descriptionSize';
+        v_title_font text := p_customization->>'titleFont';
+        v_body_font text := p_customization->>'bodyFont';
+        v_product_card_style text := p_customization->>'productCardStyle';
+        v_grid_columns text := p_customization->>'gridColumns';
+        v_grid_gap text := p_customization->>'gridGap';
+        v_container_width text := p_customization->>'containerWidth';
+        v_social_links jsonb := p_customization->'socialLinks';
+        v_social_settings jsonb := p_customization->'socialSettings';
+        v_selected_preset text := p_customization->>'selectedPreset';
+    BEGIN
+        -- Validar slug se estiver sendo alterado
+        IF v_slug IS NOT NULL AND v_slug != '' THEN
+            -- Verificar se slug já existe para outra loja
+            IF EXISTS (
+                SELECT 1 FROM stores 
+                WHERE slug = v_slug 
+                AND id != p_store_id
+            ) THEN
+                RAISE EXCEPTION 'Este slug já está em uso';
+            END IF;
+        END IF;
+        
+        -- Atualizar loja com todas as customizações
+        UPDATE stores
+        SET 
+            name = COALESCE(v_name, name),
+            slug = COALESCE(v_slug, slug),
+            description = COALESCE(v_description, description),
+            logo_url = COALESCE(v_logo_url, logo_url),
+            primary_color = COALESCE(v_primary_color, primary_color),
+            secondary_color = COALESCE(v_secondary_color, secondary_color),
+            accent_color = COALESCE(v_accent_color, accent_color),
+            header_background = COALESCE(v_header_background, header_background),
+            background = COALESCE(v_background, background),
+            surface_color = COALESCE(v_surface_color, surface_color),
+            border_color = COALESCE(v_border_color, border_color),
+            header_style = COALESCE(v_header_style, header_style),
+            header_height = COALESCE(v_header_height || 'px', header_height),
+            header_image = COALESCE(v_header_image, header_image),
+            header_gradient = COALESCE(v_header_gradient, header_gradient),
+            header_overlay_opacity = COALESCE(v_header_overlay_opacity, header_overlay_opacity),
+            header_alignment = COALESCE(v_header_alignment, header_alignment),
+            header_visibility = COALESCE(v_header_visibility, header_visibility),
+            logo_size = COALESCE(v_logo_size || 'px', logo_size),
+            title_size = COALESCE(v_title_size || 'px', title_size),
+            description_size = COALESCE(v_description_size || 'px', description_size),
+            title_font = COALESCE(v_title_font, title_font),
+            body_font = COALESCE(v_body_font, body_font),
+            product_card_style = COALESCE(v_product_card_style, product_card_style),
+            grid_columns = COALESCE(v_grid_columns, grid_columns),
+            grid_gap = COALESCE(v_grid_gap, grid_gap),
+            container_width = COALESCE(v_container_width, container_width),
+            social_links = COALESCE(v_social_links, social_links),
+            social_settings = COALESCE(v_social_settings, social_settings),
+            selected_preset = v_selected_preset,
+            updated_at = now()
+        WHERE id = p_store_id
+        RETURNING * INTO v_updated_store;
+        
+        -- Construir objeto de resultado
+        v_result := jsonb_build_object(
+            'success', true,
+            'message', 'Customização salva com sucesso',
+            'store', to_jsonb(v_updated_store)
+        );
+    EXCEPTION
+        WHEN unique_violation THEN
+            v_result := jsonb_build_object(
+                'success', false,
+                'error', 'Este slug já está em uso por outra loja'
+            );
+        WHEN check_violation THEN
+            v_result := jsonb_build_object(
+                'success', false,
+                'error', 'Um ou mais campos têm valores inválidos'
+            );
+        WHEN others THEN
+            v_result := jsonb_build_object(
+                'success', false,
+                'error', SQLERRM
+            );
+    END;
+    
+    RETURN v_result;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."save_store_customization"("p_store_id" "uuid", "p_customization" "jsonb") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."save_user_app_theme"("p_theme" "text") RETURNS boolean
+    LANGUAGE "plpgsql"
+    AS $$
+DECLARE
+    v_user_id uuid := auth.uid();
+BEGIN
+    IF v_user_id IS NULL THEN
+        RETURN false;
+    END IF;
+    
+    -- Validar tema
+    IF p_theme != 'light' AND p_theme != 'dark' THEN
+        RAISE EXCEPTION 'Tema inválido. Use "light" ou "dark".';
+    END IF;
+    
+    -- Salvar tema global
+    INSERT INTO "public"."app_settings" (user_id, theme)
+    VALUES (v_user_id, p_theme)
+    ON CONFLICT (user_id) DO
+    UPDATE SET 
+        theme = EXCLUDED.theme,
+        updated_at = now();
+    
+    RETURN true;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."save_user_app_theme"("p_theme" "text") OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."schedule_subscription_sync"() RETURNS "void"
     LANGUAGE "plpgsql"
     AS $$
@@ -1396,47 +2433,77 @@ $$;
 
 ALTER FUNCTION "public"."schedule_subscription_sync"() OWNER TO "postgres";
 
-SET default_tablespace = '';
 
-SET default_table_access_method = "heap";
+CREATE OR REPLACE FUNCTION "public"."search_products"("p_store_id" "uuid", "p_search" "text" DEFAULT NULL::"text", "p_category_id" "uuid" DEFAULT NULL::"uuid", "p_min_price" numeric DEFAULT NULL::numeric, "p_max_price" numeric DEFAULT NULL::numeric, "p_has_promotion" boolean DEFAULT NULL::boolean, "p_selected_tags" "text"[] DEFAULT NULL::"text"[], "p_brand" "text" DEFAULT NULL::"text", "p_limit" integer DEFAULT 100, "p_offset" integer DEFAULT 0) RETURNS SETOF "public"."products"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    AS $$
+BEGIN
+    RETURN QUERY 
+    SELECT p.*
+    FROM products p
+    WHERE p.store_id = p_store_id
+    AND p.parent_id IS NULL
+    -- Filtro de pesquisa por texto
+    AND (
+        p_search IS NULL 
+        OR to_tsvector('portuguese', 
+            COALESCE(p.title, '') || ' ' || 
+            COALESCE(p.description, '') || ' ' || 
+            COALESCE(p.sku, '')
+        ) @@ plainto_tsquery('portuguese', p_search)
+    )
+    -- Filtro de categoria
+    AND (
+        p_category_id IS NULL 
+        OR p.category_id = p_category_id 
+        OR p.category_id IN (
+            SELECT id FROM categories 
+            WHERE parent_id = p_category_id
+        )
+    )
+    -- Filtros de preço mínimo
+    AND (
+        p_min_price IS NULL 
+        OR p_min_price <= 0
+        OR p.price >= p_min_price 
+        OR COALESCE(p.promotional_price, p.price) >= p_min_price
+    )
+    -- Filtros de preço máximo
+    AND (
+        p_max_price IS NULL 
+        OR p_max_price <= 0
+        OR p.price <= p_max_price 
+        OR COALESCE(p.promotional_price, p.price) <= p_max_price
+    )
+    -- Filtro de promoção
+    AND (
+        p_has_promotion IS NULL
+        OR (p_has_promotion = true AND p.promotional_price IS NOT NULL)
+        OR (p_has_promotion = false)
+    )
+    -- Filtro de tags
+    AND (
+        p_selected_tags IS NULL 
+        OR array_length(p_selected_tags, 1) IS NULL
+        OR p.tags @> p_selected_tags
+    )
+    -- Filtro de marca
+    AND (
+        p_brand IS NULL 
+        OR p_brand = ''
+        OR p.brand = p_brand
+    )
+    -- Produtos ativos
+    AND p.status = true
+    -- Ordenação e paginação
+    ORDER BY p.created_at DESC
+    LIMIT p_limit
+    OFFSET p_offset;
+END;
+$$;
 
 
-CREATE TABLE IF NOT EXISTS "public"."products" (
-    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
-    "store_id" "uuid",
-    "title" "text" NOT NULL,
-    "description" "text",
-    "price" numeric(10,2) NOT NULL,
-    "sku" "text",
-    "active" boolean DEFAULT true,
-    "created_at" timestamp with time zone DEFAULT "now"(),
-    "updated_at" timestamp with time zone DEFAULT "now"(),
-    "promotional_price" numeric(10,2),
-    "tags" "text"[] DEFAULT '{}'::"text"[] NOT NULL,
-    "category_id" "uuid",
-    "brand" "text" DEFAULT ''::"text" NOT NULL,
-    "images" "text"[] DEFAULT '{}'::"text"[] NOT NULL,
-    "meta_title" "text",
-    "meta_description" "text",
-    "status" boolean DEFAULT true NOT NULL,
-    "parent_id" "uuid",
-    "attributes" "jsonb" DEFAULT '{}'::"jsonb",
-    "variation_attributes" "text"[] DEFAULT '{}'::"text"[],
-    "duration" interval,
-    "availability" "jsonb" DEFAULT '{}'::"jsonb",
-    "service_location" "text",
-    "service_modality" "public"."service_modality",
-    "type" "public"."product_type" DEFAULT 'simple'::"public"."product_type" NOT NULL,
-    "meta_keywords" "text"[],
-    "meta_image" "text",
-    CONSTRAINT "check_price_positive" CHECK (("price" >= (0)::numeric)),
-    CONSTRAINT "check_promotional_price" CHECK ((("promotional_price" IS NULL) OR ("promotional_price" < "price"))),
-    CONSTRAINT "check_service_fields" CHECK (((("type" = 'service'::"public"."product_type") AND ("service_modality" IS NOT NULL)) OR ("type" <> 'service'::"public"."product_type"))),
-    CONSTRAINT "check_variation_attributes" CHECK (((("parent_id" IS NOT NULL) AND ("variation_attributes" IS NULL)) OR ("parent_id" IS NULL)))
-);
-
-
-ALTER TABLE "public"."products" OWNER TO "postgres";
+ALTER FUNCTION "public"."search_products"("p_store_id" "uuid", "p_search" "text", "p_category_id" "uuid", "p_min_price" numeric, "p_max_price" numeric, "p_has_promotion" boolean, "p_selected_tags" "text"[], "p_brand" "text", "p_limit" integer, "p_offset" integer) OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."search_products_v2"("p_store_id" "uuid", "p_search" "text" DEFAULT NULL::"text", "p_category_id" "uuid" DEFAULT NULL::"uuid", "p_min_price" numeric DEFAULT NULL::numeric, "p_max_price" numeric DEFAULT NULL::numeric, "p_has_promotion" boolean DEFAULT NULL::boolean, "p_tags" "text"[] DEFAULT NULL::"text"[], "p_brand" "text" DEFAULT NULL::"text", "p_limit" integer DEFAULT 100, "p_offset" integer DEFAULT 0) RETURNS SETOF "public"."products"
@@ -1770,6 +2837,24 @@ $$;
 ALTER FUNCTION "public"."update_updated_at_column"() OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."update_user_last_active"() RETURNS "void"
+    LANGUAGE "plpgsql"
+    AS $$
+BEGIN
+    -- Atualizar apenas se houver uma sessão atual
+    IF auth.uid() IS NOT NULL THEN
+        INSERT INTO "public"."user_profiles" (id, last_active)
+        VALUES (auth.uid(), now())
+        ON CONFLICT (id) DO
+        UPDATE SET last_active = EXCLUDED.last_active;
+    END IF;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."update_user_last_active"() OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."validate_category_limit"() RETURNS "trigger"
     LANGUAGE "plpgsql"
     AS $$DECLARE
@@ -1842,6 +2927,19 @@ $$;
 
 
 ALTER FUNCTION "public"."validate_erp_credentials"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."validate_image_url"("url" "text") RETURNS boolean
+    LANGUAGE "plpgsql" IMMUTABLE
+    AS $_$
+BEGIN
+    -- Verificar se URL é válida e termina com extensão de imagem
+    RETURN url ~* '^https?://.*\.(jpe?g|png|gif|webp|svg)(\?.*)?$';
+END;
+$_$;
+
+
+ALTER FUNCTION "public"."validate_image_url"("url" "text") OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."validate_product_attributes"() RETURNS "trigger"
@@ -1987,6 +3085,40 @@ $$;
 
 
 ALTER FUNCTION "public"."validate_product_components"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."validate_product_images"() RETURNS "trigger"
+    LANGUAGE "plpgsql"
+    AS $$
+DECLARE
+    url text;
+    valid boolean := true;
+BEGIN
+    -- Se não há imagens, a validação passa
+    IF NEW.images IS NULL OR array_length(NEW.images, 1) = 0 THEN
+        RETURN NEW;
+    END IF;
+    
+    -- Verificar cada URL no array
+    FOREACH url IN ARRAY NEW.images
+    LOOP
+        IF NOT validate_image_url(url) THEN
+            valid := false;
+            EXIT;
+        END IF;
+    END LOOP;
+    
+    -- Se alguma URL for inválida, gerar erro
+    IF NOT valid THEN
+        RAISE EXCEPTION 'Uma ou mais URLs de imagem têm formato inválido';
+    END IF;
+    
+    RETURN NEW;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."validate_product_images"() OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."validate_product_limits"() RETURNS "trigger"
@@ -2741,6 +3873,18 @@ COMMENT ON COLUMN "auth"."users"."is_sso_user" IS 'Auth: Set this column to true
 
 
 
+CREATE TABLE IF NOT EXISTS "public"."app_settings" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "user_id" "uuid" NOT NULL,
+    "theme" "text" DEFAULT 'light'::"text" NOT NULL,
+    "updated_at" timestamp with time zone DEFAULT "now"(),
+    CONSTRAINT "app_settings_theme_check" CHECK (("theme" = ANY (ARRAY['light'::"text", 'dark'::"text"])))
+);
+
+
+ALTER TABLE "public"."app_settings" OWNER TO "postgres";
+
+
 CREATE TABLE IF NOT EXISTS "public"."categories" (
     "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
     "store_id" "uuid",
@@ -2752,11 +3896,23 @@ CREATE TABLE IF NOT EXISTS "public"."categories" (
     "status" boolean DEFAULT true NOT NULL,
     "display_order" integer,
     "meta_title" "text",
-    "meta_description" "text"
+    "meta_description" "text",
+    CONSTRAINT "check_valid_category_slug" CHECK (("slug" ~* '^[a-z0-9]([a-z0-9-]*[a-z0-9])?$'::"text"))
 );
 
 
 ALTER TABLE "public"."categories" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "public"."category_tree_cache" (
+    "store_id" "uuid" NOT NULL,
+    "tree_data" "jsonb" NOT NULL,
+    "last_updated" timestamp with time zone DEFAULT "now"(),
+    "version" integer DEFAULT 1
+);
+
+
+ALTER TABLE "public"."category_tree_cache" OWNER TO "postgres";
 
 
 CREATE TABLE IF NOT EXISTS "public"."erp_integrations" (
@@ -2883,6 +4039,104 @@ CREATE TABLE IF NOT EXISTS "public"."product_components" (
 ALTER TABLE "public"."product_components" OWNER TO "postgres";
 
 
+CREATE TABLE IF NOT EXISTS "public"."product_views" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "store_id" "uuid" NOT NULL,
+    "product_id" "uuid" NOT NULL,
+    "user_id" "uuid",
+    "session_id" "text",
+    "created_at" timestamp with time zone DEFAULT "now"()
+);
+
+
+ALTER TABLE "public"."product_views" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "public"."social_network_types" (
+    "id" "text" NOT NULL,
+    "label" "text" NOT NULL,
+    "icon" "text" NOT NULL,
+    "url_template" "text" NOT NULL,
+    "format_type" "text" NOT NULL,
+    "display_order" integer DEFAULT 0,
+    "active" boolean DEFAULT true,
+    CONSTRAINT "social_network_types_format_type_check" CHECK (("format_type" = ANY (ARRAY['phone'::"text", 'username'::"text", 'email'::"text", 'url'::"text"])))
+);
+
+
+ALTER TABLE "public"."social_network_types" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "public"."store_social_links" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "store_id" "uuid" NOT NULL,
+    "network_id" "text" NOT NULL,
+    "value" "text" NOT NULL,
+    "display_order" integer DEFAULT 0,
+    "active" boolean DEFAULT true,
+    "created_at" timestamp with time zone DEFAULT "now"(),
+    "updated_at" timestamp with time zone DEFAULT "now"()
+);
+
+
+ALTER TABLE "public"."store_social_links" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "public"."store_theme_settings" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "store_id" "uuid" NOT NULL,
+    "primary_color" "text" DEFAULT '#FFFFFF'::"text",
+    "secondary_color" "text" DEFAULT '#000000'::"text",
+    "accent_color" "text" DEFAULT '#3b82f6'::"text",
+    "background" "text" DEFAULT '#FFFFFF'::"text",
+    "header_background" "text" DEFAULT '#FFFFFF'::"text",
+    "surface_color" "text" DEFAULT '#FFFFFF'::"text",
+    "border_color" "text" DEFAULT '#e5e7eb'::"text",
+    "muted_color" "text" DEFAULT '#6b7280'::"text",
+    "header_style" "text" NOT NULL,
+    "header_height" "text" DEFAULT '200px'::"text",
+    "header_image" "text",
+    "header_gradient" "text",
+    "header_overlay_opacity" "text" DEFAULT '0.5'::"text",
+    "header_alignment" "text" NOT NULL,
+    "header_visibility" "jsonb" DEFAULT '{"logo": true, "title": true, "description": true, "socialLinks": true}'::"jsonb",
+    "logo_size" "text" DEFAULT '48px'::"text",
+    "title_size" "text" DEFAULT '36px'::"text",
+    "description_size" "text" DEFAULT '16px'::"text",
+    "title_font" "text" DEFAULT 'Inter'::"text",
+    "body_font" "text" DEFAULT 'Inter'::"text",
+    "product_card_style" "text" NOT NULL,
+    "grid_columns" "text" DEFAULT '4'::"text",
+    "grid_gap" "text" DEFAULT '24'::"text",
+    "container_width" "text" DEFAULT '1200px'::"text",
+    "selected_preset" "text",
+    "created_at" timestamp with time zone DEFAULT "now"(),
+    "updated_at" timestamp with time zone DEFAULT "now"(),
+    CONSTRAINT "store_theme_settings_header_alignment_check" CHECK (("header_alignment" = ANY (ARRAY['left'::"text", 'center'::"text", 'right'::"text"]))),
+    CONSTRAINT "store_theme_settings_header_style_check" CHECK (("header_style" = ANY (ARRAY['solid'::"text", 'gradient'::"text", 'image'::"text"]))),
+    CONSTRAINT "store_theme_settings_product_card_style_check" CHECK (("product_card_style" = ANY (ARRAY['default'::"text", 'compact'::"text", 'minimal'::"text"])))
+);
+
+
+ALTER TABLE "public"."store_theme_settings" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "public"."store_views" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "store_id" "uuid" NOT NULL,
+    "user_id" "uuid",
+    "session_id" "text",
+    "referrer_source" "text",
+    "user_agent" "text",
+    "device_type" "text",
+    "page" "text",
+    "created_at" timestamp with time zone DEFAULT "now"()
+);
+
+
+ALTER TABLE "public"."store_views" OWNER TO "postgres";
+
+
 CREATE TABLE IF NOT EXISTS "public"."stores" (
     "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
     "user_id" "uuid",
@@ -2926,6 +4180,7 @@ CREATE TABLE IF NOT EXISTS "public"."stores" (
     "background" "text",
     "selected_preset" "text",
     CONSTRAINT "body_font_category_check" CHECK ((("body_font_category")::"text" = ANY ((ARRAY['sans'::character varying, 'serif'::character varying, 'mono'::character varying])::"text"[]))),
+    CONSTRAINT "check_valid_store_slug" CHECK ((("slug" ~* '^[a-z0-9]([a-z0-9-]*[a-z0-9])?$'::"text") AND ("length"("slug") >= 3) AND ("length"("slug") <= 63))),
     CONSTRAINT "stores_container_width_check" CHECK (("container_width" = ANY (ARRAY['max-w-5xl'::"text", 'max-w-6xl'::"text", 'max-w-7xl'::"text", 'max-w-full'::"text"]))),
     CONSTRAINT "stores_grid_columns_check" CHECK (("grid_columns" = ANY (ARRAY['2'::"text", '3'::"text", '4'::"text", '5'::"text"]))),
     CONSTRAINT "stores_header_alignment_check" CHECK (("header_alignment" = ANY (ARRAY['left'::"text", 'center'::"text", 'right'::"text"]))),
@@ -3176,6 +4431,23 @@ COMMENT ON TABLE "public"."subscriptions" IS 'Assinaturas das lojas';
 
 
 
+CREATE TABLE IF NOT EXISTS "public"."user_profiles" (
+    "id" "uuid" NOT NULL,
+    "full_name" "text",
+    "phone" "text",
+    "avatar_url" "text",
+    "preferred_language" "text" DEFAULT 'pt-BR'::"text",
+    "marketing_opt_in" boolean DEFAULT true,
+    "last_active" timestamp with time zone,
+    "preferences" "jsonb" DEFAULT '{}'::"jsonb",
+    "created_at" timestamp with time zone DEFAULT "now"(),
+    "updated_at" timestamp with time zone DEFAULT "now"()
+);
+
+
+ALTER TABLE "public"."user_profiles" OWNER TO "postgres";
+
+
 CREATE TABLE IF NOT EXISTS "storage"."buckets" (
     "id" "text" NOT NULL,
     "name" "text" NOT NULL,
@@ -3387,6 +4659,16 @@ ALTER TABLE ONLY "auth"."users"
 
 
 
+ALTER TABLE ONLY "public"."app_settings"
+    ADD CONSTRAINT "app_settings_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."app_settings"
+    ADD CONSTRAINT "app_settings_user_id_key" UNIQUE ("user_id");
+
+
+
 ALTER TABLE ONLY "public"."categories"
     ADD CONSTRAINT "categories_pkey" PRIMARY KEY ("id");
 
@@ -3399,6 +4681,11 @@ ALTER TABLE ONLY "public"."categories"
 
 ALTER TABLE ONLY "public"."categories"
     ADD CONSTRAINT "categories_store_id_slug_key" UNIQUE ("store_id", "slug");
+
+
+
+ALTER TABLE ONLY "public"."category_tree_cache"
+    ADD CONSTRAINT "category_tree_cache_pkey" PRIMARY KEY ("store_id");
 
 
 
@@ -3419,6 +4706,11 @@ ALTER TABLE ONLY "public"."function_keys"
 
 ALTER TABLE ONLY "public"."function_logs"
     ADD CONSTRAINT "function_logs_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."notifications"
+    ADD CONSTRAINT "notifications_pkey" PRIMARY KEY ("id");
 
 
 
@@ -3452,8 +4744,43 @@ ALTER TABLE ONLY "public"."product_components"
 
 
 
+ALTER TABLE ONLY "public"."product_views"
+    ADD CONSTRAINT "product_views_pkey" PRIMARY KEY ("id");
+
+
+
 ALTER TABLE ONLY "public"."products"
     ADD CONSTRAINT "products_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."social_network_types"
+    ADD CONSTRAINT "social_network_types_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."store_social_links"
+    ADD CONSTRAINT "store_social_links_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."store_social_links"
+    ADD CONSTRAINT "store_social_links_store_id_network_id_key" UNIQUE ("store_id", "network_id");
+
+
+
+ALTER TABLE ONLY "public"."store_theme_settings"
+    ADD CONSTRAINT "store_theme_settings_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."store_themes"
+    ADD CONSTRAINT "store_themes_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."store_views"
+    ADD CONSTRAINT "store_views_pkey" PRIMARY KEY ("id");
 
 
 
@@ -3529,6 +4856,11 @@ ALTER TABLE ONLY "public"."subscriptions"
 
 ALTER TABLE ONLY "public"."products"
     ADD CONSTRAINT "unique_sku_per_store" UNIQUE ("store_id", "sku");
+
+
+
+ALTER TABLE ONLY "public"."user_profiles"
+    ADD CONSTRAINT "user_profiles_pkey" PRIMARY KEY ("id");
 
 
 
@@ -3746,6 +5078,10 @@ CREATE INDEX "idx_categories_store_id" ON "public"."categories" USING "btree" ("
 
 
 
+CREATE INDEX "idx_categories_store_parent" ON "public"."categories" USING "btree" ("store_id", "parent_id");
+
+
+
 CREATE INDEX "idx_erp_integrations_store_id" ON "public"."erp_integrations" USING "btree" ("store_id");
 
 
@@ -3755,6 +5091,14 @@ CREATE INDEX "idx_erp_integrations_store_provider" ON "public"."erp_integrations
 
 
 CREATE INDEX "idx_function_keys_name" ON "public"."function_keys" USING "btree" ("name");
+
+
+
+CREATE INDEX "idx_notifications_created" ON "public"."notifications" USING "btree" ("created_at");
+
+
+
+CREATE INDEX "idx_notifications_user" ON "public"."notifications" USING "btree" ("user_id", "read");
 
 
 
@@ -3778,6 +5122,10 @@ CREATE INDEX "idx_plan_downgrade_operations_store" ON "public"."plan_downgrade_o
 
 
 
+CREATE INDEX "idx_product_attributes_store" ON "public"."product_attributes" USING "btree" ("store_id", "name");
+
+
+
 CREATE INDEX "idx_product_attributes_store_id" ON "public"."product_attributes" USING "btree" ("store_id");
 
 
@@ -3787,6 +5135,10 @@ CREATE INDEX "idx_product_attributes_store_name" ON "public"."product_attributes
 
 
 CREATE INDEX "idx_product_components_component_id" ON "public"."product_components" USING "btree" ("component_id");
+
+
+
+CREATE INDEX "idx_product_components_product" ON "public"."product_components" USING "btree" ("product_id");
 
 
 
@@ -3802,11 +5154,27 @@ CREATE INDEX "idx_products_brand" ON "public"."products" USING "btree" ("brand")
 
 
 
+CREATE INDEX "idx_products_category" ON "public"."products" USING "btree" ("category_id");
+
+
+
 CREATE INDEX "idx_products_category_id" ON "public"."products" USING "btree" ("category_id");
 
 
 
+CREATE INDEX "idx_products_common_filters" ON "public"."products" USING "btree" ("store_id", "status", "brand");
+
+
+
 CREATE INDEX "idx_products_created_at" ON "public"."products" USING "btree" ("created_at");
+
+
+
+CREATE INDEX "idx_products_fulltext_search" ON "public"."products" USING "gin" ("to_tsvector"('"portuguese"'::"regconfig", ((((COALESCE("title", ''::"text") || ' '::"text") || COALESCE("description", ''::"text")) || ' '::"text") || COALESCE("sku", ''::"text"))));
+
+
+
+CREATE INDEX "idx_products_parent" ON "public"."products" USING "btree" ("parent_id");
 
 
 
@@ -3815,6 +5183,10 @@ CREATE INDEX "idx_products_parent_id" ON "public"."products" USING "btree" ("par
 
 
 CREATE INDEX "idx_products_parent_type" ON "public"."products" USING "btree" ("parent_id") WHERE ("parent_id" IS NOT NULL);
+
+
+
+CREATE INDEX "idx_products_price" ON "public"."products" USING "btree" ("price", "promotional_price");
 
 
 
@@ -3827,6 +5199,10 @@ CREATE INDEX "idx_products_sku" ON "public"."products" USING "btree" ("sku");
 
 
 CREATE INDEX "idx_products_status" ON "public"."products" USING "btree" ("status");
+
+
+
+CREATE INDEX "idx_products_store_status" ON "public"."products" USING "btree" ("store_id", "status");
 
 
 
@@ -3930,6 +5306,42 @@ CREATE INDEX "idx_webhook_logs_status" ON "public"."stripe_webhook_logs" USING "
 
 
 
+CREATE INDEX "product_views_created_at_idx" ON "public"."product_views" USING "btree" ("created_at");
+
+
+
+CREATE INDEX "product_views_product_id_idx" ON "public"."product_views" USING "btree" ("product_id");
+
+
+
+CREATE INDEX "product_views_store_id_created_at_idx" ON "public"."product_views" USING "btree" ("store_id", "created_at");
+
+
+
+CREATE INDEX "product_views_store_id_idx" ON "public"."product_views" USING "btree" ("store_id");
+
+
+
+CREATE INDEX "store_social_links_store_id_idx" ON "public"."store_social_links" USING "btree" ("store_id");
+
+
+
+CREATE INDEX "store_theme_settings_store_id_idx" ON "public"."store_theme_settings" USING "btree" ("store_id");
+
+
+
+CREATE INDEX "store_views_created_at_idx" ON "public"."store_views" USING "btree" ("created_at");
+
+
+
+CREATE INDEX "store_views_store_id_created_at_idx" ON "public"."store_views" USING "btree" ("store_id", "created_at");
+
+
+
+CREATE INDEX "store_views_store_id_idx" ON "public"."store_views" USING "btree" ("store_id");
+
+
+
 CREATE UNIQUE INDEX "bname" ON "storage"."buckets" USING "btree" ("name");
 
 
@@ -3954,11 +5366,19 @@ CREATE OR REPLACE TRIGGER "log_user_deletion_attempt" BEFORE DELETE ON "auth"."u
 
 
 
+CREATE OR REPLACE TRIGGER "on_auth_user_created" AFTER INSERT ON "auth"."users" FOR EACH ROW EXECUTE FUNCTION "public"."handle_new_user"();
+
+
+
 CREATE OR REPLACE TRIGGER "check_erp_integration_trigger" BEFORE INSERT OR UPDATE ON "public"."products" FOR EACH ROW EXECUTE FUNCTION "public"."check_erp_integration"();
 
 
 
 CREATE OR REPLACE TRIGGER "create_trial_subscription_trigger" AFTER INSERT ON "public"."stores" FOR EACH ROW EXECUTE FUNCTION "public"."create_trial_subscription"();
+
+
+
+CREATE OR REPLACE TRIGGER "invalidate_category_cache_trigger" AFTER INSERT OR DELETE OR UPDATE ON "public"."categories" FOR EACH ROW EXECUTE FUNCTION "public"."invalidate_category_cache"();
 
 
 
@@ -4019,6 +5439,10 @@ CREATE OR REPLACE TRIGGER "validate_product_attributes_trigger" BEFORE INSERT OR
 
 
 CREATE OR REPLACE TRIGGER "validate_product_components_trigger" BEFORE INSERT OR UPDATE ON "public"."product_components" FOR EACH ROW EXECUTE FUNCTION "public"."validate_product_components"();
+
+
+
+CREATE OR REPLACE TRIGGER "validate_product_images_trigger" BEFORE INSERT OR UPDATE OF "images" ON "public"."products" FOR EACH ROW EXECUTE FUNCTION "public"."validate_product_images"();
 
 
 
@@ -4093,6 +5517,11 @@ ALTER TABLE ONLY "auth"."sso_domains"
 
 
 
+ALTER TABLE ONLY "public"."app_settings"
+    ADD CONSTRAINT "app_settings_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "auth"."users"("id") ON DELETE CASCADE;
+
+
+
 ALTER TABLE ONLY "public"."categories"
     ADD CONSTRAINT "categories_parent_id_fkey" FOREIGN KEY ("parent_id") REFERENCES "public"."categories"("id") ON DELETE CASCADE;
 
@@ -4103,8 +5532,18 @@ ALTER TABLE ONLY "public"."categories"
 
 
 
+ALTER TABLE ONLY "public"."category_tree_cache"
+    ADD CONSTRAINT "category_tree_cache_store_id_fkey" FOREIGN KEY ("store_id") REFERENCES "public"."stores"("id") ON DELETE CASCADE;
+
+
+
 ALTER TABLE ONLY "public"."erp_integrations"
     ADD CONSTRAINT "erp_integrations_store_id_fkey" FOREIGN KEY ("store_id") REFERENCES "public"."stores"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."notifications"
+    ADD CONSTRAINT "notifications_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "auth"."users"("id") ON DELETE CASCADE;
 
 
 
@@ -4138,6 +5577,21 @@ ALTER TABLE ONLY "public"."product_components"
 
 
 
+ALTER TABLE ONLY "public"."product_views"
+    ADD CONSTRAINT "product_views_product_id_fkey" FOREIGN KEY ("product_id") REFERENCES "public"."products"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."product_views"
+    ADD CONSTRAINT "product_views_store_id_fkey" FOREIGN KEY ("store_id") REFERENCES "public"."stores"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."product_views"
+    ADD CONSTRAINT "product_views_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "auth"."users"("id");
+
+
+
 ALTER TABLE ONLY "public"."products"
     ADD CONSTRAINT "products_category_id_fkey" FOREIGN KEY ("category_id") REFERENCES "public"."categories"("id") ON DELETE SET NULL;
 
@@ -4150,6 +5604,31 @@ ALTER TABLE ONLY "public"."products"
 
 ALTER TABLE ONLY "public"."products"
     ADD CONSTRAINT "products_store_id_fkey" FOREIGN KEY ("store_id") REFERENCES "public"."stores"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."store_social_links"
+    ADD CONSTRAINT "store_social_links_network_id_fkey" FOREIGN KEY ("network_id") REFERENCES "public"."social_network_types"("id");
+
+
+
+ALTER TABLE ONLY "public"."store_social_links"
+    ADD CONSTRAINT "store_social_links_store_id_fkey" FOREIGN KEY ("store_id") REFERENCES "public"."stores"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."store_theme_settings"
+    ADD CONSTRAINT "store_theme_settings_store_id_fkey" FOREIGN KEY ("store_id") REFERENCES "public"."stores"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."store_views"
+    ADD CONSTRAINT "store_views_store_id_fkey" FOREIGN KEY ("store_id") REFERENCES "public"."stores"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."store_views"
+    ADD CONSTRAINT "store_views_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "auth"."users"("id");
 
 
 
@@ -4200,6 +5679,11 @@ ALTER TABLE ONLY "public"."subscriptions"
 
 ALTER TABLE ONLY "public"."subscriptions"
     ADD CONSTRAINT "subscriptions_stripe_subscription_id_fkey" FOREIGN KEY ("stripe_subscription_id") REFERENCES "public"."stripe_subscriptions"("id") ON DELETE SET NULL;
+
+
+
+ALTER TABLE ONLY "public"."user_profiles"
+    ADD CONSTRAINT "user_profiles_id_fkey" FOREIGN KEY ("id") REFERENCES "auth"."users"("id") ON DELETE CASCADE;
 
 
 
@@ -4331,6 +5815,14 @@ CREATE POLICY "Public can view product components" ON "public"."product_componen
 
 
 
+CREATE POLICY "Qualquer um pode adicionar visualização de loja" ON "public"."store_views" FOR INSERT WITH CHECK (true);
+
+
+
+CREATE POLICY "Qualquer um pode adicionar visualização de produto" ON "public"."product_views" FOR INSERT WITH CHECK (true);
+
+
+
 CREATE POLICY "Service role can manage downgrade operations" ON "public"."plan_downgrade_operations" TO "service_role" USING (true);
 
 
@@ -4374,6 +5866,10 @@ CREATE POLICY "Store owners can manage their products" ON "public"."products" TO
   WHERE ("stores"."user_id" = "auth"."uid"())))) WITH CHECK (("store_id" IN ( SELECT "stores"."id"
    FROM "public"."stores"
   WHERE ("stores"."user_id" = "auth"."uid"()))));
+
+
+
+CREATE POLICY "Todos podem ver temas" ON "public"."store_themes" FOR SELECT USING (true);
 
 
 
@@ -4476,6 +5972,64 @@ CREATE POLICY "Users can view their store's integrations" ON "public"."erp_integ
 
 
 
+CREATE POLICY "Usuários não podem excluir notificações" ON "public"."notifications" FOR DELETE USING (false);
+
+
+
+CREATE POLICY "Usuários podem atualizar suas próprias notificações" ON "public"."notifications" FOR UPDATE USING (("user_id" = "auth"."uid"()));
+
+
+
+CREATE POLICY "Usuários podem gerenciar seus próprios atributos" ON "public"."product_attributes" USING (("store_id" IN ( SELECT "stores"."id"
+   FROM "public"."stores"
+  WHERE ("stores"."user_id" = "auth"."uid"()))));
+
+
+
+CREATE POLICY "Usuários podem gerenciar seus próprios componentes" ON "public"."product_components" USING (("product_id" IN ( SELECT "products"."id"
+   FROM "public"."products"
+  WHERE ("products"."store_id" IN ( SELECT "stores"."id"
+           FROM "public"."stores"
+          WHERE ("stores"."user_id" = "auth"."uid"()))))));
+
+
+
+CREATE POLICY "Usuários podem gerenciar seus próprios links sociais" ON "public"."store_social_links" USING (("store_id" IN ( SELECT "stores"."id"
+   FROM "public"."stores"
+  WHERE ("stores"."user_id" = "auth"."uid"()))));
+
+
+
+CREATE POLICY "Usuários podem gerenciar seus próprios perfis" ON "public"."user_profiles" USING (("id" = "auth"."uid"()));
+
+
+
+CREATE POLICY "Usuários podem gerenciar suas próprias configurações de app" ON "public"."app_settings" USING (("user_id" = "auth"."uid"()));
+
+
+
+CREATE POLICY "Usuários podem gerenciar suas próprias configurações de tem" ON "public"."store_theme_settings" USING (("store_id" IN ( SELECT "stores"."id"
+   FROM "public"."stores"
+  WHERE ("stores"."user_id" = "auth"."uid"()))));
+
+
+
+CREATE POLICY "Usuários podem gerenciar suas próprias customizações de loj" ON "public"."stores" USING (("user_id" = "auth"."uid"()));
+
+
+
+CREATE POLICY "Usuários podem ver analytics de produtos de suas próprias loj" ON "public"."product_views" FOR SELECT USING (("store_id" IN ( SELECT "stores"."id"
+   FROM "public"."stores"
+  WHERE ("stores"."user_id" = "auth"."uid"()))));
+
+
+
+CREATE POLICY "Usuários podem ver analytics de suas próprias lojas" ON "public"."store_views" FOR SELECT USING (("store_id" IN ( SELECT "stores"."id"
+   FROM "public"."stores"
+  WHERE ("stores"."user_id" = "auth"."uid"()))));
+
+
+
 CREATE POLICY "Usuários podem ver histórico de suas assinaturas" ON "public"."subscription_history" FOR SELECT USING (("subscription_id" IN ( SELECT "subscriptions"."id"
    FROM "public"."subscriptions"
   WHERE ("subscriptions"."store_id" IN ( SELECT "stores"."id"
@@ -4519,6 +6073,13 @@ CREATE POLICY "Usuários podem ver suas próprias lojas" ON "public"."stores" US
 
 
 
+CREATE POLICY "Usuários podem ver suas próprias notificações" ON "public"."notifications" FOR SELECT USING (("user_id" = "auth"."uid"()));
+
+
+
+ALTER TABLE "public"."app_settings" ENABLE ROW LEVEL SECURITY;
+
+
 ALTER TABLE "public"."categories" ENABLE ROW LEVEL SECURITY;
 
 
@@ -4526,6 +6087,9 @@ ALTER TABLE "public"."erp_integrations" ENABLE ROW LEVEL SECURITY;
 
 
 ALTER TABLE "public"."function_keys" ENABLE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "public"."notifications" ENABLE ROW LEVEL SECURITY;
 
 
 ALTER TABLE "public"."plan_downgrade_excess" ENABLE ROW LEVEL SECURITY;
@@ -4540,7 +6104,22 @@ ALTER TABLE "public"."product_attributes" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "public"."product_components" ENABLE ROW LEVEL SECURITY;
 
 
+ALTER TABLE "public"."product_views" ENABLE ROW LEVEL SECURITY;
+
+
 ALTER TABLE "public"."products" ENABLE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "public"."store_social_links" ENABLE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "public"."store_theme_settings" ENABLE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "public"."store_themes" ENABLE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "public"."store_views" ENABLE ROW LEVEL SECURITY;
 
 
 ALTER TABLE "public"."stores" ENABLE ROW LEVEL SECURITY;
@@ -4565,6 +6144,9 @@ ALTER TABLE "public"."subscription_history" ENABLE ROW LEVEL SECURITY;
 
 
 ALTER TABLE "public"."subscriptions" ENABLE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "public"."user_profiles" ENABLE ROW LEVEL SECURITY;
 
 
 ALTER TABLE "storage"."buckets" ENABLE ROW LEVEL SECURITY;
@@ -4636,6 +6218,12 @@ GRANT ALL ON FUNCTION "auth"."uid"() TO "service_role";
 
 
 
+GRANT ALL ON FUNCTION "public"."admin_delete_user"("user_id" "uuid") TO "anon";
+GRANT ALL ON FUNCTION "public"."admin_delete_user"("user_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."admin_delete_user"("user_id" "uuid") TO "service_role";
+
+
+
 GRANT ALL ON FUNCTION "public"."auto_sync_subscription_plans"() TO "anon";
 GRANT ALL ON FUNCTION "public"."auto_sync_subscription_plans"() TO "authenticated";
 GRANT ALL ON FUNCTION "public"."auto_sync_subscription_plans"() TO "service_role";
@@ -4666,15 +6254,51 @@ GRANT ALL ON FUNCTION "public"."check_trial_expiration"() TO "service_role";
 
 
 
+GRANT ALL ON FUNCTION "public"."cleanup_unused_images"("p_store_id" "uuid") TO "anon";
+GRANT ALL ON FUNCTION "public"."cleanup_unused_images"("p_store_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."cleanup_unused_images"("p_store_id" "uuid") TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."count_unread_notifications"() TO "anon";
+GRANT ALL ON FUNCTION "public"."count_unread_notifications"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."count_unread_notifications"() TO "service_role";
+
+
+
 GRANT ALL ON FUNCTION "public"."create_trial_subscription"() TO "anon";
 GRANT ALL ON FUNCTION "public"."create_trial_subscription"() TO "authenticated";
 GRANT ALL ON FUNCTION "public"."create_trial_subscription"() TO "service_role";
 
 
 
+GRANT ALL ON FUNCTION "public"."create_user_notification"("p_user_id" "uuid", "p_type" "public"."notification_type", "p_title" "text", "p_content" "text", "p_metadata" "jsonb") TO "anon";
+GRANT ALL ON FUNCTION "public"."create_user_notification"("p_user_id" "uuid", "p_type" "public"."notification_type", "p_title" "text", "p_content" "text", "p_metadata" "jsonb") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."create_user_notification"("p_user_id" "uuid", "p_type" "public"."notification_type", "p_title" "text", "p_content" "text", "p_metadata" "jsonb") TO "service_role";
+
+
+
 GRANT ALL ON FUNCTION "public"."generate_function_key"() TO "anon";
 GRANT ALL ON FUNCTION "public"."generate_function_key"() TO "authenticated";
 GRANT ALL ON FUNCTION "public"."generate_function_key"() TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."store_themes" TO "anon";
+GRANT ALL ON TABLE "public"."store_themes" TO "authenticated";
+GRANT ALL ON TABLE "public"."store_themes" TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."get_available_themes"() TO "anon";
+GRANT ALL ON FUNCTION "public"."get_available_themes"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."get_available_themes"() TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."get_cached_category_tree"("p_store_id" "uuid") TO "anon";
+GRANT ALL ON FUNCTION "public"."get_cached_category_tree"("p_store_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."get_cached_category_tree"("p_store_id" "uuid") TO "service_role";
 
 
 
@@ -4690,6 +6314,18 @@ GRANT ALL ON FUNCTION "public"."get_category_path"("category_id" "uuid") TO "ser
 
 
 
+GRANT ALL ON FUNCTION "public"."get_category_tree"("p_store_id" "uuid") TO "anon";
+GRANT ALL ON FUNCTION "public"."get_category_tree"("p_store_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."get_category_tree"("p_store_id" "uuid") TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."get_formatted_social_links"("p_store_id" "uuid") TO "anon";
+GRANT ALL ON FUNCTION "public"."get_formatted_social_links"("p_store_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."get_formatted_social_links"("p_store_id" "uuid") TO "service_role";
+
+
+
 GRANT ALL ON FUNCTION "public"."get_plan_limits"("plan_type" "text") TO "anon";
 GRANT ALL ON FUNCTION "public"."get_plan_limits"("plan_type" "text") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."get_plan_limits"("plan_type" "text") TO "service_role";
@@ -4699,6 +6335,18 @@ GRANT ALL ON FUNCTION "public"."get_plan_limits"("plan_type" "text") TO "service
 GRANT ALL ON FUNCTION "public"."get_plan_type_from_name"("product_name" "text") TO "anon";
 GRANT ALL ON FUNCTION "public"."get_plan_type_from_name"("product_name" "text") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."get_plan_type_from_name"("product_name" "text") TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."products" TO "anon";
+GRANT ALL ON TABLE "public"."products" TO "authenticated";
+GRANT ALL ON TABLE "public"."products" TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."get_products_with_variations"("p_store_id" "uuid", "p_limit" integer, "p_offset" integer) TO "anon";
+GRANT ALL ON FUNCTION "public"."get_products_with_variations"("p_store_id" "uuid", "p_limit" integer, "p_offset" integer) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."get_products_with_variations"("p_store_id" "uuid", "p_limit" integer, "p_offset" integer) TO "service_role";
 
 
 
@@ -4720,15 +6368,63 @@ GRANT ALL ON FUNCTION "public"."get_store_subscription"("store_id" "uuid") TO "s
 
 
 
+GRANT ALL ON TABLE "public"."notifications" TO "anon";
+GRANT ALL ON TABLE "public"."notifications" TO "authenticated";
+GRANT ALL ON TABLE "public"."notifications" TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."get_unread_notifications"() TO "anon";
+GRANT ALL ON FUNCTION "public"."get_unread_notifications"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."get_unread_notifications"() TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."get_user_app_theme"("p_user_id" "uuid") TO "anon";
+GRANT ALL ON FUNCTION "public"."get_user_app_theme"("p_user_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."get_user_app_theme"("p_user_id" "uuid") TO "service_role";
+
+
+
 GRANT ALL ON FUNCTION "public"."handle_expired_excess_items"() TO "anon";
 GRANT ALL ON FUNCTION "public"."handle_expired_excess_items"() TO "authenticated";
 GRANT ALL ON FUNCTION "public"."handle_expired_excess_items"() TO "service_role";
 
 
 
+GRANT ALL ON FUNCTION "public"."handle_new_user"() TO "anon";
+GRANT ALL ON FUNCTION "public"."handle_new_user"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."handle_new_user"() TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."invalidate_category_cache"() TO "anon";
+GRANT ALL ON FUNCTION "public"."invalidate_category_cache"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."invalidate_category_cache"() TO "service_role";
+
+
+
 GRANT ALL ON FUNCTION "public"."log_subscription_change"() TO "anon";
 GRANT ALL ON FUNCTION "public"."log_subscription_change"() TO "authenticated";
 GRANT ALL ON FUNCTION "public"."log_subscription_change"() TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."manage_product_with_variations"("p_store_id" "uuid", "p_product" "jsonb", "p_variations" "jsonb") TO "anon";
+GRANT ALL ON FUNCTION "public"."manage_product_with_variations"("p_store_id" "uuid", "p_product" "jsonb", "p_variations" "jsonb") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."manage_product_with_variations"("p_store_id" "uuid", "p_product" "jsonb", "p_variations" "jsonb") TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."mark_notifications_read"("p_notification_ids" "uuid"[]) TO "anon";
+GRANT ALL ON FUNCTION "public"."mark_notifications_read"("p_notification_ids" "uuid"[]) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."mark_notifications_read"("p_notification_ids" "uuid"[]) TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."migrate_store_theme_settings"() TO "anon";
+GRANT ALL ON FUNCTION "public"."migrate_store_theme_settings"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."migrate_store_theme_settings"() TO "service_role";
 
 
 
@@ -4745,6 +6441,12 @@ GRANT ALL ON FUNCTION "public"."process_plan_downgrade"("p_store_id" "uuid", "p_
 
 
 
+GRANT ALL ON FUNCTION "public"."record_store_view"("p_store_id" "uuid", "p_page" "text", "p_session_id" "text", "p_user_agent" "text", "p_referrer" "text") TO "anon";
+GRANT ALL ON FUNCTION "public"."record_store_view"("p_store_id" "uuid", "p_page" "text", "p_session_id" "text", "p_user_agent" "text", "p_referrer" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."record_store_view"("p_store_id" "uuid", "p_page" "text", "p_session_id" "text", "p_user_agent" "text", "p_referrer" "text") TO "service_role";
+
+
+
 GRANT ALL ON FUNCTION "public"."reorder_categories"("p_store_id" "uuid", "p_category_ids" "uuid"[]) TO "anon";
 GRANT ALL ON FUNCTION "public"."reorder_categories"("p_store_id" "uuid", "p_category_ids" "uuid"[]) TO "authenticated";
 GRANT ALL ON FUNCTION "public"."reorder_categories"("p_store_id" "uuid", "p_category_ids" "uuid"[]) TO "service_role";
@@ -4758,15 +6460,27 @@ GRANT ALL ON FUNCTION "public"."restore_downgrade_excess_item"("p_excess_id" "uu
 
 
 
+GRANT ALL ON FUNCTION "public"."save_store_customization"("p_store_id" "uuid", "p_customization" "jsonb") TO "anon";
+GRANT ALL ON FUNCTION "public"."save_store_customization"("p_store_id" "uuid", "p_customization" "jsonb") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."save_store_customization"("p_store_id" "uuid", "p_customization" "jsonb") TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."save_user_app_theme"("p_theme" "text") TO "anon";
+GRANT ALL ON FUNCTION "public"."save_user_app_theme"("p_theme" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."save_user_app_theme"("p_theme" "text") TO "service_role";
+
+
+
 GRANT ALL ON FUNCTION "public"."schedule_subscription_sync"() TO "anon";
 GRANT ALL ON FUNCTION "public"."schedule_subscription_sync"() TO "authenticated";
 GRANT ALL ON FUNCTION "public"."schedule_subscription_sync"() TO "service_role";
 
 
 
-GRANT ALL ON TABLE "public"."products" TO "anon";
-GRANT ALL ON TABLE "public"."products" TO "authenticated";
-GRANT ALL ON TABLE "public"."products" TO "service_role";
+GRANT ALL ON FUNCTION "public"."search_products"("p_store_id" "uuid", "p_search" "text", "p_category_id" "uuid", "p_min_price" numeric, "p_max_price" numeric, "p_has_promotion" boolean, "p_selected_tags" "text"[], "p_brand" "text", "p_limit" integer, "p_offset" integer) TO "anon";
+GRANT ALL ON FUNCTION "public"."search_products"("p_store_id" "uuid", "p_search" "text", "p_category_id" "uuid", "p_min_price" numeric, "p_max_price" numeric, "p_has_promotion" boolean, "p_selected_tags" "text"[], "p_brand" "text", "p_limit" integer, "p_offset" integer) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."search_products"("p_store_id" "uuid", "p_search" "text", "p_category_id" "uuid", "p_min_price" numeric, "p_max_price" numeric, "p_has_promotion" boolean, "p_selected_tags" "text"[], "p_brand" "text", "p_limit" integer, "p_offset" integer) TO "service_role";
 
 
 
@@ -4842,6 +6556,12 @@ GRANT ALL ON FUNCTION "public"."update_updated_at_column"() TO "service_role";
 
 
 
+GRANT ALL ON FUNCTION "public"."update_user_last_active"() TO "anon";
+GRANT ALL ON FUNCTION "public"."update_user_last_active"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."update_user_last_active"() TO "service_role";
+
+
+
 GRANT ALL ON FUNCTION "public"."validate_category_limit"() TO "anon";
 GRANT ALL ON FUNCTION "public"."validate_category_limit"() TO "authenticated";
 GRANT ALL ON FUNCTION "public"."validate_category_limit"() TO "service_role";
@@ -4854,6 +6574,12 @@ GRANT ALL ON FUNCTION "public"."validate_erp_credentials"() TO "service_role";
 
 
 
+GRANT ALL ON FUNCTION "public"."validate_image_url"("url" "text") TO "anon";
+GRANT ALL ON FUNCTION "public"."validate_image_url"("url" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."validate_image_url"("url" "text") TO "service_role";
+
+
+
 GRANT ALL ON FUNCTION "public"."validate_product_attributes"() TO "anon";
 GRANT ALL ON FUNCTION "public"."validate_product_attributes"() TO "authenticated";
 GRANT ALL ON FUNCTION "public"."validate_product_attributes"() TO "service_role";
@@ -4863,6 +6589,12 @@ GRANT ALL ON FUNCTION "public"."validate_product_attributes"() TO "service_role"
 GRANT ALL ON FUNCTION "public"."validate_product_components"() TO "anon";
 GRANT ALL ON FUNCTION "public"."validate_product_components"() TO "authenticated";
 GRANT ALL ON FUNCTION "public"."validate_product_components"() TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."validate_product_images"() TO "anon";
+GRANT ALL ON FUNCTION "public"."validate_product_images"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."validate_product_images"() TO "service_role";
 
 
 
@@ -5012,9 +6744,21 @@ GRANT ALL ON TABLE "auth"."users" TO "service_role";
 
 
 
+GRANT ALL ON TABLE "public"."app_settings" TO "anon";
+GRANT ALL ON TABLE "public"."app_settings" TO "authenticated";
+GRANT ALL ON TABLE "public"."app_settings" TO "service_role";
+
+
+
 GRANT ALL ON TABLE "public"."categories" TO "anon";
 GRANT ALL ON TABLE "public"."categories" TO "authenticated";
 GRANT ALL ON TABLE "public"."categories" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."category_tree_cache" TO "anon";
+GRANT ALL ON TABLE "public"."category_tree_cache" TO "authenticated";
+GRANT ALL ON TABLE "public"."category_tree_cache" TO "service_role";
 
 
 
@@ -5066,6 +6810,36 @@ GRANT ALL ON TABLE "public"."product_components" TO "service_role";
 
 
 
+GRANT ALL ON TABLE "public"."product_views" TO "anon";
+GRANT ALL ON TABLE "public"."product_views" TO "authenticated";
+GRANT ALL ON TABLE "public"."product_views" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."social_network_types" TO "anon";
+GRANT ALL ON TABLE "public"."social_network_types" TO "authenticated";
+GRANT ALL ON TABLE "public"."social_network_types" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."store_social_links" TO "anon";
+GRANT ALL ON TABLE "public"."store_social_links" TO "authenticated";
+GRANT ALL ON TABLE "public"."store_social_links" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."store_theme_settings" TO "anon";
+GRANT ALL ON TABLE "public"."store_theme_settings" TO "authenticated";
+GRANT ALL ON TABLE "public"."store_theme_settings" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."store_views" TO "anon";
+GRANT ALL ON TABLE "public"."store_views" TO "authenticated";
+GRANT ALL ON TABLE "public"."store_views" TO "service_role";
+
+
+
 GRANT ALL ON TABLE "public"."stores" TO "anon";
 GRANT ALL ON TABLE "public"."stores" TO "authenticated";
 GRANT ALL ON TABLE "public"."stores" TO "service_role";
@@ -5111,6 +6885,12 @@ GRANT ALL ON TABLE "public"."subscription_history" TO "service_role";
 GRANT ALL ON TABLE "public"."subscriptions" TO "anon";
 GRANT ALL ON TABLE "public"."subscriptions" TO "authenticated";
 GRANT ALL ON TABLE "public"."subscriptions" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."user_profiles" TO "anon";
+GRANT ALL ON TABLE "public"."user_profiles" TO "authenticated";
+GRANT ALL ON TABLE "public"."user_profiles" TO "service_role";
 
 
 
